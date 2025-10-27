@@ -1,0 +1,43 @@
+/*
+  Localizable.strings (Spanish)
+  Wpayin_Wallet
+*/
+
+/* Wallet */
+"wallet.totalBalance" = "Saldo Total";
+"wallet.home" = "Inicio";
+"wallet.swap" = "Intercambiar";
+"wallet.activity" = "Actividad";
+"wallet.settings" = "Configuración";
+"wallet.yourAssets" = "Tus Activos";
+"wallet.viewAll" = "Ver Todo";
+"wallet.send" = "Enviar";
+"wallet.receive" = "Recibir";
+"wallet.buy" = "Comprar";
+
+/* Tokens */
+"tokens.title" = "Tokens";
+"tokens.defi" = "DeFi";
+"tokens.nfts" = "NFTs";
+"tokens.addToken" = "Agregar Token";
+"tokens.balance" = "Saldo";
+
+/* Networks */
+"networks.title" = "Redes";
+"networks.available" = "Disponible en %d redes";
+"networks.active" = "Activo";
+
+/* Settings */
+"settings.title" = "Configuración";
+"settings.currency" = "Moneda";
+"settings.language" = "Idioma";
+"settings.security" = "Seguridad";
+"settings.about" = "Acerca de";
+
+/* Actions */
+"action.send" = "Enviar";
+"action.receive" = "Recibir";
+"action.swap" = "Intercambiar";
+"action.buy" = "Comprar";
+"action.cancel" = "Cancelar";
+"action.done" = "Hecho";

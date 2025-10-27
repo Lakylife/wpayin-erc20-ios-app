@@ -1,0 +1,38 @@
+/* Wallet */
+"wallet.totalBalance" = "Total Balance";
+"wallet.home" = "Home";
+"wallet.swap" = "Swap";
+"wallet.activity" = "Activity";
+"wallet.settings" = "Settings";
+"wallet.yourAssets" = "Your Assets";
+"wallet.viewAll" = "View All";
+"wallet.send" = "Send";
+"wallet.receive" = "Receive";
+"wallet.buy" = "Buy";
+
+/* Tokens */
+"tokens.title" = "Tokens";
+"tokens.defi" = "DeFi";
+"tokens.nfts" = "NFTs";
+"tokens.addToken" = "Add Token";
+"tokens.balance" = "Balance";
+
+/* Networks */
+"networks.title" = "Networks";
+"networks.available" = "Available on %d networks";
+"networks.active" = "Active";
+
+/* Settings */
+"settings.title" = "Settings";
+"settings.currency" = "Currency";
+"settings.language" = "Language";
+"settings.security" = "Security";
+"settings.about" = "About";
+
+/* Actions */
+"action.send" = "Send";
+"action.receive" = "Receive";
+"action.swap" = "Swap";
+"action.buy" = "Buy";
+"action.cancel" = "Cancel";
+"action.done" = "Done";
