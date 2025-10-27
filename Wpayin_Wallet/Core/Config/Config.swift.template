@@ -1,0 +1,116 @@
+//
+//  Config.swift.template
+//  Wpayin_Wallet
+//
+//  Configuration template for API keys and sensitive data
+//  IMPORTANT: Copy this file to Config.swift and add your own API keys
+//
+
+import Foundation
+
+/// Application configuration containing API keys and endpoints
+/// IMPORTANT: Never commit Config.swift to version control!
+struct AppConfig {
+
+    // MARK: - API Keys
+
+    /// Alchemy API key for NFT and blockchain data
+    /// Get your free API key at: https://www.alchemy.com/
+    /// Required for: NFT fetching, enhanced blockchain queries
+    static let alchemyApiKey = "YOUR_ALCHEMY_API_KEY_HERE"
+
+    /// Etherscan API key for transaction history and blockchain data
+    /// Get your free API key at: https://etherscan.io/apis
+    /// Required for: Transaction history, gas estimation
+    static let etherscanApiKey = "YOUR_ETHERSCAN_API_KEY_HERE"
+
+    /// CoinGecko API key (optional - free tier works without key)
+    /// Get your API key at: https://www.coingecko.com/en/api
+    /// Required for: Enhanced rate limits for price data
+    static let coinGeckoApiKey: String? = nil  // Optional - can remain nil for free tier
+
+    // MARK: - RPC Endpoints
+
+    /// Default Ethereum RPC endpoint
+    /// You can use:
+    /// - Alchemy: "https://eth-mainnet.g.alchemy.com/v2/YOUR_API_KEY"
+    /// - Infura: "https://mainnet.infura.io/v3/YOUR_PROJECT_ID"
+    /// - Public: "https://cloudflare-eth.com" (rate limited)
+    static let ethereumRpcUrl = "https://cloudflare-eth.com"
+
+    /// Default Bitcoin RPC endpoint
+    /// Recommended: "https://blockstream.info/api" (free, no auth required)
+    static let bitcoinRpcUrl = "https://blockstream.info/api"
+
+    // MARK: - Feature Flags
+
+    /// Enable or disable NFT functionality
+    static let nftEnabled = true
+
+    /// Enable or disable DeFi features
+    static let defiEnabled = true
+
+    /// Enable or disable swap functionality
+    static let swapEnabled = true
+
+    // MARK: - Validation
+
+    /// Check if all required API keys are configured
+    static var isConfigured: Bool {
+        return !alchemyApiKey.contains("YOUR_") &&
+               !etherscanApiKey.contains("YOUR_")
+    }
+
+    /// Get configuration status message
+    static var configurationMessage: String {
+        if isConfigured {
+            return "✅ All API keys configured"
+        } else {
+            var missing: [String] = []
+            if alchemyApiKey.contains("YOUR_") {
+                missing.append("Alchemy API Key")
+            }
+            if etherscanApiKey.contains("YOUR_") {
+                missing.append("Etherscan API Key")
+            }
+            return "⚠️ Missing: \(missing.joined(separator: ", "))"
+        }
+    }
+}
+
+// MARK: - Setup Instructions
+
+/*
+
+ HOW TO SET UP:
+
+ 1. Copy this file:
+    - In Finder, duplicate "Config.swift.template"
+    - Rename the copy to "Config.swift"
+
+ 2. Add your API keys:
+    - Alchemy: Sign up at https://www.alchemy.com/
+      - Create a new app
+      - Copy the API key
+      - Replace YOUR_ALCHEMY_API_KEY_HERE
+
+    - Etherscan: Sign up at https://etherscan.io/
+      - Go to API Keys section
+      - Create a new API key
+      - Replace YOUR_ETHERSCAN_API_KEY_HERE
+
+ 3. (Optional) Customize RPC endpoints:
+    - Replace the default public RPCs with your own for better performance
+    - Alchemy and Infura offer free tiers with higher rate limits
+
+ 4. Build and run:
+    - The app will validate your configuration on startup
+    - Check the console for configuration status
+
+ SECURITY NOTES:
+ - Config.swift is in .gitignore and will NOT be committed to Git
+ - Never share your API keys publicly
+ - Never commit Config.swift to version control
+ - Keep your API keys secret and rotate them if exposed
+
+ */

@@ -1,0 +1,43 @@
+/*
+  Localizable.strings (Japanese)
+  Wpayin_Wallet
+*/
+
+/* Wallet */
+"wallet.totalBalance" = "合計残高";
+"wallet.home" = "ホーム";
+"wallet.swap" = "スワップ";
+"wallet.activity" = "アクティビティ";
+"wallet.settings" = "設定";
+"wallet.yourAssets" = "あなたの資産";
+"wallet.viewAll" = "すべて表示";
+"wallet.send" = "送信";
+"wallet.receive" = "受信";
+"wallet.buy" = "購入";
+
+/* Tokens */
+"tokens.title" = "トークン";
+"tokens.defi" = "DeFi";
+"tokens.nfts" = "NFT";
+"tokens.addToken" = "トークンを追加";
+"tokens.balance" = "残高";
+
+/* Networks */
+"networks.title" = "ネットワーク";
+"networks.available" = "%d のネットワークで利用可能";
+"networks.active" = "アクティブ";
+
+/* Settings */
+"settings.title" = "設定";
+"settings.currency" = "通貨";
+"settings.language" = "言語";
+"settings.security" = "セキュリティ";
+"settings.about" = "について";
+
+/* Actions */
+"action.send" = "送信";
+"action.receive" = "受信";
+"action.swap" = "スワップ";
+"action.buy" = "購入";
+"action.cancel" = "キャンセル";
+"action.done" = "完了";

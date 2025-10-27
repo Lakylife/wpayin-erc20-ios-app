@@ -1,0 +1,38 @@
+/* Wallet */
+"wallet.totalBalance" = "Celkový zůstatek";
+"wallet.home" = "Domů";
+"wallet.swap" = "Směna";
+"wallet.activity" = "Aktivita";
+"wallet.settings" = "Nastavení";
+"wallet.yourAssets" = "Vaše aktiva";
+"wallet.viewAll" = "Zobrazit vše";
+"wallet.send" = "Odeslat";
+"wallet.receive" = "Přijmout";
+"wallet.buy" = "Koupit";
+
+/* Tokens */
+"tokens.title" = "Tokeny";
+"tokens.defi" = "DeFi";
+"tokens.nfts" = "NFT";
+"tokens.addToken" = "Přidat token";
+"tokens.balance" = "Zůstatek";
+
+/* Networks */
+"networks.title" = "Sítě";
+"networks.available" = "Dostupné na %d sítích";
+"networks.active" = "Aktivní";
+
+/* Settings */
+"settings.title" = "Nastavení";
+"settings.currency" = "Měna";
+"settings.language" = "Jazyk";
+"settings.security" = "Zabezpečení";
+"settings.about" = "O aplikaci";
+
+/* Actions */
+"action.send" = "Odeslat";
+"action.receive" = "Přijmout";
+"action.swap" = "Vyměnit";
+"action.buy" = "Koupit";
+"action.cancel" = "Zrušit";
+"action.done" = "Hotovo";

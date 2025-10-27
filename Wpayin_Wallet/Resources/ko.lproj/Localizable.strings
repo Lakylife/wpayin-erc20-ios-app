@@ -1,0 +1,43 @@
+/*
+  Localizable.strings (Korean)
+  Wpayin_Wallet
+*/
+
+/* Wallet */
+"wallet.totalBalance" = "총 잔액";
+"wallet.home" = "홈";
+"wallet.swap" = "스왑";
+"wallet.activity" = "활동";
+"wallet.settings" = "설정";
+"wallet.yourAssets" = "내 자산";
+"wallet.viewAll" = "모두 보기";
+"wallet.send" = "보내기";
+"wallet.receive" = "받기";
+"wallet.buy" = "구매";
+
+/* Tokens */
+"tokens.title" = "토큰";
+"tokens.defi" = "DeFi";
+"tokens.nfts" = "NFT";
+"tokens.addToken" = "토큰 추가";
+"tokens.balance" = "잔액";
+
+/* Networks */
+"networks.title" = "네트워크";
+"networks.available" = "%d개 네트워크에서 사용 가능";
+"networks.active" = "활성";
+
+/* Settings */
+"settings.title" = "설정";
+"settings.currency" = "통화";
+"settings.language" = "언어";
+"settings.security" = "보안";
+"settings.about" = "정보";
+
+/* Actions */
+"action.send" = "보내기";
+"action.receive" = "받기";
+"action.swap" = "스왑";
+"action.buy" = "구매";
+"action.cancel" = "취소";
+"action.done" = "완료";

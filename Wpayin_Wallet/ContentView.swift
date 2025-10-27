@@ -6,56 +6,60 @@
 //
 
 import SwiftUI
-import SwiftData
 
 struct ContentView: View {
-    @Environment(\.modelContext) private var modelContext
-    @Query private var items: [Item]
+    @StateObject private var walletManager = WalletManager()
+    @StateObject private var settingsManager = SettingsManager()
+    @StateObject private var networkManager = NetworkConfigManager()
+
+    init() {
+        // Setup settings listener after both managers are initialized
+        let wallet = WalletManager()
+        let settings = SettingsManager()
+        wallet.setupSettingsListener(settings)
+
+        _walletManager = StateObject(wrappedValue: wallet)
+        _settingsManager = StateObject(wrappedValue: settings)
+        _networkManager = StateObject(wrappedValue: NetworkConfigManager())
+    }
 
     var body: some View {
-        NavigationSplitView {
-            List {
-                ForEach(items) { item in
-                    NavigationLink {
-                        Text("Item at \(item.timestamp, format: Date.FormatStyle(date: .numeric, time: .standard))")
-                    } label: {
-                        Text(item.timestamp, format: Date.FormatStyle(date: .numeric, time: .standard))
-                    }
-                }
-                .onDelete(perform: deleteItems)
+        Group {
+            if walletManager.isInitializing {
+                LoadingView()
+            } else if !walletManager.hasCompletedOnboarding {
+                OnboardingView()
+                    .environmentObject(walletManager)
+                    .environmentObject(settingsManager)
+                    .environmentObject(networkManager)
+            } else if walletManager.hasWallet {
+                MainTabView()
+                    .environmentObject(walletManager)
+                    .environmentObject(settingsManager)
+                    .environmentObject(networkManager)
+            } else {
+                WelcomeView()
+                    .environmentObject(walletManager)
+                    .environmentObject(settingsManager)
+                    .environmentObject(networkManager)
             }
-            .toolbar {
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    EditButton()
-                }
-                ToolbarItem {
-                    Button(action: addItem) {
-                        Label("Add Item", systemImage: "plus")
-                    }
-                }
-            }
-        } detail: {
-            Text("Select an item")
         }
-    }
+        .id(settingsManager.refreshID) // Force refresh when currency or language changes
+        .preferredColorScheme(.dark)
+        .task {
+            await walletManager.checkExistingWallet()
 
-    private func addItem() {
-        withAnimation {
-            let newItem = Item(timestamp: Date())
-            modelContext.insert(newItem)
-        }
-    }
-
-    private func deleteItems(offsets: IndexSet) {
-        withAnimation {
-            for index in offsets {
-                modelContext.delete(items[index])
+            // Start automatic price updates when wallet is ready
+            if walletManager.hasWallet {
+                walletManager.startPriceUpdates()
             }
+        }
+        .onDisappear {
+            walletManager.stopPriceUpdates()
         }
     }
 }
 
 #Preview {
     ContentView()
-        .modelContainer(for: Item.self, inMemory: true)
 }
