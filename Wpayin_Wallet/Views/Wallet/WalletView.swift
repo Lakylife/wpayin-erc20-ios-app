@@ -68,7 +68,7 @@ struct WalletView: View {
 
                         // Tabs and Content
                         ModernTabsView(
-                            tokens: walletManager.groupedTokens,
+                            tokens: walletManager.visibleGroupedTokens,
                             isLoading: walletManager.isLoading,
                             onTokenTap: { token in
                                 selectedToken = token
@@ -89,6 +89,7 @@ struct WalletView: View {
         .sheet(isPresented: $showDepositSheet) {
             DepositView()
                 .environmentObject(walletManager)
+                .environmentObject(settingsManager)
         }
         .sheet(isPresented: $showWithdrawSheet) {
             WithdrawView()
@@ -99,7 +100,7 @@ struct WalletView: View {
                 .environmentObject(walletManager)
         }
         .sheet(isPresented: $showBuy) {
-            P2PBuyView()
+            BuyView()
                 .environmentObject(walletManager)
                 .environmentObject(settingsManager)
         }
@@ -153,7 +154,7 @@ struct WalletView: View {
     }
 
     private var totalPortfolioValue: Double {
-        walletManager.groupedTokens.reduce(0) { $0 + $1.totalValue }
+        walletManager.visibleGroupedTokens.reduce(0) { $0 + $1.totalValue }
     }
 }
 
@@ -483,7 +484,7 @@ struct ModernBalanceCardView: View {
             }
 
             // ETH Balance equivalent
-            if balance > 0, let ethToken = walletManager.tokens.first(where: { $0.symbol == "ETH" }), ethToken.price > 0 {
+            if balance > 0, let ethToken = walletManager.visibleTokens.first(where: { $0.symbol == "ETH" }), ethToken.price > 0 {
                 Text(String(format: "%.4f ETH", balance / ethToken.price))
                     .font(.system(size: 18, weight: .medium))
                     .foregroundColor(WpayinColors.textTertiary)
@@ -709,7 +710,7 @@ struct TokensTabContent: View {
                 .padding(.vertical, 40)
             } else {
                 LazyVStack(spacing: 16) {
-                    ForEach(walletManager.groupedTokens) { token in
+                    ForEach(walletManager.visibleGroupedTokens) { token in
                         ExpandableTokenCard(
                             token: token,
                             onTokenTap: { selectedToken in onTokenTap(selectedToken) },

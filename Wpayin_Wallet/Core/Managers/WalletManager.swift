@@ -57,6 +57,7 @@ final class WalletManager: ObservableObject {
     private let walletsStorageKey = "MultiChainWallets"
     private let blockchainsStorageKey = "AvailableBlockchainConfigs"
     private let favoritesStorageKey = "FavoriteTokens"
+    private let selectedBlockchainsKey = "SelectedBlockchains"  // NEW: Persistence key
 
     private var chainAccounts: [BlockchainType: ChainAccount] = [:]
     private var cancellables = Set<AnyCancellable>()
@@ -113,6 +114,26 @@ final class WalletManager: ObservableObject {
             selectedBlockchains.contains(config.platform) && config.isEnabled && config.network == .mainnet
         }
     }
+    
+    // Filtered tokens - only show tokens from selected blockchains
+    var visibleTokens: [Token] {
+        tokens.filter { token in
+            guard let platform = BlockchainPlatform(rawValue: token.blockchain.rawValue) else {
+                return false
+            }
+            return selectedBlockchains.contains(platform)
+        }
+    }
+    
+    // Filtered grouped tokens - only show from selected blockchains
+    var visibleGroupedTokens: [Token] {
+        groupedTokens.filter { token in
+            guard let platform = BlockchainPlatform(rawValue: token.blockchain.rawValue) else {
+                return false
+            }
+            return selectedBlockchains.contains(platform)
+        }
+    }
 
     init() {
         setupDefaultBlockchains()
@@ -120,6 +141,7 @@ final class WalletManager: ObservableObject {
         loadSavedAddresses()
         loadFavorites()
         loadCustomTokens()
+        loadSelectedBlockchains()  // NEW: Load selected blockchains
         checkOnboardingStatus()
         // Don't set isInitializing = false here, let ContentView handle it
     }
@@ -255,12 +277,39 @@ final class WalletManager: ObservableObject {
         } else {
             selectedBlockchains.insert(platform)
         }
-        Task { await refreshWalletData() }
+        saveSelectedBlockchains()  // NEW: Save to UserDefaults
+        // Don't refresh all data - just filter displayed tokens
+        // Actual blockchain data will be fetched lazily when needed
+        Task { await refreshNewBlockchainData(for: platform) }
     }
 
     func enableBlockchains(_ platforms: Set<BlockchainPlatform>) {
         selectedBlockchains = platforms
+        saveSelectedBlockchains()  // NEW: Save to UserDefaults
+        // Refresh only newly added blockchains
         Task { await refreshWalletData() }
+    }
+    
+    // MARK: - Refresh specific blockchain data
+    @MainActor
+    private func refreshNewBlockchainData(for platform: BlockchainPlatform) async {
+        // If blockchain was just enabled, fetch its data
+        guard selectedBlockchains.contains(platform) else { return }
+        
+        // Check if we already have data for this blockchain
+        let hasDataForBlockchain = tokens.contains(where: { 
+            guard let blockchainType = platform.blockchainType else { return false }
+            return $0.blockchain == blockchainType 
+        })
+        
+        if hasDataForBlockchain {
+            print("✅ Already have data for \(platform.name)")
+            return
+        }
+        
+        // Fetch data for new blockchain
+        print("🔄 Fetching data for newly enabled blockchain: \(platform.name)")
+        await refreshWalletData()
     }
 
     private func getPrimaryBlockchain(for symbol: String) -> BlockchainType {
@@ -277,6 +326,30 @@ final class WalletManager: ObservableObject {
             return .avalanche
         default:
             return .ethereum // Default to Ethereum for unknown tokens
+        }
+    }
+    
+    // MARK: - Icon Helper
+    private func getDefaultIconUrl(for symbol: String) -> String? {
+        switch symbol.uppercased() {
+        case "BTC":
+            return "https://assets.coingecko.com/coins/images/1/large/bitcoin.png"
+        case "ETH":
+            return "https://assets.coingecko.com/coins/images/279/large/ethereum.png"
+        case "USDT":
+            return "https://assets.coingecko.com/coins/images/325/large/Tether.png"
+        case "USDC":
+            return "https://assets.coingecko.com/coins/images/6319/large/USD_Coin_icon.png"
+        case "BNB":
+            return "https://assets.coingecko.com/coins/images/825/large/bnb-icon2_2x.png"
+        case "MATIC":
+            return "https://assets.coingecko.com/coins/images/4713/large/matic-token-icon.png"
+        case "AVAX":
+            return "https://assets.coingecko.com/coins/images/12559/large/Avalanche_Circle_RedWhite_Trans.png"
+        case "SOL":
+            return "https://assets.coingecko.com/coins/images/4128/large/solana.png"
+        default:
+            return nil
         }
     }
 
@@ -305,6 +378,37 @@ final class WalletManager: ObservableObject {
             print("📡 Fetching native assets for \(requests.count) requests...")
             var fetchedTokens = await apiService.getNativeAssets(for: requests)
             print("💰 Fetched \(fetchedTokens.count) native tokens")
+
+            // Load Bitcoin balance if selected
+            if let btcAccount = accounts[.bitcoin], selectedBlockchains.contains(.bitcoin) {
+                print("🪙 Bitcoin account found, loading BTC balance...")
+                do {
+                    let btcBalanceResult = try await BitcoinService.shared.fetchBalance(address: btcAccount.address)
+                    let btcBalance = BitcoinService.shared.satoshisToBTC(btcBalanceResult.confirmed)
+                    
+                    // Try to get BTC price and icon from API
+                    let existingBtcToken = fetchedTokens.first(where: { $0.symbol == "BTC" })
+                    let btcPrice = existingBtcToken?.price ?? 0
+                    let btcIconUrl = existingBtcToken?.iconUrl ?? getDefaultIconUrl(for: "BTC")
+                    
+                    let btcToken = Token(
+                        contractAddress: nil,
+                        name: "Bitcoin",
+                        symbol: "BTC",
+                        decimals: 8,
+                        balance: NSDecimalNumber(decimal: btcBalance).doubleValue,
+                        price: btcPrice,
+                        iconUrl: btcIconUrl,
+                        blockchain: .bitcoin,
+                        isNative: true,
+                        receivingAddress: btcAccount.address
+                    )
+                    fetchedTokens.append(btcToken)
+                    print("✅ Bitcoin balance loaded: \(btcBalance) BTC")
+                } catch {
+                    print("❌ Failed to load Bitcoin balance: \(error)")
+                }
+            }
 
             // Load basic ERC-20 tokens (USDT, USDC, WETH)
             if let ethAccount = accounts[.ethereum] {
@@ -404,32 +508,64 @@ final class WalletManager: ObservableObject {
     private func updateState(with tokens: [Token], accounts: [ChainAccount], defaultAddress: String?) async {
         print("📊 updateState called with \(tokens.count) tokens")
 
-        // Merge native tokens with saved custom tokens
-        var mergedTokens = tokens
-
-        // Add custom tokens that aren't already in the list
-        for customToken in savedCustomTokens {
-            if !mergedTokens.contains(where: { $0.contractAddress?.lowercased() == customToken.contractAddress?.lowercased() }) {
-                mergedTokens.append(customToken)
+        // Instead of replacing all tokens, merge new tokens with existing ones
+        var existingTokensMap = Dictionary(uniqueKeysWithValues: self.tokens.map { 
+            ($0.blockchain.rawValue + ($0.contractAddress ?? "native"), $0) 
+        })
+        
+        // Update or add new tokens (preserve iconUrl if new token doesn't have one)
+        for token in tokens {
+            let key = token.blockchain.rawValue + (token.contractAddress ?? "native")
+            
+            // If updating existing token and new token has no icon, preserve old icon
+            if let existingToken = existingTokensMap[key],
+               token.iconUrl == nil,
+               let existingIconUrl = existingToken.iconUrl {
+                
+                // Create new token with preserved iconUrl
+                let updatedToken = Token(
+                    contractAddress: token.contractAddress,
+                    name: token.name,
+                    symbol: token.symbol,
+                    decimals: token.decimals,
+                    balance: token.balance,
+                    price: token.price,
+                    iconUrl: existingIconUrl,  // Preserve existing icon
+                    blockchain: token.blockchain,
+                    isNative: token.isNative,
+                    receivingAddress: token.receivingAddress
+                )
+                existingTokensMap[key] = updatedToken
+            } else {
+                // Use new token as-is (has icon or is completely new)
+                existingTokensMap[key] = token
             }
         }
 
-        self.tokens = mergedTokens
-        print("📊 Total tokens after merging: \(mergedTokens.count) (native: \(tokens.count), custom: \(savedCustomTokens.count))")
+        // Add custom tokens that aren't already in the list
+        for customToken in savedCustomTokens {
+            let key = customToken.blockchain.rawValue + (customToken.contractAddress ?? "native")
+            if existingTokensMap[key] == nil {
+                existingTokensMap[key] = customToken
+            }
+        }
+
+        self.tokens = Array(existingTokensMap.values)
+        print("📊 Total tokens after merging: \(self.tokens.count)")
 
         // Debug: print all tokens and their values
-        for token in mergedTokens {
+        for token in self.tokens {
             print("  💎 \(token.symbol): balance=\(token.balance), price=$\(token.price), totalValue=$\(token.totalValue)")
         }
 
-        // Resolve address first
-        let resolvedAddress = defaultAddress ?? mergedTokens.first?.receivingAddress ?? walletAddress
+        // Resolve address first - use visible tokens only
+        let resolvedAddress = defaultAddress ?? self.visibleTokens.first?.receivingAddress ?? walletAddress
         self.walletAddress = resolvedAddress
         print("📍 Wallet address: \(resolvedAddress)")
 
-        // Calculate new balance from all tokens (native + custom)
-        let newBalance = mergedTokens.reduce(0) { $0 + $1.totalValue }
-        print("💰 New balance calculated: $\(newBalance)")
+        // Calculate new balance from visible tokens only (respecting selectedBlockchains)
+        let newBalance = self.visibleTokens.reduce(0) { $0 + $1.totalValue }
+        print("💰 New balance calculated: $\(newBalance) (from \(self.visibleTokens.count) visible tokens)")
 
         // Load previous balance from UserDefaults only once (on first load)
         let savedPreviousBalance = UserDefaults.standard.double(forKey: "previousBalance_\(resolvedAddress)")
@@ -466,7 +602,7 @@ final class WalletManager: ObservableObject {
 
         // Update current balance (but keep previousBalance unchanged for comparison)
         self.balance = newBalance
-        self.hasWallet = !tokens.isEmpty || keychain.hasSeedPhrase() || keychain.hasPrivateKey()
+        self.hasWallet = !self.tokens.isEmpty || keychain.hasSeedPhrase() || keychain.hasPrivateKey()
 
         // Load real NFTs from API
         Task {
@@ -951,7 +1087,7 @@ final class WalletManager: ObservableObject {
         }
 
         // Get primary address (Ethereum)
-        guard let primaryAddress = chainAccounts[.ethereum]?.address else {
+        guard chainAccounts[.ethereum]?.address != nil else {
             print("❌ Failed to derive Ethereum address")
             return false
         }
@@ -1040,6 +1176,29 @@ final class WalletManager: ObservableObject {
     private func saveFavorites() {
         if let data = try? JSONEncoder().encode(favoriteTokenSymbols) {
             UserDefaults.standard.set(data, forKey: favoritesStorageKey)
+        }
+    }
+    
+    // MARK: - Selected Blockchains Persistence
+    
+    /// Load selected blockchains from UserDefaults
+    private func loadSelectedBlockchains() {
+        if let data = UserDefaults.standard.data(forKey: selectedBlockchainsKey),
+           let blockchains = try? JSONDecoder().decode(Set<BlockchainPlatform>.self, from: data) {
+            selectedBlockchains = blockchains
+            print("🌐 Loaded \(blockchains.count) selected blockchains: \(blockchains.map { $0.rawValue }.joined(separator: ", "))")
+        } else {
+            // Default to Ethereum if nothing saved
+            selectedBlockchains = [.ethereum]
+            print("🌐 No saved blockchains, defaulting to Ethereum")
+        }
+    }
+    
+    /// Save selected blockchains to UserDefaults
+    private func saveSelectedBlockchains() {
+        if let data = try? JSONEncoder().encode(selectedBlockchains) {
+            UserDefaults.standard.set(data, forKey: selectedBlockchainsKey)
+            print("💾 Saved \(selectedBlockchains.count) selected blockchains")
         }
     }
 

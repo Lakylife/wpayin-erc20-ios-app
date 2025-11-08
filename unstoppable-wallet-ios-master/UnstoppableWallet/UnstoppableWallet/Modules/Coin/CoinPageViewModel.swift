@@ -1,0 +1,26 @@
+import Combine
+
+import MarketKit
+
+class CoinPageViewModel: ObservableObject {
+    let coin: Coin
+    private let watchlistManager = Core.shared.watchlistManager
+
+    @Published var isFavorite: Bool {
+        didSet {
+            if isFavorite {
+                watchlistManager.add(coinUid: coin.uid)
+                HudHelper.instance.show(banner: .addedToWatchlist)
+            } else {
+                watchlistManager.remove(coinUid: coin.uid)
+                HudHelper.instance.show(banner: .removedFromWatchlist)
+            }
+        }
+    }
+
+    init(coin: Coin) {
+        self.coin = coin
+
+        isFavorite = watchlistManager.isWatched(coinUid: coin.uid)
+    }
+}

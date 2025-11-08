@@ -83,7 +83,7 @@ struct BlockchainRow: View {
                 .fill(blockchainColor)
                 .frame(width: 44, height: 44)
                 .overlay(
-                    Text(blockchain.platform.icon)
+                    Text(blockchain.platform.displayIcon)
                         .font(.system(size: 18, weight: .bold))
                         .foregroundColor(.white)
                 )

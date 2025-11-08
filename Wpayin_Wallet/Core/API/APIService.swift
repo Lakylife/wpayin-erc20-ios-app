@@ -630,10 +630,12 @@ class APIService: ObservableObject {
     // MARK: - Token Information
 
     /// Fetch ERC-20 token information (name, symbol, decimals) from contract address
-    func getTokenInfo(contractAddress: String, config: BlockchainConfig = BlockchainConfig.defaultConfigs.first(where: { $0.platform == .ethereum })!) async throws -> TokenInfo {
+    func getTokenInfo(contractAddress: String, config: BlockchainConfig? = nil) async throws -> TokenInfo {
         print("🔍 Fetching token info for contract: \(contractAddress)")
+        
+        let blockchainConfig = config ?? BlockchainConfig.defaultConfigs.first(where: { $0.platform == .ethereum })!
 
-        guard let rpcURL = URL(string: config.rpcUrl) else {
+        guard let rpcURL = URL(string: blockchainConfig.rpcUrl) else {
             throw APIError.invalidURL
         }
 

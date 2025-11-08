@@ -6,6 +6,7 @@
 //
 
 import Foundation
+import WalletCore
 
 enum BlockchainType: String, CaseIterable, Codable, Sendable {
     case ethereum = "ethereum"
@@ -123,6 +124,29 @@ enum BlockchainType: String, CaseIterable, Codable, Sendable {
             return true
         case .bitcoin, .solana:
             return false
+        }
+    }
+
+    var coinType: CoinType? {
+        switch self {
+        case .ethereum:
+            return .ethereum
+        case .bitcoin:
+            return .bitcoin
+        case .solana:
+            return .solana
+        case .polygon:
+            return .polygon
+        case .bsc:
+            return .smartChain
+        case .arbitrum:
+            return .arbitrum
+        case .optimism:
+            return .optimism
+        case .avalanche:
+            return .avalancheCChain
+        case .base:
+            return .ethereum // Base uses Ethereum coin type
         }
     }
 }

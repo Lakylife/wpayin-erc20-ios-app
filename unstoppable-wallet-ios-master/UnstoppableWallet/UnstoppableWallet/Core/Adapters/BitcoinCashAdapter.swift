@@ -1,0 +1,128 @@
+import BitcoinCashKit
+import BitcoinCore
+import HdWalletKit
+import MarketKit
+import RxSwift
+
+class BitcoinCashAdapter: BitcoinBaseAdapter {
+    private let bitcoinCashKit: BitcoinCashKit.Kit
+
+    init(wallet: Wallet, syncMode: BitcoinCore.SyncMode) throws {
+        guard let bitcoinCashCoinType = wallet.token.type.bitcoinCashCoinType else {
+            throw AdapterError.wrongParameters
+        }
+
+        let kitCoinType: BitcoinCashKit.CoinType
+
+        switch bitcoinCashCoinType {
+        case .type0: kitCoinType = .type0
+        case .type145: kitCoinType = .type145
+        }
+
+        let networkType: BitcoinCashKit.Kit.NetworkType = .mainNet(coinType: kitCoinType)
+        let logger = Core.shared.logger.scoped(with: "BitcoinCashKit")
+
+        switch wallet.account.type {
+        case .mnemonic:
+            guard let seed = wallet.account.type.mnemonicSeed else {
+                throw AdapterError.unsupportedAccount
+            }
+            bitcoinCashKit = try BitcoinCashKit.Kit(
+                seed: seed,
+                walletId: wallet.account.id,
+                syncMode: syncMode,
+                networkType: networkType,
+                confirmationsThreshold: Self.confirmationsThreshold,
+                logger: logger
+            )
+        case let .hdExtendedKey(key):
+            bitcoinCashKit = try BitcoinCashKit.Kit(
+                extendedKey: key,
+                walletId: wallet.account.id,
+                syncMode: syncMode,
+                networkType: networkType,
+                confirmationsThreshold: Self.confirmationsThreshold,
+                logger: logger
+            )
+        case let .btcAddress(address, _, _):
+            bitcoinCashKit = try BitcoinCashKit.Kit(
+                watchAddress: address,
+                walletId: wallet.account.id,
+                syncMode: syncMode,
+                networkType: networkType,
+                confirmationsThreshold: Self.confirmationsThreshold,
+                logger: nil
+            )
+        default:
+            throw AdapterError.unsupportedAccount
+        }
+
+        super.init(abstractKit: bitcoinCashKit, wallet: wallet, syncMode: syncMode)
+
+        bitcoinCashKit.delegate = self
+    }
+
+    override var explorerTitle: String {
+        "blockchair.com"
+    }
+
+    override func explorerUrl(transactionHash: String) -> String? {
+        "https://blockchair.com/bitcoin-cash/transaction/" + transactionHash
+    }
+
+    override func explorerUrl(address: String) -> String? {
+        "https://blockchair.com/bitcoin-cash/address/" + address
+    }
+}
+
+extension BitcoinCashAdapter: ISendBitcoinAdapter {
+    var blockchainType: BlockchainType {
+        .bitcoinCash
+    }
+}
+
+extension BitcoinCashAdapter {
+    static func clear(except excludedWalletIds: [String]) throws {
+        try Kit.clear(exceptFor: excludedWalletIds)
+    }
+
+    static func firstAddress(accountType: AccountType, tokenType: TokenType) throws -> String {
+        guard let bitcoinCashCoinType = tokenType.bitcoinCashCoinType else {
+            throw AdapterError.wrongParameters
+        }
+
+        let kitCoinType: BitcoinCashKit.CoinType
+
+        switch bitcoinCashCoinType {
+        case .type0: kitCoinType = .type0
+        case .type145: kitCoinType = .type145
+        }
+
+        let networkType: BitcoinCashKit.Kit.NetworkType = .mainNet(coinType: kitCoinType)
+
+        switch accountType {
+        case .mnemonic:
+            guard let seed = accountType.mnemonicSeed else {
+                throw AdapterError.unsupportedAccount
+            }
+
+            let address = try BitcoinCashKit.Kit.firstAddress(
+                seed: seed,
+                networkType: networkType
+            )
+
+            return address.stringValue
+        case let .hdExtendedKey(key):
+            let address = try BitcoinCashKit.Kit.firstAddress(
+                extendedKey: key,
+                networkType: networkType
+            )
+
+            return address.stringValue
+        case let .btcAddress(address, _, _):
+            return address
+        default:
+            throw AdapterError.unsupportedAccount
+        }
+    }
+}

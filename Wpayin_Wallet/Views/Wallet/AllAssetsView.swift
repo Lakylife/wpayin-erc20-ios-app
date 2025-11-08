@@ -44,7 +44,7 @@ struct AllAssetsView: View {
                     // Assets List
                     ScrollView {
                         LazyVStack(spacing: 12) {
-                            ForEach(walletManager.groupedTokens.filter { $0.balance > 0 }) { token in
+                            ForEach(walletManager.visibleGroupedTokens.filter { $0.balance > 0 }) { token in
                                 NavigationLink(destination: AssetDetailView(token: token)) {
                                     AllAssetsRowView(token: token)
                                 }

@@ -10,9 +10,9 @@ import CoreImage.CIFilterBuiltins
 
 struct DepositView: View {
     @EnvironmentObject var walletManager: WalletManager
+    @EnvironmentObject var settingsManager: SettingsManager
     @Environment(\.dismiss) private var dismiss
-    @State private var selectedAsset = 0
-    @State private var selectedBlockchain: BlockchainPlatform = .ethereum
+    @State private var selectedToken: Token?
     @State private var qrCodeImage: UIImage?
     @State private var addressCopied = false
 
@@ -29,24 +29,18 @@ struct DepositView: View {
                                 .font(.wpayinHeadline)
                                 .foregroundColor(WpayinColors.text)
 
-                            Text("Send funds to your \(selectedAssetSymbol) address")
+                            Text("Send funds to your \(selectedToken?.symbol ?? "Token") address")
                                 .font(.wpayinBody)
                                 .foregroundColor(WpayinColors.textSecondary)
                         }
 
-                        // Asset Selector
-                        AssetSelector(
-                            assets: availableAssets,
-                            selectedIndex: $selectedAsset
+                        // Token Selector with Network Info
+                        TokenNetworkSelector(
+                            selectedToken: $selectedToken,
+                            availableTokens: availableTokensWithNetwork
                         )
-
-                        // Blockchain Selector for selected asset
-                        if !availableBlockchainsForAsset.isEmpty {
-                            BlockchainSelectorView(
-                                blockchains: availableBlockchainsForAsset,
-                                selectedBlockchain: $selectedBlockchain
-                            )
-                        }
+                        .environmentObject(walletManager)
+                        .environmentObject(settingsManager)
 
                         if let tokenAddress = currentTokenAddress {
                             QRCodeView(
@@ -72,7 +66,12 @@ struct DepositView: View {
                         InstructionsView()
 
                         // Warning
-                        WarningView(tokenSymbol: selectedAssetSymbol)
+                        if let token = selectedToken {
+                            WarningView(
+                                tokenSymbol: token.symbol,
+                                networkName: token.blockchain.name
+                            )
+                        }
                     }
                     .padding(.horizontal, 24)
                     .padding(.top, 20)
@@ -90,54 +89,56 @@ struct DepositView: View {
             }
         }
         .onAppear {
+            // Select first available token
+            if selectedToken == nil && !availableTokensWithNetwork.isEmpty {
+                selectedToken = availableTokensWithNetwork.first
+            }
             generateQRCode()
         }
-        .onChange(of: selectedAsset) { _ in
+        .onChange(of: selectedToken?.id) { _ in
             generateQRCode()
         }
-        .onChange(of: selectedBlockchain) { _ in
-            generateQRCode()
-        }
-        .onChange(of: walletManager.tokens.map { $0.id }) { _ in
+        .onChange(of: walletManager.visibleTokens.map { $0.id }) { _ in
             generateQRCode()
         }
     }
 
     private var currentTokenAddress: String? {
-        // Find the blockchain config for the selected blockchain platform
-        guard let config = walletManager.availableBlockchains.first(where: { config in
-            config.platform == selectedBlockchain && config.network == .mainnet && config.isEnabled
-        }) else { return nil }
+        guard let token = selectedToken else { return nil }
+        
+        // Convert BlockchainType to BlockchainPlatform
+        let tokenBlockchainPlatform = BlockchainPlatform(rawValue: token.blockchain.rawValue) ?? .ethereum
+        
+        // Find the blockchain config for this token's blockchain
+        let config = walletManager.availableBlockchains.first { config in
+            config.platform == tokenBlockchainPlatform && config.network == .mainnet && config.isEnabled
+        }
+        
+        guard let foundConfig = config else { return nil }
 
         // Get the account for this blockchain
-        guard let blockchainType = config.blockchainType else { return nil }
+        guard let blockchainType = foundConfig.blockchainType else { return nil }
         return walletManager.availableChainAccounts[blockchainType]?.address
     }
 
-    private var availableAssets: [String] {
-        Array(Set(walletManager.groupedTokens.map { $0.symbol })).sorted()
-    }
-
-    private var selectedAssetSymbol: String {
-        guard !availableAssets.isEmpty else { return "Token" }
-        let validIndex = min(selectedAsset, availableAssets.count - 1)
-        return availableAssets[validIndex]
-    }
-
-    private var availableBlockchainsForAsset: [BlockchainPlatform] {
-        let symbol = selectedAssetSymbol
-        switch symbol.uppercased() {
-        case "ETH":
-            return [.ethereum, .arbitrum, .optimism, .base]
-        case "BTC":
-            return [.bitcoin]
-        case "MATIC":
-            return [.polygon]
-        case "BNB":
-            return [.bsc]
-        default:
-            return [.ethereum]
+    private var availableTokensWithNetwork: [Token] {
+        // Get all tokens that are on enabled networks
+        let filtered = walletManager.visibleTokens.filter { token in
+            let tokenBlockchainPlatform = BlockchainPlatform(rawValue: token.blockchain.rawValue) ?? .ethereum
+            return walletManager.availableBlockchains.contains { config in
+                config.platform == tokenBlockchainPlatform && config.network == .mainnet && config.isEnabled
+            }
         }
+        
+        // Sort by symbol first, then by blockchain
+        let sorted = filtered.sorted { token1, token2 in
+            if token1.symbol == token2.symbol {
+                return token1.blockchain.name < token2.blockchain.name
+            }
+            return token1.symbol < token2.symbol
+        }
+        
+        return sorted
     }
 
     private func generateQRCode() {
@@ -163,120 +164,125 @@ struct DepositView: View {
     }
 }
 
-struct AssetSelector: View {
-    let assets: [String]
-    @Binding var selectedIndex: Int
+struct TokenNetworkSelector: View {
+    @Binding var selectedToken: Token?
+    let availableTokens: [Token]
+    @EnvironmentObject var walletManager: WalletManager
+    @EnvironmentObject var settingsManager: SettingsManager
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("Select Asset")
-                .font(.wpayinSubheadline)
-                .foregroundColor(WpayinColors.text)
+            // Header with balance
+            HStack {
+                Text("Select Asset & Network")
+                    .font(.system(size: 14, weight: .medium))
+                    .foregroundColor(WpayinColors.textSecondary)
+                
+                Spacer()
+                
+                if let token = selectedToken {
+                    HStack(spacing: 8) {
+                        Text("Balance: \(String(format: "%.4f", token.balance))")
+                            .font(.system(size: 12))
+                            .foregroundColor(WpayinColors.textSecondary)
+                    }
+                }
+            }
 
-            if !assets.isEmpty {
-                let currentAsset = assets[min(selectedIndex, assets.count - 1)]
-                Menu {
-                    ForEach(Array(assets.enumerated()), id: \.offset) { index, asset in
-                        Button(action: {
-                            selectedIndex = index
-                        }) {
-                            Text(asset)
+            // Token Selector Button (styled like Swap)
+            Menu {
+                ForEach(availableTokens) { token in
+                    Button(action: {
+                        selectedToken = token
+                    }) {
+                        let tokenPlatform = BlockchainPlatform(rawValue: token.blockchain.rawValue) ?? .ethereum
+                        HStack {
+                            // Network icon
+                            Circle()
+                                .fill(tokenPlatform.color)
+                                .frame(width: 16, height: 16)
+                            
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("\(token.symbol) - \(token.blockchain.name)")
+                                    .font(.system(size: 14, weight: .medium))
+                                Text("\(String(format: "%.4f", token.balance)) \(token.symbol)")
+                                    .font(.system(size: 12))
+                                    .foregroundColor(.secondary)
+                            }
+                            
+                            Spacer()
+                            
+                            Text(token.totalValue.formatted(as: settingsManager.selectedCurrency))
+                                .font(.system(size: 12, weight: .medium))
+                                .foregroundColor(.secondary)
                         }
                     }
-                } label: {
-                    HStack {
+                }
+            } label: {
+                HStack(spacing: 12) {
+                    if let token = selectedToken {
+                        let tokenPlatform = BlockchainPlatform(rawValue: token.blockchain.rawValue) ?? .ethereum
+                        
+                        // Token icon with gradient
                         Circle()
-                            .fill(WpayinColors.primary)
-                            .frame(width: 32, height: 32)
+                            .fill(
+                                LinearGradient(
+                                    gradient: Gradient(colors: [tokenPlatform.color, tokenPlatform.color.opacity(0.7)]),
+                                    startPoint: .topLeading,
+                                    endPoint: .bottomTrailing
+                                )
+                            )
+                            .frame(width: 36, height: 36)
                             .overlay(
-                                Text(currentAsset.prefix(1))
-                                    .font(.wpayinCaption)
+                                Text(token.symbol.prefix(2))
+                                    .font(.system(size: 12, weight: .bold))
                                     .foregroundColor(.white)
                             )
 
                         VStack(alignment: .leading, spacing: 2) {
-                            Text(getAssetName(currentAsset))
-                                .font(.wpayinBody)
-                                .foregroundColor(WpayinColors.text)
-
-                            Text(currentAsset)
-                                .font(.wpayinCaption)
+                            HStack(spacing: 6) {
+                                Text(token.symbol)
+                                    .font(.system(size: 16, weight: .semibold))
+                                    .foregroundColor(WpayinColors.text)
+                                
+                                // Small network badge
+                                Circle()
+                                    .fill(tokenPlatform.color)
+                                    .frame(width: 14, height: 14)
+                                    .overlay(
+                                        Image(systemName: tokenPlatform.iconName)
+                                            .font(.system(size: 7, weight: .medium))
+                                            .foregroundColor(.white)
+                                    )
+                            }
+                            
+                            Text(token.blockchain.name)
+                                .font(.system(size: 12))
                                 .foregroundColor(WpayinColors.textSecondary)
+                                .lineLimit(1)
                         }
-
-                        Spacer()
-
-                        Image(systemName: "chevron.down")
-                            .font(.system(size: 12))
+                    } else {
+                        Text("Select Token")
+                            .font(.system(size: 16, weight: .medium))
                             .foregroundColor(WpayinColors.textSecondary)
                     }
-                    .padding(16)
-                    .background(WpayinColors.surface)
-                    .cornerRadius(12)
+
+                    Image(systemName: "chevron.down")
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundColor(WpayinColors.textTertiary)
                 }
-            } else {
-                Text("No assets available")
-                    .font(.wpayinCaption)
-                    .foregroundColor(WpayinColors.textSecondary)
-                    .frame(maxWidth: .infinity)
-                    .padding(16)
-                    .background(WpayinColors.surface)
-                    .cornerRadius(12)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 8)
+                .background(
+                    RoundedRectangle(cornerRadius: 12)
+                        .fill(WpayinColors.background)
+                )
             }
-        }
-    }
-
-    private func getAssetName(_ symbol: String) -> String {
-        switch symbol.uppercased() {
-        case "ETH":
-            return "Ethereum"
-        case "BTC":
-            return "Bitcoin"
-        case "MATIC":
-            return "Polygon"
-        case "BNB":
-            return "BNB Chain"
-        case "AVAX":
-            return "Avalanche"
-        default:
-            return symbol
         }
     }
 }
 
-struct TokenSelectorItem: View {
-    let token: Token
-    let isSelected: Bool
-    let action: () -> Void
 
-    var body: some View {
-        Button(action: action) {
-            HStack(spacing: 12) {
-                Circle()
-                    .fill(isSelected ? WpayinColors.primary : WpayinColors.surfaceLight)
-                    .frame(width: 32, height: 32)
-                    .overlay(
-                        Text(token.symbol.prefix(1))
-                            .font(.wpayinBody)
-                            .foregroundColor(isSelected ? .white : WpayinColors.text)
-                    )
-
-                Text(token.symbol)
-                    .font(.wpayinBody)
-                    .foregroundColor(isSelected ? WpayinColors.primary : WpayinColors.text)
-            }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 12)
-            .background(isSelected ? WpayinColors.primary.opacity(0.1) : WpayinColors.surface)
-            .cornerRadius(20)
-            .overlay(
-                RoundedRectangle(cornerRadius: 20)
-                    .stroke(isSelected ? WpayinColors.primary : Color.clear, lineWidth: 2)
-            )
-        }
-        .buttonStyle(PlainButtonStyle())
-    }
-}
 
 struct QRCodeView: View {
     let address: String
@@ -397,6 +403,7 @@ struct InstructionStep: View {
 
 struct WarningView: View {
     let tokenSymbol: String
+    let networkName: String
 
     var body: some View {
         HStack(spacing: 12) {
@@ -409,7 +416,7 @@ struct WarningView: View {
                     .font(.wpayinSubheadline)
                     .foregroundColor(WpayinColors.error)
 
-                Text("Only send \(tokenSymbol) on its native network to this address. Sending other cryptocurrencies may result in permanent loss.")
+                Text("Only send \(tokenSymbol) on \(networkName) network to this address. Sending wrong tokens or using wrong network may result in permanent loss.")
                     .font(.wpayinCaption)
                     .foregroundColor(WpayinColors.textSecondary)
                     .fixedSize(horizontal: false, vertical: true)
@@ -423,69 +430,15 @@ struct WarningView: View {
     }
 }
 
-struct BlockchainSelectorView: View {
-    let blockchains: [BlockchainPlatform]
-    @Binding var selectedBlockchain: BlockchainPlatform
 
-    var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text("Select Blockchain")
-                .font(.wpayinSubheadline)
-                .foregroundColor(WpayinColors.text)
-
-            if !blockchains.isEmpty {
-                Menu {
-                    ForEach(blockchains, id: \.self) { blockchain in
-                        Button(action: {
-                            selectedBlockchain = blockchain
-                        }) {
-                            HStack {
-                                Circle()
-                                    .fill(blockchain.color)
-                                    .frame(width: 12, height: 12)
-                                Text(blockchain.name)
-                                if blockchain == selectedBlockchain {
-                                    Spacer()
-                                    Image(systemName: "checkmark")
-                                }
-                            }
-                        }
-                    }
-                } label: {
-                    HStack {
-                        Circle()
-                            .fill(selectedBlockchain.color)
-                            .frame(width: 20, height: 20)
-                            .overlay(
-                                Image(systemName: selectedBlockchain.iconName)
-                                    .font(.system(size: 10, weight: .medium))
-                                    .foregroundColor(.white)
-                            )
-
-                        Text(selectedBlockchain.name)
-                            .font(.wpayinBody)
-                            .foregroundColor(WpayinColors.text)
-
-                        Spacer()
-
-                        Image(systemName: "chevron.down")
-                            .font(.system(size: 12))
-                            .foregroundColor(WpayinColors.textSecondary)
-                    }
-                    .padding(16)
-                    .background(WpayinColors.surface)
-                    .cornerRadius(12)
-                }
-            }
-        }
-    }
-}
 
 #Preview {
     DepositView()
         .environmentObject({
             let walletManager = WalletManager()
             walletManager.walletAddress = "0x742d35Cc6D06b73494d45e5d2b0542f2f"
+            walletManager.tokens = Token.mockTokens
             return walletManager
         }())
+        .environmentObject(SettingsManager())
 }

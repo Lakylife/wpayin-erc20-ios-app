@@ -132,6 +132,29 @@ enum BlockchainPlatform: String, CaseIterable, Codable, Identifiable {
             return "circle.grid.cross"
         }
     }
+    
+    var displayIcon: String {
+        switch self {
+        case .ethereum:
+            return "Ξ"  // Ethereum symbol
+        case .bitcoin:
+            return "₿"  // Bitcoin symbol
+        case .polygon:
+            return "⬡"  // Hexagon
+        case .bsc:
+            return "B"  // BNB
+        case .arbitrum:
+            return "A"  // Arbitrum
+        case .optimism:
+            return "O"  // Optimism
+        case .avalanche:
+            return "A"  // Avalanche
+        case .base:
+            return "◼︎"  // Base square
+        case .solana:
+            return "S"  // Solana
+        }
+    }
 
     var supportedNetworks: [NetworkType] {
         switch self {

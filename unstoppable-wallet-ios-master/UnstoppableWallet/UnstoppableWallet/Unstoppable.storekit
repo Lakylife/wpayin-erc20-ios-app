@@ -1,0 +1,182 @@
+{
+  "appPolicies" : {
+    "eula" : "",
+    "policies" : [
+      {
+        "locale" : "en_US",
+        "policyText" : "",
+        "policyURL" : ""
+      }
+    ]
+  },
+  "identifier" : "7B08124D",
+  "nonRenewingSubscriptions" : [
+
+  ],
+  "products" : [
+    {
+      "displayPrice" : "199990.0",
+      "familyShareable" : false,
+      "internalID" : "6741316958",
+      "localizations" : [
+        {
+          "description" : "lifetime",
+          "displayName" : "Premium - Lifetime",
+          "locale" : "en_US"
+        }
+      ],
+      "productID" : "premium_lifetime",
+      "referenceName" : "Premium - Lifetime",
+      "type" : "NonConsumable"
+    }
+  ],
+  "settings" : {
+    "_applicationInternalID" : "1447619907",
+    "_developerTeamID" : "HC4MCAXJ66",
+    "_failTransactionsEnabled" : false,
+    "_lastSynchronizedDate" : 761026862.16541398,
+    "_locale" : "en_US",
+    "_storefront" : "KAZ",
+    "_storeKitErrors" : [
+      {
+        "current" : null,
+        "enabled" : false,
+        "name" : "Load Products"
+      },
+      {
+        "current" : null,
+        "enabled" : false,
+        "name" : "Purchase"
+      },
+      {
+        "current" : null,
+        "enabled" : false,
+        "name" : "Verification"
+      },
+      {
+        "current" : null,
+        "enabled" : false,
+        "name" : "App Store Sync"
+      },
+      {
+        "current" : null,
+        "enabled" : false,
+        "name" : "Subscription Status"
+      },
+      {
+        "current" : null,
+        "enabled" : false,
+        "name" : "App Transaction"
+      },
+      {
+        "current" : null,
+        "enabled" : false,
+        "name" : "Manage Subscriptions Sheet"
+      },
+      {
+        "current" : null,
+        "enabled" : false,
+        "name" : "Refund Request Sheet"
+      },
+      {
+        "current" : null,
+        "enabled" : false,
+        "name" : "Offer Code Redeem Sheet"
+      }
+    ]
+  },
+  "subscriptionGroups" : [
+    {
+      "id" : "21627389",
+      "localizations" : [
+
+      ],
+      "name" : "Premium",
+      "subscriptions" : [
+        {
+          "adHocOffers" : [
+
+          ],
+          "codeOffers" : [
+            {
+              "displayPrice" : "6990.0",
+              "eligibility" : [
+                "expired",
+                "existing",
+                "new"
+              ],
+              "internalID" : "0BD774B1",
+              "isStackable" : true,
+              "numberOfPeriods" : 1,
+              "paymentMode" : "payAsYouGo",
+              "referenceName" : "PROMO15",
+              "subscriptionPeriod" : "P1M"
+            },
+            {
+              "displayPrice" : "5990.0",
+              "eligibility" : [
+                "new",
+                "existing",
+                "expired"
+              ],
+              "internalID" : "A50ACEDE",
+              "isStackable" : true,
+              "numberOfPeriods" : 1,
+              "paymentMode" : "payUpFront",
+              "referenceName" : "PROMO50",
+              "subscriptionPeriod" : "P1M"
+            }
+          ],
+          "displayPrice" : "11990.0",
+          "familyShareable" : true,
+          "groupNumber" : 1,
+          "internalID" : "6741198962",
+          "introductoryOffer" : {
+            "internalID" : "D9399DFE",
+            "numberOfPeriods" : 1,
+            "paymentMode" : "free",
+            "subscriptionPeriod" : "P1W"
+          },
+          "localizations" : [
+
+          ],
+          "productID" : "premium_1m",
+          "recurringSubscriptionPeriod" : "P1M",
+          "referenceName" : "Premium - Month",
+          "subscriptionGroupID" : "21627389",
+          "type" : "RecurringSubscription"
+        },
+        {
+          "adHocOffers" : [
+
+          ],
+          "codeOffers" : [
+
+          ],
+          "displayPrice" : "99990.0",
+          "familyShareable" : false,
+          "groupNumber" : 2,
+          "internalID" : "6741199030",
+          "introductoryOffer" : {
+            "internalID" : "43F4CDBD",
+            "numberOfPeriods" : 1,
+            "paymentMode" : "free",
+            "subscriptionPeriod" : "P1W"
+          },
+          "localizations" : [
+
+          ],
+          "productID" : "premium_1y",
+          "recurringSubscriptionPeriod" : "P1Y",
+          "referenceName" : "Premium - Year",
+          "subscriptionGroupID" : "21627389",
+          "type" : "RecurringSubscription"
+        }
+      ]
+    }
+  ],
+  "version" : {
+    "major" : 3,
+    "minor" : 0
+  }
+}

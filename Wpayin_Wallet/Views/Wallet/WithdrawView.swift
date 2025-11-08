@@ -35,6 +35,18 @@ enum WithdrawGasSpeed: String, CaseIterable {
         case .fast: return "~30 sec"
         }
     }
+    
+    func estimatedTimeFor(blockchain: BlockchainType) -> String {
+        if blockchain == .bitcoin {
+            switch self {
+            case .slow: return "~60 min"
+            case .standard: return "~30 min"
+            case .fast: return "~10 min"
+            }
+        } else {
+            return estimatedTime
+        }
+    }
 }
 
 struct WithdrawView: View {
@@ -51,9 +63,9 @@ struct WithdrawView: View {
     @State private var showGasSettings = false
 
     private var selectedToken: Token? {
-        guard !walletManager.tokens.isEmpty else { return nil }
-        let safeIndex = max(0, min(selectedTokenIndex, walletManager.tokens.count - 1))
-        return walletManager.tokens[safeIndex]
+        guard !walletManager.visibleTokens.isEmpty else { return nil }
+        let safeIndex = max(0, min(selectedTokenIndex, walletManager.visibleTokens.count - 1))
+        return walletManager.visibleTokens[safeIndex]
     }
 
     private var amountValue: Double {
@@ -62,17 +74,65 @@ struct WithdrawView: View {
 
     private var isValidTransaction: Bool {
         guard let token = selectedToken else { return false }
+        
+        // Bitcoin address validation
+        if token.blockchain == .bitcoin {
+            // Bitcoin addresses can start with 1, 3, or bc1
+            let isBitcoinAddress = recipientAddress.hasPrefix("bc1") || 
+                                  recipientAddress.hasPrefix("1") || 
+                                  recipientAddress.hasPrefix("3")
+            return !recipientAddress.isEmpty &&
+                   isBitcoinAddress &&
+                   amountValue > 0 &&
+                   amountValue <= token.balance
+        }
+        
+        // EVM address validation
         return !recipientAddress.isEmpty &&
                recipientAddress.hasPrefix("0x") &&
                recipientAddress.count == 42 &&
                amountValue > 0 &&
                amountValue <= token.balance
     }
+    
+    private var headerTitle: String {
+        guard let token = selectedToken else { return "Send Funds" }
+        return token.blockchain == .bitcoin ? "Send Bitcoin" : "Send Funds"
+    }
+    
+    private var headerSubtitle: String {
+        guard let token = selectedToken else { return "Send cryptocurrency to another wallet" }
+        if token.blockchain == .bitcoin {
+            return "Send BTC to any Bitcoin address"
+        }
+        return "Send cryptocurrency to another wallet"
+    }
+    
+    private var feeDisplayText: String {
+        guard let token = selectedToken else { return "Fee" }
+        if token.blockchain == .bitcoin {
+            return "Network Fee: \(Int(estimatedGasFee)) sat/vB"
+        }
+        return String(format: "Est. Gas: $%.4f", estimatedGasFee)
+    }
 
     private var estimatedGasFee: Double {
         guard let token = selectedToken else { return 0 }
 
-        // Base gas fee by network
+        // Bitcoin uses satoshis/byte, others use ETH/native token amount
+        if token.blockchain == .bitcoin {
+            // Return fee rate in satoshis/byte
+            switch selectedGasSpeed {
+            case .slow:
+                return 10  // ~1 hour
+            case .standard:
+                return 20  // ~30 minutes
+            case .fast:
+                return 40  // ~10-15 minutes
+            }
+        }
+
+        // Base gas fee by network (in native tokens)
         let baseGas: Double
         switch token.blockchain {
         case .ethereum:
@@ -99,18 +159,18 @@ struct WithdrawView: View {
                     VStack(spacing: 32) {
                         // Header
                         VStack(spacing: 16) {
-                            Text("Send Funds")
+                            Text(headerTitle)
                                 .font(.wpayinHeadline)
                                 .foregroundColor(WpayinColors.text)
 
-                            Text("Send cryptocurrency to another wallet")
+                            Text(headerSubtitle)
                                 .font(.wpayinBody)
                                 .foregroundColor(WpayinColors.textSecondary)
                         }
 
                         // Token Selection
                         TokenSelectionView(
-                            tokens: walletManager.tokens,
+                            tokens: walletManager.visibleTokens,
                             selectedIndex: $selectedTokenIndex
                         )
 
@@ -174,7 +234,11 @@ struct WithdrawView: View {
             )
         }
         .sheet(isPresented: $showGasSettings) {
-            WithdrawGasSettingsSheet(selectedSpeed: $selectedGasSpeed, estimatedGas: estimatedGasFee)
+            WithdrawGasSettingsSheet(
+                selectedSpeed: $selectedGasSpeed, 
+                estimatedGas: estimatedGasFee,
+                selectedToken: selectedToken
+            )
         }
         .alert("Transaction Error", isPresented: $showError) {
             Button("OK") { }
@@ -186,14 +250,61 @@ struct WithdrawView: View {
     private func processTransaction() {
         isProcessing = true
 
-        // Simulate transaction processing
         Task {
-            try await Task.sleep(nanoseconds: 2_000_000_000)
+            do {
+                guard let token = selectedToken else {
+                    throw TransactionError.failedToCreateTransaction
+                }
 
-            await MainActor.run {
-                isProcessing = false
-                // In real implementation, this would call the blockchain API
-                dismiss()
+                // Send transaction using TransactionService
+                let result: TransactionResult
+                
+                // Check if it's Bitcoin
+                if token.blockchain == .bitcoin {
+                    // Bitcoin transaction
+                    result = try await BitcoinService.shared.sendTransaction(
+                        to: recipientAddress,
+                        amount: Decimal(amountValue),
+                        feeRate: estimatedGasFee > 0 ? Int(estimatedGasFee) : nil  // satoshis/byte
+                    )
+                } else if token.isNative {
+                    // Send native token (ETH, BNB, MATIC, etc.)
+                    result = try await TransactionService.shared.sendEvmNativeToken(
+                        to: recipientAddress,
+                        amount: Decimal(amountValue),
+                        blockchain: token.blockchain,
+                        customGasPrice: nil, // Use automatic gas price
+                        gasLimit: 21000
+                    )
+                } else {
+                    // Send ERC-20 token
+                    result = try await TransactionService.shared.sendErc20Token(
+                        tokenAddress: token.contractAddress ?? "",
+                        to: recipientAddress,
+                        amount: Decimal(amountValue),
+                        decimals: token.decimals,
+                        blockchain: token.blockchain,
+                        customGasPrice: nil, // Use automatic gas price
+                        gasLimit: 65000
+                    )
+                }
+
+                print("✅ Transaction sent! Hash: \(result.hash)")
+
+                await MainActor.run {
+                    isProcessing = false
+                    // Refresh wallet data to show updated balance
+                    Task {
+                        await walletManager.refreshWalletData()
+                    }
+                    dismiss()
+                }
+            } catch {
+                await MainActor.run {
+                    isProcessing = false
+                    errorMessage = error.localizedDescription
+                    showError = true
+                }
             }
         }
     }
@@ -215,7 +326,35 @@ struct TokenSelectionView: View {
                         Button(action: {
                             selectedIndex = index
                         }) {
-                            HStack {
+                            HStack(spacing: 12) {
+                                // Token Icon
+                                if let iconUrl = token.iconUrl, let url = URL(string: iconUrl) {
+                                    AsyncImage(url: url) { image in
+                                        image
+                                            .resizable()
+                                            .aspectRatio(contentMode: .fill)
+                                    } placeholder: {
+                                        Circle()
+                                            .fill(WpayinColors.primary)
+                                            .overlay(
+                                                Text(token.symbol.prefix(1))
+                                                    .font(.system(size: 10, weight: .bold))
+                                                    .foregroundColor(.white)
+                                            )
+                                    }
+                                    .frame(width: 24, height: 24)
+                                    .clipShape(Circle())
+                                } else {
+                                    Circle()
+                                        .fill(WpayinColors.primary)
+                                        .frame(width: 24, height: 24)
+                                        .overlay(
+                                            Text(token.symbol.prefix(1))
+                                                .font(.system(size: 10, weight: .bold))
+                                                .foregroundColor(.white)
+                                        )
+                                }
+                                
                                 VStack(alignment: .leading, spacing: 2) {
                                     Text(token.symbol)
                                         .font(.system(size: 14, weight: .semibold))
@@ -231,14 +370,33 @@ struct TokenSelectionView: View {
                     }
                 } label: {
                     HStack {
-                        Circle()
-                            .fill(WpayinColors.primary)
+                        // Token Icon
+                        if let iconUrl = currentToken.iconUrl, let url = URL(string: iconUrl) {
+                            AsyncImage(url: url) { image in
+                                image
+                                    .resizable()
+                                    .aspectRatio(contentMode: .fill)
+                            } placeholder: {
+                                Circle()
+                                    .fill(WpayinColors.primary)
+                                    .overlay(
+                                        Text(currentToken.symbol.prefix(1))
+                                            .font(.wpayinCaption)
+                                            .foregroundColor(.white)
+                                    )
+                            }
                             .frame(width: 32, height: 32)
-                            .overlay(
-                                Text(currentToken.symbol.prefix(1))
-                                    .font(.wpayinCaption)
-                                    .foregroundColor(.white)
-                            )
+                            .clipShape(Circle())
+                        } else {
+                            Circle()
+                                .fill(WpayinColors.primary)
+                                .frame(width: 32, height: 32)
+                                .overlay(
+                                    Text(currentToken.symbol.prefix(1))
+                                        .font(.wpayinCaption)
+                                        .foregroundColor(.white)
+                                )
+                        }
 
                         VStack(alignment: .leading, spacing: 2) {
                             HStack(spacing: 6) {
@@ -827,6 +985,7 @@ struct AddAddressSheet: View {
 struct WithdrawGasSettingsSheet: View {
     @Binding var selectedSpeed: WithdrawGasSpeed
     let estimatedGas: Double
+    let selectedToken: Token?
     @Environment(\.dismiss) private var dismiss
 
     var body: some View {
@@ -872,13 +1031,15 @@ struct WithdrawGasSettingsSheet: View {
                                                 .font(.system(size: 16, weight: .semibold))
                                                 .foregroundColor(WpayinColors.text)
 
-                                            Text(speed.estimatedTime)
+                                            Text(speed.estimatedTimeFor(blockchain: selectedToken?.blockchain ?? .ethereum))
                                                 .font(.system(size: 14))
                                                 .foregroundColor(WpayinColors.textSecondary)
 
-                                            Text("~\(String(format: "%.6f", estimatedGas * speed.multiplier)) ETH")
-                                                .font(.system(size: 14))
-                                                .foregroundColor(WpayinColors.textSecondary)
+                                            if selectedToken?.blockchain != .bitcoin {
+                                                Text("~\(String(format: "%.6f", estimatedGas * speed.multiplier)) ETH")
+                                                    .font(.system(size: 14))
+                                                    .foregroundColor(WpayinColors.textSecondary)
+                                            }
                                         }
 
                                         Spacer()

@@ -1,0 +1,14 @@
+import Foundation
+import MarketKit
+
+import UIKit
+
+enum AddEvmSyncSourceModule {
+    static func viewController(blockchainType: BlockchainType) -> UIViewController {
+        let service = AddEvmSyncSourceService(blockchainType: blockchainType, evmSyncSourceManager: Core.shared.evmSyncSourceManager)
+        let viewModel = AddEvmSyncSourceViewModel(service: service)
+        let viewController = AddEvmSyncSourceViewController(viewModel: viewModel)
+
+        return ThemeNavigationController(rootViewController: viewController)
+    }
+}
