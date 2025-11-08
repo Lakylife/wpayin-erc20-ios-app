@@ -111,6 +111,16 @@ struct NetworkConfig: Identifiable, Codable, Equatable {
             symbol: "AVAX",
             blockExplorerUrl: "https://snowtrace.io",
             blockchain: .avalanche
+        ),
+        
+        // Bitcoin
+        NetworkConfig(
+            name: "Bitcoin",
+            chainId: 0,  // Bitcoin doesn't use chain ID
+            rpcUrl: "https://blockstream.info/api",
+            symbol: "BTC",
+            blockExplorerUrl: "https://blockstream.info",
+            blockchain: .bitcoin
         )
     ]
 
@@ -119,6 +129,8 @@ struct NetworkConfig: Identifiable, Codable, Equatable {
         switch blockchain {
         case .ethereum:
             return Color.blue
+        case .bitcoin:
+            return Color.orange
         case .arbitrum:
             return Color.cyan
         case .polygon:
@@ -131,8 +143,8 @@ struct NetworkConfig: Identifiable, Codable, Equatable {
             return Color(red: 0.91, green: 0.24, blue: 0.20)
         case .base:
             return Color(red: 0.0, green: 0.46, blue: 0.87)
-        default:
-            return WpayinColors.primary
+        case .solana:
+            return Color(red: 0.56, green: 0.24, blue: 0.85)
         }
     }
 
@@ -140,21 +152,23 @@ struct NetworkConfig: Identifiable, Codable, Equatable {
     var iconSymbol: String {
         switch blockchain {
         case .ethereum:
-            return "E"
+            return "Ξ"  // Ethereum symbol
+        case .bitcoin:
+            return "₿"  // Bitcoin symbol
         case .arbitrum:
             return "A"
         case .polygon:
-            return "P"
+            return "⬡"  // Polygon/hexagon
         case .bsc:
             return "B"
         case .optimism:
             return "O"
         case .avalanche:
-            return "V"
+            return "A"
         case .base:
-            return "B"
-        default:
-            return String(name.prefix(1))
+            return "◼︎"  // Square for Base
+        case .solana:
+            return "S"
         }
     }
 }

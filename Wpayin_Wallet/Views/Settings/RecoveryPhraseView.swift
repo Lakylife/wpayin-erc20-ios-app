@@ -57,7 +57,7 @@ struct RecoveryPhraseView: View {
                             .padding(.horizontal, 24)
                         } else {
                             // Recovery Phrase Display
-                            if let recoveryPhrase = recoveryPhrase {
+                            if recoveryPhrase != nil {
                                 VStack(spacing: 24) {
                                     VStack(spacing: 16) {
                                         Text("Your Recovery Phrase")

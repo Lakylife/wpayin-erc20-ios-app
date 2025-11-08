@@ -41,12 +41,26 @@ struct SwapView: View {
     @State private var isSelectingFromToken = true
     @State private var slippage: Double = 0.5
     @State private var showSlippageSettings = false
-    @State private var showBuyOptions = false
     @State private var selectedGasSpeed: GasSpeed = .standard
     @State private var showGasSettings = false
+    @State private var selectedNetwork: BlockchainPlatform = .ethereum
+    @State private var showNetworkSelector = false
 
     private var availableTokens: [Token] {
-        walletManager.groupedTokens
+        walletManager.visibleTokens.filter { 
+            $0.blockchain.rawValue == selectedNetwork.rawValue && 
+            $0.blockchain != .bitcoin  // Bitcoin doesn't support swaps
+        }
+    }
+    
+    private var availableNetworks: [BlockchainPlatform] {
+        walletManager.availableBlockchains
+            .filter { 
+                $0.network == .mainnet && 
+                $0.isEnabled &&
+                $0.blockchainType != .bitcoin  // Exclude Bitcoin from swap networks
+            }
+            .map { $0.platform }
     }
 
     private var swapRate: Double {
@@ -129,16 +143,6 @@ struct SwapView: View {
                     }
 
                     Spacer()
-
-                    Button("Buy") {
-                        showBuyOptions = true
-                    }
-                    .font(.system(size: 16, weight: .semibold))
-                    .foregroundColor(.white)
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 8)
-                    .background(WpayinColors.primary)
-                    .cornerRadius(20)
                 }
                 .padding(.horizontal, 20)
                 .padding(.top, 60)
@@ -147,6 +151,15 @@ struct SwapView: View {
                 // Swap Content
                 ScrollView {
                     VStack(spacing: 20) {
+                        // Network Selector
+                        if !availableNetworks.isEmpty {
+                            NetworkSelectorButton(
+                                selectedNetwork: $selectedNetwork,
+                                availableNetworks: availableNetworks,
+                                onTap: { showNetworkSelector = true }
+                            )
+                        }
+                        
                         // Swap Card
                         VStack(spacing: 0) {
                             // From Token Section
@@ -335,14 +348,18 @@ struct SwapView: View {
                 }
             }
         }
-        .sheet(isPresented: $showBuyOptions) {
-            BuyOptionsView()
-        }
+
         .sheet(isPresented: $showGasSettings) {
             GasSettingsSheet(selectedSpeed: $selectedGasSpeed, estimatedGas: estimatedGasFee, gasInUSD: gasFeeInUSD, tokenSymbol: selectedFromToken?.symbol ?? "ETH")
         }
         .sheet(isPresented: $showSlippageSettings) {
             SlippageSettingsSheet(slippage: $slippage)
+        }
+        .sheet(isPresented: $showNetworkSelector) {
+            NetworkSelectorSheet(
+                selectedNetwork: $selectedNetwork,
+                availableNetworks: availableNetworks
+            )
         }
         .onAppear {
             if selectedFromToken == nil && !availableTokens.isEmpty {
@@ -351,6 +368,12 @@ struct SwapView: View {
             if selectedToToken == nil && availableTokens.count > 1 {
                 selectedToToken = availableTokens[1]
             }
+        }
+        .onChange(of: selectedNetwork) { _ in
+            // Reset token selection when network changes
+            selectedFromToken = availableTokens.first
+            selectedToToken = availableTokens.count > 1 ? availableTokens[1] : nil
+            fromAmount = ""
         }
     }
 
@@ -381,12 +404,53 @@ struct SwapView: View {
         isSwapping = true
 
         Task {
-            try await Task.sleep(nanoseconds: 2_000_000_000)
+            do {
+                guard let fromToken = selectedFromToken,
+                      let toToken = selectedToToken,
+                      let amount = Double(fromAmount),
+                      amount > 0 else {
+                    throw SwapError.invalidTokenPair
+                }
 
-            await MainActor.run {
-                isSwapping = false
-                fromAmount = ""
-                // In real implementation, this would update balances
+                // Get swap quote
+                print("📊 Getting swap quote...")
+                let quote = try await SwapService.shared.getQuote(
+                    fromToken: fromToken,
+                    toToken: toToken,
+                    amountIn: Decimal(amount),
+                    slippage: slippage
+                )
+
+                print("✅ Quote received: \(quote.amountOut) \(toToken.symbol)")
+                print("💰 Minimum amount out: \(quote.amountOutMin)")
+                print("⛽ Estimated gas: \(quote.gasEstimate)")
+
+                // Execute swap
+                print("🔄 Executing swap...")
+                let result = try await SwapService.shared.executeSwap(
+                    quote: quote,
+                    fromToken: fromToken,
+                    toToken: toToken
+                )
+
+                print("✅ Swap successful! TX: \(result.transactionHash)")
+
+                await MainActor.run {
+                    isSwapping = false
+                    fromAmount = ""
+
+                    // Refresh wallet data to show updated balances
+                    Task {
+                        await walletManager.refreshWalletData()
+                    }
+                }
+            } catch {
+                print("❌ Swap failed: \(error.localizedDescription)")
+                await MainActor.run {
+                    isSwapping = false
+                    // Show error to user
+                    // You could add @State var showError and errorMessage here
+                }
             }
         }
     }
@@ -441,14 +505,33 @@ struct ModernTokenSelector: View {
                 Button(action: onTokenSelect) {
                     HStack(spacing: 12) {
                         if let token = selectedToken {
-                            Circle()
-                                .fill(tokenGradient(for: token))
+                            // Token Icon
+                            if let iconUrl = token.iconUrl, let url = URL(string: iconUrl) {
+                                AsyncImage(url: url) { image in
+                                    image
+                                        .resizable()
+                                        .aspectRatio(contentMode: .fill)
+                                } placeholder: {
+                                    Circle()
+                                        .fill(tokenGradient(for: token))
+                                        .overlay(
+                                            Text(token.symbol.prefix(2))
+                                                .font(.system(size: 12, weight: .bold))
+                                                .foregroundColor(.white)
+                                        )
+                                }
                                 .frame(width: 36, height: 36)
-                                .overlay(
-                                    Text(token.symbol.prefix(2))
-                                        .font(.system(size: 12, weight: .bold))
-                                        .foregroundColor(.white)
-                                )
+                                .clipShape(Circle())
+                            } else {
+                                Circle()
+                                    .fill(tokenGradient(for: token))
+                                    .frame(width: 36, height: 36)
+                                    .overlay(
+                                        Text(token.symbol.prefix(2))
+                                            .font(.system(size: 12, weight: .bold))
+                                            .foregroundColor(.white)
+                                    )
+                            }
 
                             VStack(alignment: .leading, spacing: 2) {
                                 Text(token.symbol)
@@ -567,19 +650,55 @@ struct TokenPickerView: View {
                                 dismiss()
                             }) {
                                 HStack(spacing: 16) {
-                                    Circle()
-                                        .fill(tokenGradient(for: token))
+                                    // Token Icon
+                                    if let iconUrl = token.iconUrl, let url = URL(string: iconUrl) {
+                                        AsyncImage(url: url) { image in
+                                            image
+                                                .resizable()
+                                                .aspectRatio(contentMode: .fill)
+                                        } placeholder: {
+                                            Circle()
+                                                .fill(tokenGradient(for: token))
+                                                .overlay(
+                                                    Text(token.symbol.prefix(2))
+                                                        .font(.system(size: 14, weight: .bold))
+                                                        .foregroundColor(.white)
+                                                )
+                                        }
                                         .frame(width: 40, height: 40)
-                                        .overlay(
-                                            Text(token.symbol.prefix(2))
-                                                .font(.system(size: 14, weight: .bold))
-                                                .foregroundColor(.white)
-                                        )
+                                        .clipShape(Circle())
+                                    } else {
+                                        Circle()
+                                            .fill(tokenGradient(for: token))
+                                            .frame(width: 40, height: 40)
+                                            .overlay(
+                                                Text(token.symbol.prefix(2))
+                                                    .font(.system(size: 14, weight: .bold))
+                                                    .foregroundColor(.white)
+                                            )
+                                    }
 
                                     VStack(alignment: .leading, spacing: 4) {
-                                        Text(token.symbol)
-                                            .font(.system(size: 16, weight: .semibold))
-                                            .foregroundColor(WpayinColors.text)
+                                        let tokenPlatform = BlockchainPlatform(rawValue: token.blockchain.rawValue) ?? .ethereum
+                                        HStack(spacing: 6) {
+                                            Text(token.symbol)
+                                                .font(.system(size: 16, weight: .semibold))
+                                                .foregroundColor(WpayinColors.text)
+                                            
+                                            // Network badge
+                                            Circle()
+                                                .fill(tokenPlatform.color)
+                                                .frame(width: 14, height: 14)
+                                                .overlay(
+                                                    Image(systemName: tokenPlatform.iconName)
+                                                        .font(.system(size: 7, weight: .medium))
+                                                        .foregroundColor(.white)
+                                                )
+                                            
+                                            Text(tokenPlatform.name)
+                                                .font(.system(size: 12))
+                                                .foregroundColor(WpayinColors.textSecondary)
+                                        }
 
                                         Text(token.name)
                                             .font(.system(size: 14))
@@ -641,98 +760,7 @@ struct TokenPickerView: View {
     }
 }
 
-struct BuyOptionsView: View {
-    @Environment(\.dismiss) private var dismiss
 
-    var body: some View {
-        NavigationView {
-            VStack(spacing: 24) {
-                Text("Buy Crypto")
-                    .font(.system(size: 28, weight: .bold))
-                    .foregroundColor(WpayinColors.text)
-
-                VStack(spacing: 16) {
-                    BuyOptionCard(
-                        icon: "creditcard.fill",
-                        title: "Buy with Card",
-                        subtitle: "Purchase crypto using debit/credit card",
-                        action: {}
-                    )
-
-                    BuyOptionCard(
-                        icon: "building.columns.fill",
-                        title: "Bank Transfer",
-                        subtitle: "Transfer from your bank account",
-                        action: {}
-                    )
-
-                    BuyOptionCard(
-                        icon: "arrow.left.arrow.right",
-                        title: "P2P Trading",
-                        subtitle: "Buy directly from other users",
-                        action: {}
-                    )
-                }
-
-                Spacer()
-            }
-            .padding(20)
-            .background(WpayinColors.background)
-            .navigationBarHidden(true)
-            .toolbar {
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    Button("Close") {
-                        dismiss()
-                    }
-                }
-            }
-        }
-    }
-}
-
-struct BuyOptionCard: View {
-    let icon: String
-    let title: String
-    let subtitle: String
-    let action: () -> Void
-
-    var body: some View {
-        Button(action: action) {
-            HStack(spacing: 16) {
-                Circle()
-                    .fill(WpayinColors.primary.opacity(0.2))
-                    .frame(width: 50, height: 50)
-                    .overlay(
-                        Image(systemName: icon)
-                            .font(.system(size: 24))
-                            .foregroundColor(WpayinColors.primary)
-                    )
-
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(title)
-                        .font(.system(size: 16, weight: .semibold))
-                        .foregroundColor(WpayinColors.text)
-
-                    Text(subtitle)
-                        .font(.system(size: 14))
-                        .foregroundColor(WpayinColors.textSecondary)
-                }
-
-                Spacer()
-
-                Image(systemName: "chevron.right")
-                    .font(.system(size: 14, weight: .medium))
-                    .foregroundColor(WpayinColors.textTertiary)
-            }
-            .padding(20)
-            .background(
-                RoundedRectangle(cornerRadius: 16)
-                    .fill(WpayinColors.surface)
-            )
-        }
-        .buttonStyle(PlainButtonStyle())
-    }
-}
 
 struct GasSettingsSheet: View {
     @Binding var selectedSpeed: GasSpeed
@@ -891,6 +919,156 @@ struct SlippageSettingsSheet: View {
                     }
                 }
             }
+        }
+    }
+}
+
+struct NetworkSelectorButton: View {
+    @Binding var selectedNetwork: BlockchainPlatform
+    let availableNetworks: [BlockchainPlatform]
+    let onTap: () -> Void
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            // Header
+            Text("Select Network")
+                .font(.system(size: 14, weight: .medium))
+                .foregroundColor(WpayinColors.textSecondary)
+            
+            // Network Selector (styled like token selector)
+            Button(action: onTap) {
+                HStack(spacing: 12) {
+                    // Network icon with gradient
+                    Circle()
+                        .fill(
+                            LinearGradient(
+                                gradient: Gradient(colors: [selectedNetwork.color, selectedNetwork.color.opacity(0.7)]),
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            )
+                        )
+                        .frame(width: 36, height: 36)
+                        .overlay(
+                            Image(systemName: selectedNetwork.iconName)
+                                .font(.system(size: 16, weight: .medium))
+                                .foregroundColor(.white)
+                        )
+                    
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(selectedNetwork.name)
+                            .font(.system(size: 16, weight: .semibold))
+                            .foregroundColor(WpayinColors.text)
+                        
+                        Text(selectedNetwork.symbol)
+                            .font(.system(size: 12))
+                            .foregroundColor(WpayinColors.textSecondary)
+                            .lineLimit(1)
+                    }
+                    
+                    Spacer()
+                    
+                    Image(systemName: "chevron.down")
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundColor(WpayinColors.textTertiary)
+                }
+                .padding(.horizontal, 12)
+                .padding(.vertical, 8)
+                .background(
+                    RoundedRectangle(cornerRadius: 12)
+                        .fill(WpayinColors.background)
+                )
+            }
+            .buttonStyle(PlainButtonStyle())
+        }
+    }
+}
+
+struct NetworkSelectorSheet: View {
+    @Binding var selectedNetwork: BlockchainPlatform
+    let availableNetworks: [BlockchainPlatform]
+    @Environment(\.dismiss) private var dismiss
+    
+    var body: some View {
+        NavigationView {
+            VStack(spacing: 0) {
+                // Header (same style as TokenPickerView)
+                HStack {
+                    Button(L10n.Action.cancel.localized) {
+                        dismiss()
+                    }
+                    .font(.system(size: 16, weight: .medium))
+                    .foregroundColor(WpayinColors.primary)
+
+                    Spacer()
+
+                    Text("Select Network")
+                        .font(.system(size: 20, weight: .bold))
+                        .foregroundColor(WpayinColors.text)
+
+                    Spacer()
+
+                    Text("")
+                        .font(.system(size: 16, weight: .medium))
+                        .foregroundColor(.clear)
+                }
+                .padding(20)
+
+                // Network List
+                ScrollView {
+                    LazyVStack(spacing: 12) {
+                        ForEach(availableNetworks, id: \.self) { network in
+                            Button(action: {
+                                selectedNetwork = network
+                                dismiss()
+                            }) {
+                                HStack(spacing: 16) {
+                                    // Network icon with gradient
+                                    Circle()
+                                        .fill(
+                                            LinearGradient(
+                                                gradient: Gradient(colors: [network.color, network.color.opacity(0.7)]),
+                                                startPoint: .topLeading,
+                                                endPoint: .bottomTrailing
+                                            )
+                                        )
+                                        .frame(width: 40, height: 40)
+                                        .overlay(
+                                            Image(systemName: network.iconName)
+                                                .font(.system(size: 18, weight: .medium))
+                                                .foregroundColor(.white)
+                                        )
+                                    
+                                    VStack(alignment: .leading, spacing: 4) {
+                                        Text(network.name)
+                                            .font(.system(size: 16, weight: .semibold))
+                                            .foregroundColor(WpayinColors.text)
+                                        
+                                        Text(network.symbol)
+                                            .font(.system(size: 14))
+                                            .foregroundColor(WpayinColors.textSecondary)
+                                    }
+                                    
+                                    Spacer()
+                                    
+                                    if selectedNetwork == network {
+                                        Image(systemName: "checkmark.circle.fill")
+                                            .font(.system(size: 20))
+                                            .foregroundColor(WpayinColors.primary)
+                                    }
+                                }
+                                .padding(16)
+                                .background(
+                                    RoundedRectangle(cornerRadius: 12)
+                                        .fill(selectedNetwork == network ? WpayinColors.primary.opacity(0.1) : WpayinColors.surface)
+                                )
+                            }
+                            .buttonStyle(PlainButtonStyle())
+                        }
+                    }
+                    .padding(.horizontal, 20)
+                }
+            }
+            .background(WpayinColors.background)
         }
     }
 }

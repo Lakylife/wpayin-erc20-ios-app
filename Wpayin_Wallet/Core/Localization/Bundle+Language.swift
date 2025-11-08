@@ -10,7 +10,7 @@ import UIKit
 
 private var bundleKey: UInt8 = 0
 
-class BundleExtension: Bundle {
+@objc class BundleExtension: Bundle, @unchecked Sendable {
     override func localizedString(forKey key: String, value: String?, table tableName: String?) -> String {
         if let bundle = objc_getAssociatedObject(self, &bundleKey) as? Bundle {
             return bundle.localizedString(forKey: key, value: value, table: tableName)

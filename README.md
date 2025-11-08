@@ -1,10 +1,60 @@
-# Wpayin Wallet - ERC-20 iOS Wallet
+# Wpayin Wallet - Multi-Chain Crypto Wallet (v1.1.0)
 
-A comprehensive, secure, and feature-rich cryptocurrency wallet for iOS built with SwiftUI and Trust Wallet Core. Wpayin Wallet supports ERC-20 tokens, NFTs, DeFi protocols, and token swaps with an elegant black/white/blue design.
+A comprehensive, secure, and feature-rich cryptocurrency wallet for iOS built with SwiftUI and Trust Wallet Core. Wpayin Wallet supports Bitcoin, Ethereum, ERC-20 tokens, NFTs, DeFi protocols, and token swaps with an elegant black/white/blue design.
 
 <p align="center">
   <img src="./screenshots/demo.png" width="300" alt="Wpayin Wallet Demo">
 </p>
+
+## 🆕 What's New in Version 1.1.0
+
+### 🪙 Bitcoin Support
+- **Native SegWit (BIP84)**: `bc1...` addresses with lowest transaction fees
+- **Full Bitcoin Integration**: Balance viewing, sending, and receiving
+- **WalletCore Derivation**: Industry-standard BIP39/BIP44/BIP84 implementation
+- **Real-time Balance**: Direct blockchain queries via Blockstream API
+
+### 🔄 Real Token Swapping (DEX Integration)
+- **DEX Router Support**: Uniswap V2, PancakeSwap, QuickSwap, SushiSwap
+- **Multi-Chain Swaps**: Works on all EVM chains (Ethereum, BSC, Polygon, etc.)
+- **Slippage Protection**: Configurable slippage tolerance (0.1% - 5%)
+- **Gas Optimization**: Automatic gas estimation and fee calculation
+- **Quote System**: Real-time swap quotes with price impact analysis
+
+### 💸 Real Transaction Sending
+- **Native Token Support**: Send ETH, BNB, MATIC, AVAX, etc.
+- **ERC-20 Transfers**: Full support for token transfers
+- **EIP-1559 Support**: Modern gas fee system for Ethereum
+- **Legacy Gas**: Support for BSC and older chains
+- **Transaction Signing**: Secure EIP-155 signing with WalletCore
+
+### 🌐 Advanced Network Management
+- **Multiple RPC Sources**: Automatic failover between RPC providers
+- **Network Switching**: Easy toggle between blockchains
+- **Custom RPC**: Support for custom RPC endpoints (future)
+- **Gas Price Intelligence**: 
+  - EIP-1559: Dynamic base fee + priority fee
+  - Legacy: Smart gas price estimation
+  - Safety warnings for too low/high fees
+
+### 👛 Multi-Account Wallet System
+- **HD Wallet Support**: Create multiple accounts from single seed phrase
+- **MetaMask Compatible**: m/44'/60'/0'/0/{index} derivation
+- **Independent Addresses**: Each account has unique addresses per blockchain
+- **Easy Switching**: Quick account selector in UI
+- **Account Management**: Create, rename, and organize accounts
+
+### 🎨 Token Icon Preservation
+- **Persistent Icons**: Token icons never lost during updates
+- **Fallback System**: Default icons when API fails
+- **CoinGecko Integration**: High-quality token logos
+- **Smart Merging**: Intelligent token data merging
+
+### 🔧 Technical Improvements
+- **Zero Compiler Warnings**: Clean, production-ready code
+- **Concurrency Safety**: Proper Swift 6 actor isolation
+- **Memory Efficiency**: Optimized token caching and filtering
+- **Better Error Handling**: Comprehensive error messages
 
 ## Features
 
@@ -12,33 +62,46 @@ A comprehensive, secure, and feature-rich cryptocurrency wallet for iOS built wi
 - **Secure Key Storage**: Private keys and seed phrases stored in iOS Keychain
 - **Biometric Authentication**: Face ID / Touch ID support
 - **BIP39 Compatible**: 12-word mnemonic generation and import
-- **Multi-Chain Support**: Ethereum, Bitcoin, and all EVM-compatible chains
+- **Multi-Chain Support**: Bitcoin, Ethereum, and all EVM-compatible chains
 - **Non-Custodial**: You control your keys, always
+- **HD Wallet**: Industry-standard BIP32/44/84 derivation
 
 ### 💎 Token Management
+- **Multi-Blockchain**: Bitcoin, Ethereum, BSC, Polygon, Arbitrum, Optimism, Avalanche, Base
 - **ERC-20 Support**: Full support for Ethereum and EVM token standards
 - **Custom Tokens**: Add any ERC-20 token by contract address with auto-fetch
 - **Real-Time Prices**: Live price data from CoinGecko
-- **Balance Tracking**: Track portfolio value across all tokens
+- **Balance Tracking**: Track portfolio value across all tokens and chains
 - **Token Import/Export**: Easy token management
+- **Icon Preservation**: Tokens keep their icons across updates
+
+### 🪙 Bitcoin Features
+- **Native SegWit**: bc1... addresses (BIP84) with lowest fees
+- **Real Balance**: Live balance from Blockstream API
+- **Send/Receive**: Full transaction support
+- **Fee Tiers**: Slow/Standard/Fast (10/20/40 sat/vB)
+- **Multi-Account**: Unique Bitcoin address per account
+
+### 💱 DeFi & Swap
+- **Real DEX Swaps**: Actual on-chain token exchanges
+- **Multi-DEX Support**: Uniswap, PancakeSwap, QuickSwap, SushiSwap
+- **Gas Estimation**: Accurate gas fee calculation
+- **Slippage Protection**: Customizable slippage tolerance
+- **Price Impact**: Real-time swap quote analysis
+- **Multi-Chain**: Swap on any EVM chain
 
 ### 🎨 NFT Support
 - **NFT Gallery**: View your NFT collection
 - **Metadata Display**: Full NFT metadata with images
 - **Alchemy Integration**: Reliable NFT data via Alchemy API
 
-### 💱 DeFi & Swap
-- **Token Swap**: Exchange tokens directly in the app
-- **DeFi Protocols**: Access to lending, staking, and yield farming
-- **Gas Estimation**: Accurate gas fee calculation
-- **Slippage Protection**: Customizable slippage tolerance
-
 ### 📱 User Experience
-- **Multi-Wallet Support**: Create and manage multiple wallets
+- **Multi-Wallet Support**: Create and manage multiple accounts
 - **QR Code Scanning**: Quick address input and deposit
 - **Transaction History**: Full transaction history with Etherscan integration
 - **Multi-Language Support**: English, Czech, Spanish, French, Japanese, Korean, Chinese
 - **Dark Theme**: Elegant black-based design optimized for OLED
+- **Blockchain Filtering**: Show/hide tokens by blockchain
 
 ## Requirements
 
@@ -232,14 +295,92 @@ struct AppConfig {
 
 ### Supported Networks
 
+- **Bitcoin** (Native SegWit - bc1... addresses)
+  - Mainnet support
+  - BIP84 derivation (m/84'/0'/0'/0/index)
+  - Lowest transaction fees
+  - Real-time balance via Blockstream API
+
 - **Ethereum** (Mainnet)
+  - Full ERC-20 token support
+  - EIP-1559 gas pricing
+  - NFT support via Alchemy
+  - Transaction history via Etherscan
+
 - **Polygon** (MATIC)
+  - Fast and cheap transactions
+  - ERC-20 compatible
+  - DeFi protocols support
+
 - **Binance Smart Chain** (BSC)
+  - BEP-20 token support
+  - PancakeSwap integration
+  - Legacy gas pricing
+
 - **Arbitrum**
+  - Layer 2 scaling solution
+  - Low fees, fast confirmations
+  - Full EVM compatibility
+
 - **Optimism**
+  - Optimistic rollup
+  - Ethereum security
+  - Lower costs
+
 - **Avalanche C-Chain**
+  - High throughput
+  - Sub-second finality
+  - EVM compatible
+
 - **Base**
-- **Bitcoin** (balance view only)
+  - Coinbase's L2
+  - Low fees
+  - Growing ecosystem
+
+## 📝 Changelog
+
+### Version 1.1.0 (November 2024)
+
+#### ✨ New Features
+- 🪙 **Bitcoin Support**: Full integration with Native SegWit (BIP84) addresses
+- 🔄 **Real Token Swaps**: DEX integration (Uniswap, PancakeSwap, QuickSwap, SushiSwap)
+- 💸 **Real Transactions**: Send ETH, BTC, and ERC-20 tokens on-chain
+- 🌐 **Network Manager**: Multi-RPC support with automatic failover
+- 💰 **Gas Price Service**: EIP-1559 and Legacy gas price intelligence
+- 👛 **Multi-Account System**: Create multiple accounts from one seed phrase
+- 🎨 **Token Icon System**: Icons preserved during updates with fallback URLs
+
+#### 🔧 Improvements
+- ⚡ Optimized token merging - no data loss when switching blockchains
+- 🎯 Smart blockchain filtering - show/hide specific chains
+- 📊 Better balance calculation - respects active blockchains
+- 🔐 Enhanced transaction signing with EIP-155
+- 🌍 Multiple RPC sources for better reliability
+- 💾 Intelligent token caching
+
+#### 🐛 Bug Fixes
+- ✅ Fixed: Tokens losing icons when adding/removing blockchains
+- ✅ Fixed: All assets breaking when activating Bitcoin
+- ✅ Fixed: Incorrect addresses shown in wallet selector
+- ✅ Fixed: 9 compiler warnings (infinite recursion, unused variables, concurrency)
+- ✅ Fixed: Icon preservation during token updates
+- ✅ Fixed: Balance not updating when switching blockchains
+
+#### 🏗️ Technical
+- Clean build with zero warnings
+- Swift 6 concurrency safety
+- Proper actor isolation
+- Memory optimization
+- Better error handling
+- Comprehensive documentation
+
+### Version 1.0.0 (Initial Release)
+- Initial release with Ethereum support
+- ERC-20 token management
+- NFT gallery
+- Basic swap UI (demo)
+- Multi-language support
+- Dark theme
 
 ## Troubleshooting
 
@@ -292,11 +433,43 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ## Acknowledgments
 
-- **Trust Wallet Core**: For the excellent HD wallet library
+- **Trust Wallet Core**: For the excellent HD wallet library and Bitcoin support
 - **Alchemy**: For reliable blockchain APIs
 - **CoinGecko**: For comprehensive price data
 - **Etherscan**: For transaction indexing
+- **Blockstream**: For Bitcoin blockchain API
+- **Mempool.space**: For Bitcoin fee estimation
+- **Unstoppable Wallet**: For architecture inspiration
 - **SwiftUI Community**: For patterns and best practices
+
+## Roadmap
+
+### Planned Features
+- [ ] **Taproot Support**: BIP86 addresses (bc1p...)
+- [ ] **Hardware Wallet**: Ledger/Trezor integration
+- [ ] **Token Bridge**: Cross-chain token bridges
+- [ ] **Advanced Charts**: Price history and analytics
+- [ ] **Watch-Only Wallets**: Monitor addresses without private keys
+- [ ] **Address Book**: Save frequently used addresses
+- [ ] **Custom RPC**: User-defined RPC endpoints
+- [ ] **Transaction Export**: CSV/PDF export for taxes
+- [ ] **DApp Browser**: In-app Web3 browser
+- [ ] **Staking**: Native staking for supported chains
+
+### Under Consideration
+- Lightning Network support
+- Solana integration
+- Multi-sig wallets
+- Social recovery
+- Fiat on/off ramps
+
+## Documentation
+
+For detailed documentation, see:
+- [BLOCKCHAIN_MANAGEMENT_FIX.md](BLOCKCHAIN_MANAGEMENT_FIX.md) - How blockchain activation works
+- [BITCOIN_ADDRESS_AND_ICONS_FIX.md](BITCOIN_ADDRESS_AND_ICONS_FIX.md) - Bitcoin address derivation and icon system
+- [COMPILER_WARNINGS_FIXED.md](COMPILER_WARNINGS_FIXED.md) - All fixed compiler warnings
+- [AGENTS.md](AGENTS.md) - Repository guidelines and coding standards
 
 ## Support
 

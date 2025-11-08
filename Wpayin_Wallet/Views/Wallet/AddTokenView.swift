@@ -19,6 +19,8 @@ struct AddTokenView: View {
     @State private var showError = false
     @State private var errorMessage = ""
     @State private var autoFetched = false
+    @State private var selectedBlockchain: BlockchainPlatform = .ethereum
+    @State private var showBlockchainPicker = false
 
     var body: some View {
         NavigationView {
@@ -32,13 +34,19 @@ struct AddTokenView: View {
                                 .font(.wpayinHeadline)
                                 .foregroundColor(WpayinColors.text)
 
-                            Text("Add a custom ERC-20 token to your wallet")
+                            Text("Add a custom token to your wallet")
                                 .font(.wpayinBody)
                                 .foregroundColor(WpayinColors.textSecondary)
                                 .multilineTextAlignment(.center)
                         }
 
                         VStack(spacing: 20) {
+                            // Blockchain Selector
+                            BlockchainSelectorField(
+                                selectedBlockchain: $selectedBlockchain,
+                                availableBlockchains: availableEVMBlockchains
+                            )
+                            
                             TokenInputField(
                                 title: "Contract Address",
                                 placeholder: "0x...",
@@ -146,6 +154,12 @@ struct AddTokenView: View {
         !decimals.isEmpty &&
         Int(decimals) != nil
     }
+    
+    private var availableEVMBlockchains: [BlockchainPlatform] {
+        walletManager.availableBlockchains
+            .filter { $0.network == .mainnet && $0.isEnabled && $0.platform.blockchainType?.isEVM == true }
+            .map { $0.platform }
+    }
 
     private func fetchTokenInfo() {
         guard isValidContractAddress else { return }
@@ -154,7 +168,14 @@ struct AddTokenView: View {
 
         Task {
             do {
-                let tokenInfo = try await APIService.shared.getTokenInfo(contractAddress: contractAddress)
+                // Get the config for the selected blockchain
+                guard let config = walletManager.availableBlockchains.first(where: { 
+                    $0.platform == selectedBlockchain && $0.network == .mainnet 
+                }) else {
+                    throw NSError(domain: "AddToken", code: -1, userInfo: [NSLocalizedDescriptionKey: "Network not available"])
+                }
+                
+                let tokenInfo = try await APIService.shared.getTokenInfo(contractAddress: contractAddress, config: config)
 
                 await MainActor.run {
                     isFetching = false
@@ -162,7 +183,7 @@ struct AddTokenView: View {
                     tokenSymbol = tokenInfo.symbol
                     decimals = String(tokenInfo.decimals)
                     autoFetched = true
-                    print("✅ Auto-fetched token: \(tokenInfo.name) (\(tokenInfo.symbol))")
+                    print("✅ Auto-fetched token: \(tokenInfo.name) (\(tokenInfo.symbol)) on \(selectedBlockchain.name)")
                 }
             } catch {
                 await MainActor.run {
@@ -193,12 +214,18 @@ struct AddTokenView: View {
 
         Task {
             do {
+                // Get the config for the selected blockchain
+                guard let config = walletManager.availableBlockchains.first(where: { 
+                    $0.platform == selectedBlockchain && $0.network == .mainnet 
+                }) else {
+                    throw NSError(domain: "AddToken", code: -1, userInfo: [NSLocalizedDescriptionKey: "Network not available"])
+                }
+                
                 // Get token balance first
-                let ethereumConfig = BlockchainConfig.defaultConfigs.first(where: { $0.platform == .ethereum })!
                 let tokenWithBalance = try await APIService.shared.getERC20TokenBalance(
                     address: walletManager.walletAddress,
                     contractAddress: contractAddress,
-                    config: ethereumConfig,
+                    config: config,
                     name: tokenName,
                     symbol: tokenSymbol,
                     decimals: decimalsInt
@@ -210,7 +237,7 @@ struct AddTokenView: View {
                     if let token = tokenWithBalance {
                         // Add token to wallet manager
                         walletManager.addCustomToken(token)
-                        print("✅ Token added: \(token.name) (\(token.symbol)) - Balance: \(token.balance)")
+                        print("✅ Token added: \(token.name) (\(token.symbol)) on \(selectedBlockchain.name) - Balance: \(token.balance)")
                         dismiss()
                     } else {
                         errorMessage = "Failed to add token. Please try again."
@@ -312,6 +339,69 @@ struct TokenPreview: View {
             .padding(16)
             .background(WpayinColors.surface)
             .cornerRadius(12)
+        }
+    }
+}
+
+struct BlockchainSelectorField: View {
+    @Binding var selectedBlockchain: BlockchainPlatform
+    let availableBlockchains: [BlockchainPlatform]
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                Text("Network")
+                    .font(.wpayinSubheadline)
+                    .foregroundColor(WpayinColors.text)
+                
+                Text("*")
+                    .foregroundColor(WpayinColors.error)
+                
+                Spacer()
+            }
+            
+            Menu {
+                ForEach(availableBlockchains, id: \.self) { blockchain in
+                    Button(action: {
+                        selectedBlockchain = blockchain
+                    }) {
+                        HStack {
+                            Circle()
+                                .fill(blockchain.color)
+                                .frame(width: 12, height: 12)
+                            Text(blockchain.name)
+                            if blockchain == selectedBlockchain {
+                                Spacer()
+                                Image(systemName: "checkmark")
+                            }
+                        }
+                    }
+                }
+            } label: {
+                HStack {
+                    Circle()
+                        .fill(selectedBlockchain.color)
+                        .frame(width: 24, height: 24)
+                        .overlay(
+                            Image(systemName: selectedBlockchain.iconName)
+                                .font(.system(size: 12, weight: .medium))
+                                .foregroundColor(.white)
+                        )
+                    
+                    Text(selectedBlockchain.name)
+                        .font(.wpayinBody)
+                        .foregroundColor(WpayinColors.text)
+                    
+                    Spacer()
+                    
+                    Image(systemName: "chevron.down")
+                        .font(.system(size: 12))
+                        .foregroundColor(WpayinColors.textSecondary)
+                }
+                .padding(16)
+                .background(WpayinColors.surface)
+                .cornerRadius(12)
+            }
         }
     }
 }

@@ -184,7 +184,7 @@ struct WalletCard: View {
                         }
                     }
 
-                    if let primaryAddress = wallet.accounts.first?.address {
+                    if let primaryAddress = getPrimaryAddress(for: wallet) {
                         Text(formatAddress(primaryAddress))
                             .font(.system(size: 14, design: .monospaced))
                             .foregroundColor(WpayinColors.textSecondary)
@@ -231,6 +231,17 @@ struct WalletCard: View {
             [WpayinColors.primary, WpayinColors.primaryDark]
         ]
         return colorSets[hash % colorSets.count]
+    }
+
+    private func getPrimaryAddress(for wallet: MultiChainWallet) -> String? {
+        // Priority: Ethereum > first EVM chain > any chain
+        if let ethAccount = wallet.accounts.first(where: { $0.blockchainConfig.platform == .ethereum }) {
+            return ethAccount.address
+        } else if let evmAccount = wallet.accounts.first(where: { $0.blockchainConfig.platform.blockchainType?.isEVM == true }) {
+            return evmAccount.address
+        } else {
+            return wallet.accounts.first?.address
+        }
     }
 
     private func formatAddress(_ address: String) -> String {
