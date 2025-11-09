@@ -8,9 +8,46 @@
 import Foundation
 import WalletCore
 
+// MARK: - Token Protocol
+enum TokenProtocol: String, Codable, Sendable {
+    case native = "Native"         // Native blockchain token (ETH, BTC, etc.)
+    case erc20 = "ERC20"          // Ethereum ERC-20
+    case bep20 = "BEP20"          // Binance Smart Chain BEP-20
+    case trc20 = "TRC20"          // Tron TRC-20
+    case bep2 = "BEP2"            // Binance Chain BEP-2
+    case spl = "SPL"              // Solana SPL
+    case bip84 = "BIP84"          // Bitcoin Native SegWit
+    case bip49 = "BIP49"          // Bitcoin SegWit wrapped
+    case bip44 = "BIP44"          // Bitcoin Legacy
+    
+    var displayName: String {
+        rawValue
+    }
+    
+    var shortName: String {
+        switch self {
+        case .native: return ""
+        case .erc20: return "ERC20"
+        case .bep20: return "BEP20"
+        case .trc20: return "TRC20"
+        case .bep2: return "BEP2"
+        case .spl: return "SPL"
+        case .bip84: return "SegWit"
+        case .bip49: return "P2SH"
+        case .bip44: return "Legacy"
+        }
+    }
+}
+
 enum BlockchainType: String, CaseIterable, Codable, Sendable {
     case ethereum = "ethereum"
     case bitcoin = "bitcoin"
+    case litecoin = "litecoin"
+    case bitcoinCash = "bitcoin-cash"
+    case eCash = "ecash"
+    case dash = "dash"
+    case zcash = "zcash"
+    case monero = "monero"
     case solana = "solana"
     case polygon = "polygon"
     case bsc = "binance-smart-chain"
@@ -18,6 +55,9 @@ enum BlockchainType: String, CaseIterable, Codable, Sendable {
     case optimism = "optimism"
     case avalanche = "avalanche"
     case base = "base"
+    case gnosis = "gnosis"
+    case zkSync = "zksync"
+    case fantom = "fantom"
 
     var name: String {
         switch self {
@@ -25,6 +65,18 @@ enum BlockchainType: String, CaseIterable, Codable, Sendable {
             return "Ethereum"
         case .bitcoin:
             return "Bitcoin"
+        case .litecoin:
+            return "Litecoin"
+        case .bitcoinCash:
+            return "Bitcoin Cash"
+        case .eCash:
+            return "eCash"
+        case .dash:
+            return "Dash"
+        case .zcash:
+            return "Zcash"
+        case .monero:
+            return "Monero"
         case .solana:
             return "Solana"
         case .polygon:
@@ -39,6 +91,12 @@ enum BlockchainType: String, CaseIterable, Codable, Sendable {
             return "Avalanche"
         case .base:
             return "Base"
+        case .gnosis:
+            return "Gnosis"
+        case .zkSync:
+            return "zkSync Era"
+        case .fantom:
+            return "Fantom"
         }
     }
 
@@ -48,6 +106,18 @@ enum BlockchainType: String, CaseIterable, Codable, Sendable {
             return "ETH"
         case .bitcoin:
             return "BTC"
+        case .litecoin:
+            return "LTC"
+        case .bitcoinCash:
+            return "BCH"
+        case .eCash:
+            return "XEC"
+        case .dash:
+            return "DASH"
+        case .zcash:
+            return "ZEC"
+        case .monero:
+            return "XMR"
         case .solana:
             return "SOL"
         case .polygon:
@@ -62,21 +132,35 @@ enum BlockchainType: String, CaseIterable, Codable, Sendable {
             return "AVAX"
         case .base:
             return "ETH"
+        case .gnosis:
+            return "xDAI"
+        case .zkSync:
+            return "ETH"
+        case .fantom:
+            return "FTM"
         }
     }
 
     var addressFormat: String {
         switch self {
-        case .ethereum, .polygon, .bsc:
+        case .ethereum, .polygon, .bsc, .arbitrum, .optimism, .avalanche, .base, .gnosis, .zkSync, .fantom:
             return "0x"
         case .bitcoin:
-            return "bc1" // Bech32 or "1", "3" for legacy
+            return "bc1" // Bech32 (BIP84)
+        case .litecoin:
+            return "ltc1" // Bech32
+        case .bitcoinCash:
+            return "bitcoincash:"
+        case .eCash:
+            return "ecash:"
+        case .dash:
+            return "X"
+        case .zcash:
+            return "t1" // transparent
+        case .monero:
+            return "4" // mainnet
         case .solana:
             return "base58"
-        case .arbitrum, .optimism, .avalanche:
-            return "0x"
-        case .base:
-            return "0x"
         }
     }
 
@@ -101,6 +185,18 @@ enum BlockchainType: String, CaseIterable, Codable, Sendable {
             return "ethereum"
         case .bitcoin:
             return "bitcoin"
+        case .litecoin:
+            return "litecoin"
+        case .bitcoinCash:
+            return "bitcoin-cash"
+        case .eCash:
+            return "ecash"
+        case .dash:
+            return "dash"
+        case .zcash:
+            return "zcash"
+        case .monero:
+            return "monero"
         case .solana:
             return "solana"
         case .polygon:
@@ -115,14 +211,20 @@ enum BlockchainType: String, CaseIterable, Codable, Sendable {
             return "avalanche-2"
         case .base:
             return "base"
+        case .gnosis:
+            return "gnosis"
+        case .zkSync:
+            return "zksync"
+        case .fantom:
+            return "fantom"
         }
     }
 
     var isEVM: Bool {
         switch self {
-        case .ethereum, .polygon, .bsc, .arbitrum, .optimism, .avalanche, .base:
+        case .ethereum, .polygon, .bsc, .arbitrum, .optimism, .avalanche, .base, .gnosis, .zkSync, .fantom:
             return true
-        case .bitcoin, .solana:
+        case .bitcoin, .litecoin, .bitcoinCash, .eCash, .dash, .zcash, .monero, .solana:
             return false
         }
     }
@@ -133,6 +235,18 @@ enum BlockchainType: String, CaseIterable, Codable, Sendable {
             return .ethereum
         case .bitcoin:
             return .bitcoin
+        case .litecoin:
+            return .litecoin
+        case .bitcoinCash:
+            return .bitcoinCash
+        case .eCash:
+            return .ecash
+        case .dash:
+            return .dash
+        case .zcash:
+            return .zcash
+        case .monero:
+            return nil  // Monero not supported by WalletCore
         case .solana:
             return .solana
         case .polygon:
@@ -147,6 +261,12 @@ enum BlockchainType: String, CaseIterable, Codable, Sendable {
             return .avalancheCChain
         case .base:
             return .ethereum // Base uses Ethereum coin type
+        case .gnosis:
+            return .xdai
+        case .zkSync:
+            return .ethereum // zkSync uses Ethereum coin type
+        case .fantom:
+            return .fantom
         }
     }
 }
@@ -163,6 +283,7 @@ struct Token: Identifiable, Codable, Sendable {
     let blockchain: BlockchainType
     let isNative: Bool  // true for ETH, BTC, SOL, etc.
     let receivingAddress: String?
+    let tokenProtocol: TokenProtocol?  // ERC20, BEP20, BIP84, etc.
 
     var totalValue: Double {
         balance * price
@@ -170,6 +291,14 @@ struct Token: Identifiable, Codable, Sendable {
 
     var displayAddress: String {
         contractAddress ?? blockchain.nativeToken
+    }
+    
+    // Display name with protocol badge
+    var displayNameWithProtocol: String {
+        if let proto = tokenProtocol, !proto.shortName.isEmpty {
+            return "\(symbol) (\(proto.shortName))"
+        }
+        return symbol
     }
 
     init(
@@ -183,7 +312,8 @@ struct Token: Identifiable, Codable, Sendable {
         blockchain: BlockchainType,
         isNative: Bool,
         id: UUID = UUID(),
-        receivingAddress: String? = nil
+        receivingAddress: String? = nil,
+        tokenProtocol: TokenProtocol? = nil
     ) {
         self.id = id
         self.contractAddress = contractAddress
@@ -196,6 +326,35 @@ struct Token: Identifiable, Codable, Sendable {
         self.blockchain = blockchain
         self.isNative = isNative
         self.receivingAddress = receivingAddress
+        self.tokenProtocol = tokenProtocol ?? Token.deriveProtocol(blockchain: blockchain, isNative: isNative)
+    }
+    
+    // Auto-derive protocol based on blockchain and token type
+    private static func deriveProtocol(blockchain: BlockchainType, isNative: Bool) -> TokenProtocol {
+        if isNative {
+            switch blockchain {
+            case .bitcoin:
+                return .bip84  // Native SegWit
+            case .litecoin, .bitcoinCash, .eCash, .dash, .zcash, .monero:
+                return .native
+            case .ethereum, .polygon, .bsc, .arbitrum, .optimism, .avalanche, .base, .gnosis, .zkSync, .fantom:
+                return .native
+            case .solana:
+                return .native
+            }
+        } else {
+            // Token (not native)
+            switch blockchain {
+            case .ethereum, .polygon, .arbitrum, .optimism, .avalanche, .base, .gnosis, .zkSync, .fantom:
+                return .erc20
+            case .bsc:
+                return .bep20
+            case .solana:
+                return .spl
+            default:
+                return .native
+            }
+        }
     }
 
     private enum CodingKeys: String, CodingKey {
@@ -210,6 +369,7 @@ struct Token: Identifiable, Codable, Sendable {
         case blockchain
         case isNative
         case receivingAddress
+        case tokenProtocol
     }
 
     init(from decoder: Decoder) throws {
@@ -225,6 +385,8 @@ struct Token: Identifiable, Codable, Sendable {
         isNative = try container.decode(Bool.self, forKey: .isNative)
         id = try container.decodeIfPresent(UUID.self, forKey: .id) ?? UUID()
         receivingAddress = try container.decodeIfPresent(String.self, forKey: .receivingAddress)
+        tokenProtocol = try container.decodeIfPresent(TokenProtocol.self, forKey: .tokenProtocol) 
+            ?? Token.deriveProtocol(blockchain: blockchain, isNative: isNative)
     }
 
     func encode(to encoder: Encoder) throws {
@@ -240,6 +402,7 @@ struct Token: Identifiable, Codable, Sendable {
         try container.encode(blockchain, forKey: .blockchain)
         try container.encode(isNative, forKey: .isNative)
         try container.encodeIfPresent(receivingAddress, forKey: .receivingAddress)
+        try container.encodeIfPresent(tokenProtocol, forKey: .tokenProtocol)
     }
 
     static let mockTokens: [Token] = [
@@ -343,6 +506,18 @@ extension BlockchainType {
             self = .ethereum
         case .bitcoin:
             self = .bitcoin
+        case .litecoin:
+            self = .litecoin
+        case .bitcoinCash:
+            self = .bitcoinCash
+        case .eCash:
+            self = .eCash
+        case .dash:
+            self = .dash
+        case .zcash:
+            self = .zcash
+        case .monero:
+            self = .monero
         case .solana:
             self = .solana
         case .polygon:
@@ -357,6 +532,12 @@ extension BlockchainType {
             self = .avalanche
         case .base:
             self = .base
+        case .gnosis:
+            self = .gnosis
+        case .zkSync:
+            self = .zkSync
+        case .fantom:
+            self = .fantom
         }
     }
 }

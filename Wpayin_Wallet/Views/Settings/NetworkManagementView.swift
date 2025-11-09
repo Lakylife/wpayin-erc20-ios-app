@@ -34,24 +34,11 @@ struct NetworkManagementView: View {
                         .padding(.horizontal, 20)
                         .padding(.top, 20)
 
-                        // Default Networks Section
-                        VStack(alignment: .leading, spacing: 12) {
-                            Text("Default Networks")
-                                .font(.system(size: 16, weight: .bold))
-                                .foregroundColor(WpayinColors.text)
-                                .padding(.horizontal, 20)
-
-                            VStack(spacing: 1) {
-                                ForEach(networkManager.networks.filter { !$0.isCustom }) { network in
-                                    NetworkRow(network: network) {
-                                        selectedNetwork = network
-                                    }
-                                }
-                            }
-                            .background(WpayinColors.surface)
-                            .cornerRadius(16)
-                            .padding(.horizontal, 20)
-                        }
+                        // Categorized Networks
+                        NetworkCategoriesView(
+                            networks: networkManager.networks.filter { !$0.isCustom },
+                            selectedNetwork: $selectedNetwork
+                        )
 
                         // Custom Networks Section
                         if networkManager.networks.contains(where: { $0.isCustom }) {
@@ -206,6 +193,116 @@ struct NetworkRow: View {
             .padding(16)
         }
         .buttonStyle(PlainButtonStyle())
+    }
+}
+
+// MARK: - Network Categories View
+
+struct NetworkCategoriesView: View {
+    let networks: [NetworkConfig]
+    @Binding var selectedNetwork: NetworkConfig?
+    @EnvironmentObject var networkManager: NetworkConfigManager
+    
+    private var categorizedNetworks: [(category: BlockchainPlatform.Category, networks: [NetworkConfig])] {
+        let grouped = Dictionary(grouping: networks) { network -> BlockchainPlatform.Category in
+            if let platform = BlockchainPlatform(rawValue: network.blockchain.rawValue) {
+                return platform.category
+            }
+            return .baseLayer1
+        }
+        
+        return [
+            (.baseLayer1, grouped[.baseLayer1] ?? []),
+            (.evmChain, grouped[.evmChain] ?? []),
+            (.altLayer1, grouped[.altLayer1] ?? [])
+        ].filter { !$0.networks.isEmpty }
+    }
+    
+    var body: some View {
+        VStack(spacing: 24) {
+            ForEach(Array(categorizedNetworks.enumerated()), id: \.offset) { index, item in
+                VStack(alignment: .leading, spacing: 12) {
+                    Text(item.category.displayName)
+                        .font(.system(size: 16, weight: .bold))
+                        .foregroundColor(WpayinColors.text)
+                        .padding(.horizontal, 20)
+                    
+                    VStack(spacing: 1) {
+                        ForEach(item.networks) { network in
+                            NetworkRowWithToggle(network: network) {
+                                selectedNetwork = network
+                            }
+                        }
+                    }
+                    .background(WpayinColors.surface)
+                    .cornerRadius(16)
+                    .padding(.horizontal, 20)
+                }
+            }
+        }
+    }
+}
+
+// MARK: - Network Row with Toggle
+
+struct NetworkRowWithToggle: View {
+    let network: NetworkConfig
+    let onTap: () -> Void
+    @EnvironmentObject var networkManager: NetworkConfigManager
+    
+    var body: some View {
+        HStack(spacing: 16) {
+            // Network Icon
+            Circle()
+                .fill(network.color)
+                .frame(width: 44, height: 44)
+                .overlay(
+                    Image(systemName: network.iconSymbol)
+                        .font(.system(size: 20, weight: .bold))
+                        .foregroundColor(.white)
+                )
+            
+            VStack(alignment: .leading, spacing: 4) {
+                HStack(spacing: 8) {
+                    Text(network.name)
+                        .font(.system(size: 16, weight: .semibold))
+                        .foregroundColor(WpayinColors.text)
+                    
+                    if network.isTestnet {
+                        Text("TESTNET")
+                            .font(.system(size: 10, weight: .bold))
+                            .foregroundColor(.orange)
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 2)
+                            .background(
+                                RoundedRectangle(cornerRadius: 4)
+                                    .fill(Color.orange.opacity(0.1))
+                            )
+                    }
+                }
+                
+                Text("Chain ID: \(network.chainId)")
+                    .font(.system(size: 13))
+                    .foregroundColor(WpayinColors.textSecondary)
+            }
+            
+            Spacer()
+            
+            // Toggle
+            Toggle("", isOn: Binding(
+                get: { networkManager.isNetworkEnabled(network) },
+                set: { enabled in
+                    networkManager.setNetworkEnabled(network, enabled: enabled)
+                }
+            ))
+            .labelsHidden()
+            .toggleStyle(SwitchToggleStyle(tint: WpayinColors.primary))
+        }
+        .padding(16)
+        .contentShape(Rectangle())
+        .onTapGesture {
+            onTap()
+        }
     }
 }
 

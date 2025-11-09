@@ -29,15 +29,27 @@ enum NetworkType: String, CaseIterable, Codable {
 }
 
 enum BlockchainPlatform: String, CaseIterable, Codable, Identifiable {
+    // Base Layer 1 Blockchains
     case ethereum = "ethereum"
     case bitcoin = "bitcoin"
+    case litecoin = "litecoin"
+    case bitcoinCash = "bitcoin-cash"
+    case eCash = "ecash"
+    case dash = "dash"
+    case zcash = "zcash"
+    case monero = "monero"
     case solana = "solana"
+    
+    // EVM-Compatible Chains (Ethereum-based)
     case polygon = "polygon"
     case bsc = "binance-smart-chain"
     case arbitrum = "arbitrum"
     case optimism = "optimism"
     case avalanche = "avalanche"
     case base = "base"
+    case gnosis = "gnosis"
+    case zkSync = "zksync"
+    case fantom = "fantom"
 
     var id: String { rawValue }
 
@@ -47,6 +59,18 @@ enum BlockchainPlatform: String, CaseIterable, Codable, Identifiable {
             return "Ethereum"
         case .bitcoin:
             return "Bitcoin"
+        case .litecoin:
+            return "Litecoin"
+        case .bitcoinCash:
+            return "Bitcoin Cash"
+        case .eCash:
+            return "eCash"
+        case .dash:
+            return "Dash"
+        case .zcash:
+            return "Zcash"
+        case .monero:
+            return "Monero"
         case .solana:
             return "Solana"
         case .polygon:
@@ -61,6 +85,12 @@ enum BlockchainPlatform: String, CaseIterable, Codable, Identifiable {
             return "Avalanche"
         case .base:
             return "Base"
+        case .gnosis:
+            return "Gnosis"
+        case .zkSync:
+            return "zkSync Era"
+        case .fantom:
+            return "Fantom"
         }
     }
 
@@ -70,6 +100,18 @@ enum BlockchainPlatform: String, CaseIterable, Codable, Identifiable {
             return "ETH"
         case .bitcoin:
             return "BTC"
+        case .litecoin:
+            return "LTC"
+        case .bitcoinCash:
+            return "BCH"
+        case .eCash:
+            return "XEC"
+        case .dash:
+            return "DASH"
+        case .zcash:
+            return "ZEC"
+        case .monero:
+            return "XMR"
         case .solana:
             return "SOL"
         case .polygon:
@@ -84,29 +126,53 @@ enum BlockchainPlatform: String, CaseIterable, Codable, Identifiable {
             return "AVAX"
         case .base:
             return "ETH"
+        case .gnosis:
+            return "xDAI"
+        case .zkSync:
+            return "ETH"
+        case .fantom:
+            return "FTM"
         }
     }
 
     var color: Color {
         switch self {
         case .ethereum:
-            return Color(red: 0.39, green: 0.47, blue: 1.0)
+            return Color(red: 0.39, green: 0.47, blue: 1.0)  // Blue
         case .bitcoin:
-            return Color(red: 1.0, green: 0.65, blue: 0.0)
+            return Color(red: 1.0, green: 0.65, blue: 0.0)  // Orange
+        case .litecoin:
+            return Color(red: 0.2, green: 0.38, blue: 0.62)  // Light blue
+        case .bitcoinCash:
+            return Color(red: 0.0, green: 0.71, blue: 0.39)  // Green
+        case .eCash:
+            return Color(red: 0.0, green: 0.48, blue: 0.8)  // Blue
+        case .dash:
+            return Color(red: 0.0, green: 0.55, blue: 0.88)  // Dash blue
+        case .zcash:
+            return Color(red: 0.96, green: 0.66, blue: 0.2)  // Yellow/gold
+        case .monero:
+            return Color(red: 1.0, green: 0.39, blue: 0.0)  // Orange
         case .solana:
-            return Color(red: 0.66, green: 0.36, blue: 1.0)
+            return Color(red: 0.66, green: 0.36, blue: 1.0)  // Purple
         case .polygon:
-            return Color(red: 0.51, green: 0.29, blue: 0.93)
+            return Color(red: 0.51, green: 0.29, blue: 0.93)  // Purple
         case .bsc:
-            return Color(red: 0.95, green: 0.77, blue: 0.19)
+            return Color(red: 0.95, green: 0.77, blue: 0.19)  // Yellow
         case .arbitrum:
-            return Color(red: 0.18, green: 0.57, blue: 1.0)
+            return Color(red: 0.18, green: 0.57, blue: 1.0)  // Blue
         case .optimism:
-            return Color(red: 1.0, green: 0.04, blue: 0.13)
+            return Color(red: 1.0, green: 0.04, blue: 0.13)  // Red
         case .avalanche:
-            return Color(red: 0.91, green: 0.24, blue: 0.20)
+            return Color(red: 0.91, green: 0.24, blue: 0.20)  // Red
         case .base:
-            return Color(red: 0.0, green: 0.46, blue: 0.87)
+            return Color(red: 0.0, green: 0.46, blue: 0.87)  // Blue
+        case .gnosis:
+            return Color(red: 0.0, green: 0.51, blue: 0.47)  // Teal
+        case .zkSync:
+            return Color(red: 0.32, green: 0.42, blue: 0.98)  // Blue/purple
+        case .fantom:
+            return Color(red: 0.08, green: 0.49, blue: 0.96)  // Blue
         }
     }
 
@@ -116,6 +182,18 @@ enum BlockchainPlatform: String, CaseIterable, Codable, Identifiable {
             return "diamond.fill"
         case .bitcoin:
             return "bitcoinsign.circle.fill"
+        case .litecoin:
+            return "l.circle.fill"
+        case .bitcoinCash:
+            return "b.circle.fill"
+        case .eCash:
+            return "e.circle.fill"
+        case .dash:
+            return "d.circle.fill"
+        case .zcash:
+            return "z.circle.fill"
+        case .monero:
+            return "m.circle.fill"
         case .solana:
             return "sun.max.fill"
         case .polygon:
@@ -130,6 +208,12 @@ enum BlockchainPlatform: String, CaseIterable, Codable, Identifiable {
             return "mountain.2.fill"
         case .base:
             return "circle.grid.cross"
+        case .gnosis:
+            return "g.circle.fill"
+        case .zkSync:
+            return "z.square.fill"
+        case .fantom:
+            return "f.circle.fill"
         }
     }
     
@@ -139,6 +223,18 @@ enum BlockchainPlatform: String, CaseIterable, Codable, Identifiable {
             return "Ξ"  // Ethereum symbol
         case .bitcoin:
             return "₿"  // Bitcoin symbol
+        case .litecoin:
+            return "Ł"  // Litecoin symbol
+        case .bitcoinCash:
+            return "฿"  // Bitcoin Cash
+        case .eCash:
+            return "XEC"
+        case .dash:
+            return "D"
+        case .zcash:
+            return "Z"
+        case .monero:
+            return "ɱ"  // Monero symbol
         case .polygon:
             return "⬡"  // Hexagon
         case .bsc:
@@ -151,17 +247,60 @@ enum BlockchainPlatform: String, CaseIterable, Codable, Identifiable {
             return "A"  // Avalanche
         case .base:
             return "◼︎"  // Base square
+        case .gnosis:
+            return "G"
+        case .zkSync:
+            return "Z"
+        case .fantom:
+            return "F"
         case .solana:
             return "S"  // Solana
         }
     }
+    
+    // Blockchain category for UI grouping
+    enum Category {
+        case baseLayer1      // Bitcoin, Ethereum, Litecoin, etc.
+        case evmChain       // Polygon, BSC, Arbitrum, etc.
+        case altLayer1      // Solana, etc.
+        
+        var displayName: String {
+            switch self {
+            case .baseLayer1:
+                return "Base Layer 1"
+            case .evmChain:
+                return "EVM Chains"
+            case .altLayer1:
+                return "Other L1s"
+            }
+        }
+    }
+    
+    var category: Category {
+        switch self {
+        case .bitcoin, .litecoin, .bitcoinCash, .eCash, .dash, .zcash, .monero:
+            return .baseLayer1
+        case .ethereum:
+            return .baseLayer1
+        case .polygon, .bsc, .arbitrum, .optimism, .avalanche, .base, .gnosis, .zkSync, .fantom:
+            return .evmChain
+        case .solana:
+            return .altLayer1
+        }
+    }
+    
+    var isEVM: Bool {
+        category == .evmChain || self == .ethereum
+    }
 
     var supportedNetworks: [NetworkType] {
         switch self {
-        case .ethereum, .polygon, .bsc, .arbitrum, .optimism, .avalanche:
+        case .ethereum, .polygon, .bsc, .arbitrum, .optimism, .avalanche, .gnosis, .zkSync, .fantom:
             return [.mainnet, .testnet]
-        case .bitcoin:
+        case .bitcoin, .litecoin, .bitcoinCash, .dash, .zcash:
             return [.mainnet, .testnet]
+        case .eCash, .monero:
+            return [.mainnet]
         case .solana:
             return [.mainnet, .testnet, .devnet]
         case .base:
@@ -171,14 +310,24 @@ enum BlockchainPlatform: String, CaseIterable, Codable, Identifiable {
 
     var addressPrefix: String {
         switch self {
-        case .ethereum, .polygon, .bsc, .arbitrum, .optimism, .avalanche:
+        case .ethereum, .polygon, .bsc, .arbitrum, .optimism, .avalanche, .base, .gnosis, .zkSync, .fantom:
             return "0x"
         case .bitcoin:
             return "bc1" // Bech32 for mainnet
+        case .litecoin:
+            return "ltc1"
+        case .bitcoinCash:
+            return "bitcoincash:"
+        case .eCash:
+            return "ecash:"
+        case .dash:
+            return "X"
+        case .zcash:
+            return "t1"
+        case .monero:
+            return "4"
         case .solana:
             return "" // Base58
-        case .base:
-            return "0x"
         }
     }
 
@@ -188,6 +337,18 @@ enum BlockchainPlatform: String, CaseIterable, Codable, Identifiable {
             return .ethereum
         case .bitcoin:
             return .bitcoin
+        case .litecoin:
+            return .litecoin
+        case .bitcoinCash:
+            return .bitcoinCash
+        case .eCash:
+            return .ecash
+        case .dash:
+            return .dash
+        case .zcash:
+            return .zcash
+        case .monero:
+            return nil  // Not supported by WalletCore
         case .solana:
             return .solana
         case .polygon:
@@ -202,6 +363,12 @@ enum BlockchainPlatform: String, CaseIterable, Codable, Identifiable {
             return .avalancheCChain
         case .base:
             return .ethereum
+        case .gnosis:
+            return .xdai
+        case .zkSync:
+            return .ethereum
+        case .fantom:
+            return .fantom
         }
     }
 
