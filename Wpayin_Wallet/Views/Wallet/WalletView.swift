@@ -24,7 +24,7 @@ struct WalletView: View {
 
     var body: some View {
         ZStack {
-            // Background gradient matching mockup
+            // Background gradient matching design specification
             LinearGradient(
                 gradient: Gradient(colors: [
                     WpayinColors.backgroundGradientStart,
@@ -301,14 +301,7 @@ struct TokenRowView: View {
     var body: some View {
         HStack(spacing: 16) {
             // Token Icon
-            Circle()
-                .fill(WpayinColors.primary)
-                .frame(width: 44, height: 44)
-                .overlay(
-                    Text(token.symbol.prefix(1))
-                        .font(.wpayinSubheadline)
-                        .foregroundColor(.white)
-                )
+            TokenIconView(token: token, size: 44, showNetworkBadge: true)
 
             // Token Info
             VStack(alignment: .leading, spacing: 4) {
@@ -1049,7 +1042,7 @@ struct EnhancedWalletHeaderView: View {
 
     private var portfolioChange: (isPositive: Bool, formatted: String, color: Color) {
         // Real portfolio change would be calculated based on historical data
-        let changePercent = 0.0 // Placeholder - implement real calculation
+        let changePercent = 0.0 // TODO: implement real calculation
         let isPositive = true // Since changePercent is 0.0, always positive
         let color = WpayinColors.success
         let formatted = String(format: "%.1f%%", abs(changePercent))
@@ -1308,8 +1301,8 @@ struct EnhancedTokenRow: View {
 
     var body: some View {
         HStack(spacing: 16) {
-            // Token Icon - simplified
-            TokenIconView(symbol: token.symbol, blockchain: token.blockchain)
+            // Token Icon with network badge for non-native tokens
+            TokenIconView(token: token, size: 40, showNetworkBadge: true)
 
             // Token Info - simplified
             VStack(alignment: .leading, spacing: 4) {
@@ -1392,42 +1385,6 @@ struct EnhancedTokenRow: View {
             return "S"
         default:
             return String(blockchain.nativeToken.prefix(1))
-        }
-    }
-}
-
-struct TokenIconView: View {
-    let symbol: String
-    let blockchain: BlockchainType
-
-    init(symbol: String, blockchain: BlockchainType = .ethereum) {
-        self.symbol = symbol
-        self.blockchain = blockchain
-    }
-
-    var body: some View {
-        Circle()
-            .fill(tokenColor)
-            .frame(width: 40, height: 40)
-            .overlay(
-                Text(symbol.prefix(1))
-                    .font(.system(size: 16, weight: .bold))
-                    .foregroundColor(.white)
-            )
-    }
-
-    private var tokenColor: Color {
-        switch symbol.uppercased() {
-        case "ETH":
-            return Color.blue
-        case "BTC":
-            return Color.orange
-        case "MATIC":
-            return Color.purple
-        case "BNB":
-            return Color.yellow
-        default:
-            return WpayinColors.primary
         }
     }
 }

@@ -39,5 +39,6 @@
 "action.receive" = "Recevoir";
 "action.swap" = "Échanger";
 "action.buy" = "Acheter";
+"action.sell" = "Vendre";
 "action.cancel" = "Annuler";
 "action.done" = "Terminé";

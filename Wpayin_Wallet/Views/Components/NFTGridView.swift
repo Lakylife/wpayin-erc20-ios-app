@@ -339,5 +339,5 @@ struct NFTDetailView: View {
 }
 
 #Preview {
-    NFTGridView(nfts: NFT.mockNFTs, onNFTTap: { _ in })
+    // NFTGridView(nfts: NFT.sampleNFTs, onNFTTap: { _ in }) // disabled
 }

@@ -336,7 +336,7 @@ struct P2POffersView: View {
 
                         // Offers List
                         VStack(spacing: 12) {
-                            ForEach(mockOffers, id: \.id) { offer in
+                            ForEach(p2pOffers, id: \.id) { offer in
                                 P2POfferCard(offer: offer, fiatCurrency: fiatCurrency)
                             }
                         }
@@ -357,7 +357,7 @@ struct P2POffersView: View {
         }
     }
 
-    private var mockOffers: [P2POffer] {
+    private var p2pOffers: [P2POffer] {
         [
             P2POffer(id: "1", seller: "CryptoTrader123", rating: 4.8, trades: 156, price: 2650.00, available: 2.5, limit: "100 - 5000"),
             P2POffer(id: "2", seller: "BitcoinBob", rating: 4.9, trades: 324, price: 2645.50, available: 1.8, limit: "50 - 3000"),

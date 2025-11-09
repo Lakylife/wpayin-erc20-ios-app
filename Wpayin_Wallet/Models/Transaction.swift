@@ -140,49 +140,4 @@ struct Transaction: Identifiable, Codable {
         try container.encodeIfPresent(blockNumber, forKey: .blockNumber)
         try container.encodeIfPresent(explorerUrl, forKey: .explorerUrl)
     }
-
-    static let mockTransactions: [Transaction] = [
-        Transaction(
-            hash: "0x1234567890abcdef",
-            from: "0x742d35Cc2C4f0532",
-            to: "0xd8dA6BF26964aF9D",
-            amount: 0.5,
-            token: "ETH",
-            type: .send,
-            status: .confirmed,
-            timestamp: Date().addingTimeInterval(-3600),
-            gasUsed: 21000,
-            gasFee: 0.002,
-            blockNumber: "18000000",
-            explorerUrl: URL(string: "https://etherscan.io/tx/0x1234567890abcdef")
-        ),
-        Transaction(
-            hash: "0xabcdef1234567890",
-            from: "0xd8dA6BF26964aF9D",
-            to: "0x742d35Cc2C4f0532",
-            amount: 100.0,
-            token: "USDT",
-            type: .receive,
-            status: .confirmed,
-            timestamp: Date().addingTimeInterval(-7200),
-            gasUsed: 35000,
-            gasFee: 0.003,
-            blockNumber: "17999990",
-            explorerUrl: URL(string: "https://etherscan.io/tx/0xabcdef1234567890")
-        ),
-        Transaction(
-            hash: "0x567890abcdef1234",
-            from: "0x742d35Cc2C4f0532",
-            to: "0x742d35Cc2C4f0532",
-            amount: 50.0,
-            token: "USDC",
-            type: .swap,
-            status: .pending,
-            timestamp: Date().addingTimeInterval(-1800),
-            gasUsed: 120000,
-            gasFee: 0.01,
-            blockNumber: "17999995",
-            explorerUrl: URL(string: "https://etherscan.io/tx/0x567890abcdef1234")
-        )
-    ]
 }

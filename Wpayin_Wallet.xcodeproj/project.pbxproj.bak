@@ -1,0 +1,711 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 77;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		EEE1EAB42E854D5700737D17 /* WalletCoreSwiftProtobuf in Frameworks */ = {isa = PBXBuildFile; productRef = EEE1EAB32E854D5700737D17 /* WalletCoreSwiftProtobuf */; };
+		EEE1F2012E90000000737D17 /* web3swift in Frameworks */ = {isa = PBXBuildFile; productRef = EEE1F1012E90000000737D17 /* web3swift */; };
+		EEE1F2022E90000000737D17 /* CryptoSwift in Frameworks */ = {isa = PBXBuildFile; productRef = EEE1F1022E90000000737D17 /* CryptoSwift */; };
+		EEE1F2032E90000000737D17 /* BigInt in Frameworks */ = {isa = PBXBuildFile; productRef = EEE1F1032E90000000737D17 /* BigInt */; };
+		EEE1F2042E90000000737D17 /* secp256k1 in Frameworks */ = {isa = PBXBuildFile; productRef = EEE1F1042E90000000737D17 /* secp256k1 */; };
+		EEE1F2052E90500000737D17 /* WalletCore in Frameworks */ = {isa = PBXBuildFile; productRef = EEE1F1052E90500000737D17 /* WalletCore */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		EEE1E4A22E85004500737D17 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = EEE1E48A2E85004200737D17 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = EEE1E4912E85004200737D17;
+			remoteInfo = Wpayin_Wallet;
+		};
+		EEE1E4AC2E85004500737D17 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = EEE1E48A2E85004200737D17 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = EEE1E4912E85004200737D17;
+			remoteInfo = Wpayin_Wallet;
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXFileReference section */
+		EEE1E4922E85004200737D17 /* Wpayin_Wallet.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Wpayin_Wallet.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		EEE1E4A12E85004500737D17 /* Wpayin_WalletTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = Wpayin_WalletTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		EEE1E4AB2E85004500737D17 /* Wpayin_WalletUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = Wpayin_WalletUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+/* End PBXFileReference section */
+
+/* Begin PBXFileSystemSynchronizedRootGroup section */
+		EEE1E4942E85004200737D17 /* Wpayin_Wallet */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = Wpayin_Wallet;
+			sourceTree = "<group>";
+		};
+		EEE1E4A42E85004500737D17 /* Wpayin_WalletTests */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = Wpayin_WalletTests;
+			sourceTree = "<group>";
+		};
+		EEE1E4AE2E85004500737D17 /* Wpayin_WalletUITests */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = Wpayin_WalletUITests;
+			sourceTree = "<group>";
+		};
+/* End PBXFileSystemSynchronizedRootGroup section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		EEE1E48F2E85004200737D17 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				EEE1F2012E90000000737D17 /* web3swift in Frameworks */,
+				EEE1F2022E90000000737D17 /* CryptoSwift in Frameworks */,
+				EEE1F2032E90000000737D17 /* BigInt in Frameworks */,
+				EEE1F2042E90000000737D17 /* secp256k1 in Frameworks */,
+				EEE1F2052E90500000737D17 /* WalletCore in Frameworks */,
+				EEE1EAB42E854D5700737D17 /* WalletCoreSwiftProtobuf in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		EEE1E49E2E85004500737D17 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		EEE1E4A82E85004500737D17 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		EEE1E4892E85004200737D17 = {
+			isa = PBXGroup;
+			children = (
+				EEE1E4942E85004200737D17 /* Wpayin_Wallet */,
+				EEE1E4A42E85004500737D17 /* Wpayin_WalletTests */,
+				EEE1E4AE2E85004500737D17 /* Wpayin_WalletUITests */,
+				EEE1EAB22E854C7100737D17 /* Frameworks */,
+				EEE1E4932E85004200737D17 /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		EEE1E4932E85004200737D17 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				EEE1E4922E85004200737D17 /* Wpayin_Wallet.app */,
+				EEE1E4A12E85004500737D17 /* Wpayin_WalletTests.xctest */,
+				EEE1E4AB2E85004500737D17 /* Wpayin_WalletUITests.xctest */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		EEE1EAB22E854C7100737D17 /* Frameworks */ = {
+			isa = PBXGroup;
+			children = (
+			);
+			name = Frameworks;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		EEE1E4912E85004200737D17 /* Wpayin_Wallet */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = EEE1E4B52E85004500737D17 /* Build configuration list for PBXNativeTarget "Wpayin_Wallet" */;
+			buildPhases = (
+				EEE1E48E2E85004200737D17 /* Sources */,
+				EEE1E48F2E85004200737D17 /* Frameworks */,
+				EEE1E4902E85004200737D17 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				EEE1E4942E85004200737D17 /* Wpayin_Wallet */,
+			);
+			name = Wpayin_Wallet;
+			packageProductDependencies = (
+				EEE1F1012E90000000737D17 /* web3swift */,
+				EEE1F1022E90000000737D17 /* CryptoSwift */,
+				EEE1F1032E90000000737D17 /* BigInt */,
+				EEE1F1042E90000000737D17 /* secp256k1 */,
+				EEE1F1052E90500000737D17 /* WalletCore */,
+				EEE1EAB32E854D5700737D17 /* WalletCoreSwiftProtobuf */,
+			);
+			productName = Wpayin_Wallet;
+			productReference = EEE1E4922E85004200737D17 /* Wpayin_Wallet.app */;
+			productType = "com.apple.product-type.application";
+		};
+		EEE1E4A02E85004500737D17 /* Wpayin_WalletTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = EEE1E4B82E85004500737D17 /* Build configuration list for PBXNativeTarget "Wpayin_WalletTests" */;
+			buildPhases = (
+				EEE1E49D2E85004500737D17 /* Sources */,
+				EEE1E49E2E85004500737D17 /* Frameworks */,
+				EEE1E49F2E85004500737D17 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				EEE1E4A32E85004500737D17 /* PBXTargetDependency */,
+			);
+			fileSystemSynchronizedGroups = (
+				EEE1E4A42E85004500737D17 /* Wpayin_WalletTests */,
+			);
+			name = Wpayin_WalletTests;
+			packageProductDependencies = (
+			);
+			productName = Wpayin_WalletTests;
+			productReference = EEE1E4A12E85004500737D17 /* Wpayin_WalletTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
+		EEE1E4AA2E85004500737D17 /* Wpayin_WalletUITests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = EEE1E4BB2E85004500737D17 /* Build configuration list for PBXNativeTarget "Wpayin_WalletUITests" */;
+			buildPhases = (
+				EEE1E4A72E85004500737D17 /* Sources */,
+				EEE1E4A82E85004500737D17 /* Frameworks */,
+				EEE1E4A92E85004500737D17 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				EEE1E4AD2E85004500737D17 /* PBXTargetDependency */,
+			);
+			fileSystemSynchronizedGroups = (
+				EEE1E4AE2E85004500737D17 /* Wpayin_WalletUITests */,
+			);
+			name = Wpayin_WalletUITests;
+			packageProductDependencies = (
+			);
+			productName = Wpayin_WalletUITests;
+			productReference = EEE1E4AB2E85004500737D17 /* Wpayin_WalletUITests.xctest */;
+			productType = "com.apple.product-type.bundle.ui-testing";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		EEE1E48A2E85004200737D17 /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = 1;
+				KnownAssetTags = (
+					New,
+				);
+				LastSwiftUpdateCheck = 2600;
+				LastUpgradeCheck = 2600;
+				TargetAttributes = {
+					EEE1E4912E85004200737D17 = {
+						CreatedOnToolsVersion = 26.0.1;
+					};
+					EEE1E4A02E85004500737D17 = {
+						CreatedOnToolsVersion = 26.0.1;
+						TestTargetID = EEE1E4912E85004200737D17;
+					};
+					EEE1E4AA2E85004500737D17 = {
+						CreatedOnToolsVersion = 26.0.1;
+						TestTargetID = EEE1E4912E85004200737D17;
+					};
+				};
+			};
+			buildConfigurationList = EEE1E48D2E85004200737D17 /* Build configuration list for PBXProject "Wpayin_Wallet" */;
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				en,
+				Base,
+				cs,
+				de,
+				fr,
+				es,
+				zh,
+				ja,
+				ko,
+			);
+			mainGroup = EEE1E4892E85004200737D17;
+			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				EEE1E5052E85326900737D17 /* XCRemoteSwiftPackageReference "web3swift" */,
+				EEE1F3012E90000000737D17 /* XCRemoteSwiftPackageReference "CryptoSwift" */,
+				EEE1F3022E90000000737D17 /* XCRemoteSwiftPackageReference "BigInt" */,
+				EEE1F3032E90000000737D17 /* XCRemoteSwiftPackageReference "secp256k1" */,
+				EEE1E7062E853E8200737D17 /* XCRemoteSwiftPackageReference "wallet-core" */,
+			);
+			preferredProjectObjectVersion = 77;
+			productRefGroup = EEE1E4932E85004200737D17 /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				EEE1E4912E85004200737D17 /* Wpayin_Wallet */,
+				EEE1E4A02E85004500737D17 /* Wpayin_WalletTests */,
+				EEE1E4AA2E85004500737D17 /* Wpayin_WalletUITests */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		EEE1E4902E85004200737D17 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		EEE1E49F2E85004500737D17 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		EEE1E4A92E85004500737D17 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		EEE1E48E2E85004200737D17 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		EEE1E49D2E85004500737D17 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		EEE1E4A72E85004500737D17 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		EEE1E4A32E85004500737D17 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = EEE1E4912E85004200737D17 /* Wpayin_Wallet */;
+			targetProxy = EEE1E4A22E85004500737D17 /* PBXContainerItemProxy */;
+		};
+		EEE1E4AD2E85004500737D17 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = EEE1E4912E85004200737D17 /* Wpayin_Wallet */;
+			targetProxy = EEE1E4AC2E85004500737D17 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
+
+/* Begin XCBuildConfiguration section */
+		EEE1E4B32E85004500737D17 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				DEVELOPMENT_TEAM = AA9GARUABY;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"DEBUG=1",
+					"$(inherited)",
+				);
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
+				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				MTL_FAST_MATH = YES;
+				ONLY_ACTIVE_ARCH = YES;
+				SDKROOT = iphoneos;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)";
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+			};
+			name = Debug;
+		};
+		EEE1E4B42E85004500737D17 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				DEVELOPMENT_TEAM = AA9GARUABY;
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
+				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				MTL_FAST_MATH = YES;
+				SDKROOT = iphoneos;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				VALIDATE_PRODUCT = YES;
+			};
+			name = Release;
+		};
+		EEE1E4B62E85004500737D17 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = YES;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = AA9GARUABY;
+				ENABLE_PREVIEWS = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_CFBundleDisplayName = Walletpayin;
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.finance";
+				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
+				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
+				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 2.0.0;
+				PRODUCT_BUNDLE_IDENTIFIER = "io.noriskservis.standart.Wpayin-Wallet";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		EEE1E4B72E85004500737D17 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = YES;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = AA9GARUABY;
+				ENABLE_PREVIEWS = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_CFBundleDisplayName = Walletpayin;
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.finance";
+				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
+				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
+				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 2.0.0;
+				PRODUCT_BUNDLE_IDENTIFIER = "io.noriskservis.standart.Wpayin-Wallet";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
+		EEE1E4B92E85004500737D17 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = AA9GARUABY;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
+				MARKETING_VERSION = 2.0.0;
+				PRODUCT_BUNDLE_IDENTIFIER = "io.noriskservis.standart.Wpayin-WalletTests";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				STRING_CATALOG_GENERATE_SYMBOLS = NO;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Wpayin_Wallet.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/Wpayin_Wallet";
+			};
+			name = Debug;
+		};
+		EEE1E4BA2E85004500737D17 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = AA9GARUABY;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
+				MARKETING_VERSION = 2.0.0;
+				PRODUCT_BUNDLE_IDENTIFIER = "io.noriskservis.standart.Wpayin-WalletTests";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				STRING_CATALOG_GENERATE_SYMBOLS = NO;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Wpayin_Wallet.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/Wpayin_Wallet";
+			};
+			name = Release;
+		};
+		EEE1E4BC2E85004500737D17 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = AA9GARUABY;
+				GENERATE_INFOPLIST_FILE = YES;
+				MARKETING_VERSION = 2.0.0;
+				PRODUCT_BUNDLE_IDENTIFIER = "io.noriskservis.standart.Wpayin-WalletUITests";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				STRING_CATALOG_GENERATE_SYMBOLS = NO;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_TARGET_NAME = Wpayin_Wallet;
+			};
+			name = Debug;
+		};
+		EEE1E4BD2E85004500737D17 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = AA9GARUABY;
+				GENERATE_INFOPLIST_FILE = YES;
+				MARKETING_VERSION = 2.0.0;
+				PRODUCT_BUNDLE_IDENTIFIER = "io.noriskservis.standart.Wpayin-WalletUITests";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				STRING_CATALOG_GENERATE_SYMBOLS = NO;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_TARGET_NAME = Wpayin_Wallet;
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		EEE1E48D2E85004200737D17 /* Build configuration list for PBXProject "Wpayin_Wallet" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				EEE1E4B32E85004500737D17 /* Debug */,
+				EEE1E4B42E85004500737D17 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		EEE1E4B52E85004500737D17 /* Build configuration list for PBXNativeTarget "Wpayin_Wallet" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				EEE1E4B62E85004500737D17 /* Debug */,
+				EEE1E4B72E85004500737D17 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		EEE1E4B82E85004500737D17 /* Build configuration list for PBXNativeTarget "Wpayin_WalletTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				EEE1E4B92E85004500737D17 /* Debug */,
+				EEE1E4BA2E85004500737D17 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		EEE1E4BB2E85004500737D17 /* Build configuration list for PBXNativeTarget "Wpayin_WalletUITests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				EEE1E4BC2E85004500737D17 /* Debug */,
+				EEE1E4BD2E85004500737D17 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+/* End XCConfigurationList section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		EEE1E5052E85326900737D17 /* XCRemoteSwiftPackageReference "web3swift" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/skywinder/web3swift";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 3.3.2;
+			};
+		};
+		EEE1E7062E853E8200737D17 /* XCRemoteSwiftPackageReference "wallet-core" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/trustwallet/wallet-core";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 4.3.10;
+			};
+		};
+		EEE1F3012E90000000737D17 /* XCRemoteSwiftPackageReference "CryptoSwift" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/krzyzanowskim/CryptoSwift.git";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 1.9.0;
+			};
+		};
+		EEE1F3022E90000000737D17 /* XCRemoteSwiftPackageReference "BigInt" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/attaswift/BigInt.git";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 5.4.1;
+			};
+		};
+		EEE1F3032E90000000737D17 /* XCRemoteSwiftPackageReference "secp256k1" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/GigaBitcoin/secp256k1.swift";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 0.10.0;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		EEE1EAB32E854D5700737D17 /* WalletCoreSwiftProtobuf */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = EEE1E7062E853E8200737D17 /* XCRemoteSwiftPackageReference "wallet-core" */;
+			productName = WalletCoreSwiftProtobuf;
+		};
+		EEE1F1012E90000000737D17 /* web3swift */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = EEE1E5052E85326900737D17 /* XCRemoteSwiftPackageReference "web3swift" */;
+			productName = web3swift;
+		};
+		EEE1F1022E90000000737D17 /* CryptoSwift */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = EEE1F3012E90000000737D17 /* XCRemoteSwiftPackageReference "CryptoSwift" */;
+			productName = CryptoSwift;
+		};
+		EEE1F1032E90000000737D17 /* BigInt */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = EEE1F3022E90000000737D17 /* XCRemoteSwiftPackageReference "BigInt" */;
+			productName = BigInt;
+		};
+		EEE1F1042E90000000737D17 /* secp256k1 */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = EEE1F3032E90000000737D17 /* XCRemoteSwiftPackageReference "secp256k1" */;
+			productName = secp256k1;
+		};
+		EEE1F1052E90500000737D17 /* WalletCore */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = EEE1E7062E853E8200737D17 /* XCRemoteSwiftPackageReference "wallet-core" */;
+			productName = WalletCore;
+		};
+/* End XCSwiftPackageProductDependency section */
+	};
+	rootObject = EEE1E48A2E85004200737D17 /* Project object */;
+}

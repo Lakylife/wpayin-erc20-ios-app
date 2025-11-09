@@ -17,7 +17,7 @@ struct VerifyMnemonicStep: View {
     }
 
     private var shuffledWords: [String] {
-        let fakeWords = ["fake", "decoy", "wrong", "invalid", "test", "dummy", "false", "bogus", "mock"]
+        let fakeWords = ["fake", "decoy", "wrong", "invalid", "test", "dummy", "false", "bogus", "incorrect"]
         let allWords = mnemonicWords + fakeWords
         return allWords.shuffled()
     }

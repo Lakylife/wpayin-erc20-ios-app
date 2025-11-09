@@ -502,6 +502,6 @@ struct TokenActionButton: View {
 }
 
 #Preview {
-    TokenDetailView(token: Token.mockTokens[0])
+    TokenDetailView(token: Token(contractAddress: nil, name: "", symbol: "", decimals: 18, balance: 0, price: 0, iconUrl: nil, blockchain: .ethereum, isNative: true))
         .environmentObject(WalletManager())
 }

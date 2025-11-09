@@ -14,7 +14,7 @@ struct BrowserView: View {
 
     var body: some View {
         ZStack {
-            // Background gradient matching mockup
+            // Background gradient matching design specification
             LinearGradient(
                 gradient: Gradient(colors: [
                     WpayinColors.backgroundGradientStart,

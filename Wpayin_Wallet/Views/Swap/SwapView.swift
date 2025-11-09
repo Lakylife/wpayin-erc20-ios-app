@@ -942,21 +942,28 @@ struct NetworkSelectorButton: View {
             // Network Selector (styled like token selector)
             Button(action: onTap) {
                 HStack(spacing: 12) {
-                    // Network icon with gradient
-                    Circle()
-                        .fill(
-                            LinearGradient(
-                                gradient: Gradient(colors: [selectedNetwork.color, selectedNetwork.color.opacity(0.7)]),
-                                startPoint: .topLeading,
-                                endPoint: .bottomTrailing
+                    // Network icon
+                    if let iconName = selectedNetwork.assetIconName {
+                        Image(iconName)
+                            .resizable()
+                            .aspectRatio(contentMode: .fit)
+                            .frame(width: 36, height: 36)
+                    } else {
+                        Circle()
+                            .fill(
+                                LinearGradient(
+                                    gradient: Gradient(colors: [selectedNetwork.color, selectedNetwork.color.opacity(0.7)]),
+                                    startPoint: .topLeading,
+                                    endPoint: .bottomTrailing
+                                )
                             )
-                        )
-                        .frame(width: 36, height: 36)
-                        .overlay(
-                            Image(systemName: selectedNetwork.iconName)
-                                .font(.system(size: 16, weight: .medium))
-                                .foregroundColor(.white)
-                        )
+                            .frame(width: 36, height: 36)
+                            .overlay(
+                                Image(systemName: selectedNetwork.iconName)
+                                    .font(.system(size: 16, weight: .medium))
+                                    .foregroundColor(.white)
+                            )
+                    }
                     
                     VStack(alignment: .leading, spacing: 2) {
                         Text(selectedNetwork.name)
@@ -1026,21 +1033,28 @@ struct NetworkSelectorSheet: View {
                                 dismiss()
                             }) {
                                 HStack(spacing: 16) {
-                                    // Network icon with gradient
-                                    Circle()
-                                        .fill(
-                                            LinearGradient(
-                                                gradient: Gradient(colors: [network.color, network.color.opacity(0.7)]),
-                                                startPoint: .topLeading,
-                                                endPoint: .bottomTrailing
+                                    // Network icon
+                                    if let iconName = network.assetIconName {
+                                        Image(iconName)
+                                            .resizable()
+                                            .aspectRatio(contentMode: .fit)
+                                            .frame(width: 40, height: 40)
+                                    } else {
+                                        Circle()
+                                            .fill(
+                                                LinearGradient(
+                                                    gradient: Gradient(colors: [network.color, network.color.opacity(0.7)]),
+                                                    startPoint: .topLeading,
+                                                    endPoint: .bottomTrailing
+                                                )
                                             )
-                                        )
-                                        .frame(width: 40, height: 40)
-                                        .overlay(
-                                            Image(systemName: network.iconName)
-                                                .font(.system(size: 18, weight: .medium))
-                                                .foregroundColor(.white)
-                                        )
+                                            .frame(width: 40, height: 40)
+                                            .overlay(
+                                                Image(systemName: network.iconName)
+                                                    .font(.system(size: 18, weight: .medium))
+                                                    .foregroundColor(.white)
+                                            )
+                                    }
                                     
                                     VStack(alignment: .leading, spacing: 4) {
                                         Text(network.name)
@@ -1080,7 +1094,7 @@ struct NetworkSelectorSheet: View {
 #Preview {
     let walletManager = WalletManager()
     let settingsManager = SettingsManager()
-    walletManager.tokens = Token.mockTokens
+    // walletManager.tokens = Token.mockTokens // disabled
 
     return SwapView()
         .environmentObject(walletManager)

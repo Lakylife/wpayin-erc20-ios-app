@@ -1,0 +1,321 @@
+//
+//  BuyView.swift
+//  Wpayin_Wallet
+//
+//  Main entry point for buying crypto with fiat ramp integration
+//
+
+import SwiftUI
+
+struct BuyView: View {
+    @EnvironmentObject var walletManager: WalletManager
+    @EnvironmentObject var settingsManager: SettingsManager
+    @Environment(\.dismiss) private var dismiss
+    @State private var selectedToken: Token?
+    @State private var showProviderSelection = false
+    @State private var showP2PTrading = false
+    
+    private var popularTokens: [Token] {
+        walletManager.tokens.filter { token in
+            ["BTC", "ETH", "USDT", "USDC", "BNB", "MATIC"].contains(token.symbol)
+        }
+    }
+    
+    // Helper to get wallet address for a token
+    private func getAddress(for token: Token) -> String {
+        return walletManager.depositAddress(for: token)
+    }
+    
+    var body: some View {
+        NavigationView {
+            ZStack {
+                LinearGradient(
+                    gradient: Gradient(colors: [
+                        WpayinColors.backgroundGradientStart,
+                        WpayinColors.backgroundGradientEnd
+                    ]),
+                    startPoint: .top,
+                    endPoint: .bottom
+                )
+                .ignoresSafeArea()
+                
+                ScrollView {
+                    VStack(spacing: 32) {
+                        // Header
+                        VStack(spacing: 12) {
+                            Image(systemName: "creditcard.circle.fill")
+                                .font(.system(size: 60))
+                                .foregroundColor(WpayinColors.primary)
+                            
+                            Text("Buy Crypto")
+                                .font(.system(size: 28, weight: .bold))
+                                .foregroundColor(WpayinColors.text)
+                            
+                            Text("Purchase cryptocurrency instantly")
+                                .font(.system(size: 16))
+                                .foregroundColor(WpayinColors.textSecondary)
+                                .multilineTextAlignment(.center)
+                        }
+                        .padding(.top, 20)
+                        
+                        // Quick Buy - Popular Tokens
+                        VStack(alignment: .leading, spacing: 16) {
+                            Text("Quick Buy")
+                                .font(.wpayinHeadline)
+                                .foregroundColor(WpayinColors.text)
+                                .padding(.horizontal)
+                            
+                            if popularTokens.isEmpty {
+                                EmptyQuickBuyView()
+                            } else {
+                                VStack(spacing: 12) {
+                                    ForEach(popularTokens) { token in
+                                        QuickBuyCard(token: token) {
+                                            print("👆 Tapped Buy on \(token.symbol)")
+                                            selectedToken = token
+                                            showProviderSelection = true
+                                        }
+                                    }
+                                }
+                                .padding(.horizontal)
+                            }
+                        }
+                        .onAppear {
+                            print("📊 Total tokens in wallet: \(walletManager.tokens.count)")
+                            print("⭐ Popular tokens: \(popularTokens.count)")
+                            for token in popularTokens {
+                                let addr = getAddress(for: token)
+                                print("  - \(token.symbol): \(addr.prefix(10))...")
+                            }
+                        }
+                        
+                        // Other Methods
+                        VStack(alignment: .leading, spacing: 16) {
+                            Text("Other Methods")
+                                .font(.wpayinHeadline)
+                                .foregroundColor(WpayinColors.text)
+                                .padding(.horizontal)
+                            
+                            BuyMethodCard(
+                                icon: "arrow.left.arrow.right.circle.fill",
+                                title: "P2P Trading",
+                                subtitle: "Buy directly from other users",
+                                badge: "Best Rates",
+                                badgeColor: .orange,
+                                action: {
+                                    showP2PTrading = true
+                                }
+                            )
+                            .padding(.horizontal)
+                        }
+                        
+                        // Info Section
+                        BuyInfoSection()
+                            .padding(.horizontal)
+                        
+                        Spacer(minLength: 40)
+                    }
+                }
+            }
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarLeading) {
+                    Button("Close") {
+                        dismiss()
+                    }
+                    .foregroundColor(WpayinColors.text)
+                }
+            }
+        }
+        .sheet(isPresented: $showProviderSelection) {
+            if let token = selectedToken {
+                let address = getAddress(for: token)
+                ProviderSelectionView(
+                    crypto: token.symbol,
+                    walletAddress: address
+                )
+                .onAppear {
+                    print("🔍 Opening provider selection for \(token.symbol)")
+                    print("📍 Using address: \(address)")
+                }
+            }
+        }
+        .sheet(isPresented: $showP2PTrading) {
+            P2PBuyView()
+                .environmentObject(walletManager)
+                .environmentObject(settingsManager)
+        }
+    }
+}
+
+// MARK: - Supporting Views
+
+struct QuickBuyCard: View {
+    let token: Token
+    let action: () -> Void
+    
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 16) {
+                TokenIconView(token: token, size: 44, showNetworkBadge: false)
+                
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(token.symbol)
+                        .font(.wpayinSubheadline)
+                        .foregroundColor(WpayinColors.text)
+                    
+                    Text(token.name)
+                        .font(.wpayinCaption)
+                        .foregroundColor(WpayinColors.textSecondary)
+                }
+                
+                Spacer()
+                
+                HStack(spacing: 6) {
+                    Image(systemName: "plus.circle.fill")
+                        .font(.system(size: 16))
+                    Text("Buy")
+                        .font(.system(size: 14, weight: .semibold))
+                }
+                .foregroundColor(.white)
+                .padding(.horizontal, 16)
+                .padding(.vertical, 8)
+                .background(WpayinColors.primary)
+                .cornerRadius(20)
+            }
+            .padding()
+            .background(WpayinColors.surface)
+            .cornerRadius(12)
+        }
+        .buttonStyle(PlainButtonStyle())
+    }
+}
+
+struct EmptyQuickBuyView: View {
+    var body: some View {
+        VStack(spacing: 12) {
+            Image(systemName: "wallet.pass")
+                .font(.system(size: 40))
+                .foregroundColor(WpayinColors.textTertiary)
+            
+            Text("No tokens in wallet")
+                .font(.wpayinSubheadline)
+                .foregroundColor(WpayinColors.text)
+            
+            Text("Add tokens to enable quick buy")
+                .font(.wpayinCaption)
+                .foregroundColor(WpayinColors.textSecondary)
+                .multilineTextAlignment(.center)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(30)
+        .background(WpayinColors.surface.opacity(0.5))
+        .cornerRadius(12)
+        .padding(.horizontal)
+    }
+}
+
+struct BuyInfoSection: View {
+    var body: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            HStack(spacing: 8) {
+                Image(systemName: "info.circle.fill")
+                    .foregroundColor(WpayinColors.primary)
+                Text("How it works")
+                    .font(.wpayinSubheadline)
+                    .foregroundColor(WpayinColors.text)
+            }
+            
+            VStack(alignment: .leading, spacing: 12) {
+                BuyInfoRow(icon: "1.circle.fill", text: "Select cryptocurrency")
+                BuyInfoRow(icon: "2.circle.fill", text: "Choose payment provider")
+                BuyInfoRow(icon: "3.circle.fill", text: "Complete payment")
+                BuyInfoRow(icon: "4.circle.fill", text: "Crypto arrives in 5-30 min")
+            }
+        }
+        .padding()
+        .background(WpayinColors.surface)
+        .cornerRadius(12)
+    }
+}
+
+// MARK: - Buy Method Card
+
+struct BuyMethodCard: View {
+    let icon: String
+    let title: String
+    let subtitle: String
+    let badge: String
+    let badgeColor: Color
+    let action: () -> Void
+    
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 16) {
+                ZStack {
+                    Circle()
+                        .fill(WpayinColors.primary.opacity(0.15))
+                        .frame(width: 50, height: 50)
+                    
+                    Image(systemName: icon)
+                        .font(.system(size: 24))
+                        .foregroundColor(WpayinColors.primary)
+                }
+                
+                VStack(alignment: .leading, spacing: 6) {
+                    HStack {
+                        Text(title)
+                            .font(.wpayinSubheadline)
+                            .foregroundColor(WpayinColors.text)
+                        
+                        Spacer()
+                        
+                        Text(badge)
+                            .font(.system(size: 11, weight: .semibold))
+                            .foregroundColor(.white)
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 4)
+                            .background(badgeColor)
+                            .cornerRadius(6)
+                    }
+                    
+                    Text(subtitle)
+                        .font(.wpayinCaption)
+                        .foregroundColor(WpayinColors.textSecondary)
+                }
+                
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundColor(WpayinColors.textTertiary)
+            }
+            .padding()
+            .background(WpayinColors.surface)
+            .cornerRadius(12)
+        }
+        .buttonStyle(PlainButtonStyle())
+    }
+}
+
+struct BuyInfoRow: View {
+    let icon: String
+    let text: String
+    
+    var body: some View {
+        HStack(spacing: 12) {
+            Image(systemName: icon)
+                .font(.system(size: 14))
+                .foregroundColor(WpayinColors.primary)
+                .frame(width: 20)
+            
+            Text(text)
+                .font(.wpayinCaption)
+                .foregroundColor(WpayinColors.textSecondary)
+        }
+    }
+}
+
+#Preview {
+    BuyView()
+        .environmentObject(WalletManager())
+        .environmentObject(SettingsManager())
+}

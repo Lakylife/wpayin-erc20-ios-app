@@ -79,14 +79,21 @@ struct BlockchainRow: View {
     var body: some View {
         HStack(spacing: 16) {
             // Blockchain Icon
-            Circle()
-                .fill(blockchainColor)
-                .frame(width: 44, height: 44)
-                .overlay(
-                    Text(blockchain.platform.displayIcon)
-                        .font(.system(size: 18, weight: .bold))
-                        .foregroundColor(.white)
-                )
+            if let iconName = blockchain.platform.assetIconName {
+                Image(iconName)
+                    .resizable()
+                    .aspectRatio(contentMode: .fit)
+                    .frame(width: 44, height: 44)
+            } else {
+                Circle()
+                    .fill(blockchainColor)
+                    .frame(width: 44, height: 44)
+                    .overlay(
+                        Text(blockchain.platform.displayIcon)
+                            .font(.system(size: 18, weight: .bold))
+                            .foregroundColor(.white)
+                    )
+            }
 
             VStack(alignment: .leading, spacing: 4) {
                 Text(blockchain.platform.name)
@@ -131,29 +138,6 @@ struct BlockchainRow: View {
             return Color.pink
         default:
             return WpayinColors.primary
-        }
-    }
-}
-
-extension BlockchainPlatform {
-    var icon: String {
-        switch self {
-        case .ethereum:
-            return "Ξ"
-        case .bitcoin:
-            return "₿"
-        case .polygon:
-            return "◬"
-        case .bsc:
-            return "B"
-        case .arbitrum:
-            return "A"
-        case .optimism:
-            return "O"
-        case .avalanche:
-            return "Λ"
-        default:
-            return String(name.prefix(1))
         }
     }
 }

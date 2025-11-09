@@ -42,7 +42,7 @@ struct DepositView: View {
                         .environmentObject(walletManager)
                         .environmentObject(settingsManager)
 
-                        if let tokenAddress = currentTokenAddress {
+                        if let tokenAddress = currentTokenAddress, !tokenAddress.isEmpty {
                             QRCodeView(
                                 address: tokenAddress,
                                 qrCodeImage: $qrCodeImage
@@ -118,6 +118,7 @@ struct DepositView: View {
 
         // Get the account for this blockchain
         guard let blockchainType = foundConfig.blockchainType else { return nil }
+        guard walletManager.hasWallet && (walletManager.keychain.hasSeedPhrase() || walletManager.keychain.hasPrivateKey()) else { return nil }
         return walletManager.availableChainAccounts[blockchainType]?.address
     }
 
@@ -442,11 +443,6 @@ struct WarningView: View {
 
 #Preview {
     DepositView()
-        .environmentObject({
-            let walletManager = WalletManager()
-            walletManager.walletAddress = "0x742d35Cc6D06b73494d45e5d2b0542f2f"
-            walletManager.tokens = Token.mockTokens
-            return walletManager
-        }())
+        .environmentObject(WalletManager())
         .environmentObject(SettingsManager())
 }

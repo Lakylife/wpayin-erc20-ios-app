@@ -39,5 +39,6 @@
 "action.receive" = "받기";
 "action.swap" = "스왑";
 "action.buy" = "구매";
+"action.sell" = "판매";
 "action.cancel" = "취소";
 "action.done" = "완료";

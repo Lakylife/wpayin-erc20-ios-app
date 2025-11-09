@@ -14,7 +14,7 @@ struct MainTabView: View {
 
     var body: some View {
         ZStack {
-            // Background matching mockup
+            // Background matching design specification
             WpayinColors.background.ignoresSafeArea()
 
             VStack(spacing: 0) {

@@ -211,7 +211,7 @@ struct LedgerTokenCard: View {
 #Preview {
     VStack(spacing: 12) {
         LedgerTokenCard(
-            token: Token.mockTokens[0],
+            token: Token(contractAddress: nil, name: "Ethereum", symbol: "ETH", decimals: 18, balance: 0, price: 0, iconUrl: nil, blockchain: .ethereum, isNative: true),
             onTokenTap: { _ in }
         )
         .environmentObject(WalletManager())

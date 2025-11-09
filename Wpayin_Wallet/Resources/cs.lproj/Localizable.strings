@@ -34,5 +34,6 @@
 "action.receive" = "Přijmout";
 "action.swap" = "Vyměnit";
 "action.buy" = "Koupit";
+"action.sell" = "Prodat";
 "action.cancel" = "Zrušit";
 "action.done" = "Hotovo";
