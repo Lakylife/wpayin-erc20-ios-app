@@ -162,7 +162,7 @@ struct SettingsView: View {
                                 .font(.wpayinCaption)
                                 .foregroundColor(WpayinColors.textSecondary)
 
-                            Text("Version 1.0.0")
+                            Text("Version 1.1.0")
                                 .font(.wpayinSmall)
                                 .foregroundColor(WpayinColors.textSecondary)
                         }
@@ -420,7 +420,7 @@ struct AboutView: View {
                                     .font(.wpayinTitle)
                                     .foregroundColor(WpayinColors.text)
 
-                                Text("Version 1.0.0")
+                                Text("Version 1.1.0")
                                     .font(.wpayinSubheadline)
                                     .foregroundColor(WpayinColors.textSecondary)
                             }

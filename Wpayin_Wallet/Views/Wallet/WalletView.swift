@@ -312,9 +312,15 @@ struct TokenRowView: View {
 
             // Token Info
             VStack(alignment: .leading, spacing: 4) {
-                Text(token.name)
-                    .font(.wpayinBody)
-                    .foregroundColor(WpayinColors.text)
+                HStack(spacing: 6) {
+                    Text(token.name)
+                        .font(.wpayinBody)
+                        .foregroundColor(WpayinColors.text)
+                    
+                    if let proto = token.tokenProtocol {
+                        TokenProtocolBadge(tokenProtocol: proto, size: .small)
+                    }
+                }
 
                 Text(token.symbol)
                     .font(.wpayinCaption)
@@ -1349,6 +1355,12 @@ struct EnhancedTokenRow: View {
             return Color.blue
         case .bitcoin:
             return Color.orange
+        case .litecoin:
+            return Color(red: 0.2, green: 0.38, blue: 0.62)
+        case .bitcoinCash:
+            return Color.green
+        case .dash:
+            return Color.blue
         case .solana:
             return Color.purple
         case .polygon:
@@ -1363,29 +1375,23 @@ struct EnhancedTokenRow: View {
             return Color(red: 0.91, green: 0.24, blue: 0.20)
         case .base:
             return Color(red: 0.0, green: 0.46, blue: 0.87)
+        default:
+            return Color.gray
         }
     }
 
     private func blockchainSymbol(_ blockchain: BlockchainType) -> String {
         switch blockchain {
         case .ethereum:
-            return "E"
+            return "Ξ"
         case .bitcoin:
             return "₿"
+        case .litecoin:
+            return "Ł"
         case .solana:
-            return "◎"
-        case .polygon:
-            return "⬟"
-        case .bsc:
-            return "▲"
-        case .arbitrum:
-            return "A"
-        case .optimism:
-            return "O"
-        case .avalanche:
-            return "V"
-        case .base:
-            return "B"
+            return "S"
+        default:
+            return String(blockchain.nativeToken.prefix(1))
         }
     }
 }

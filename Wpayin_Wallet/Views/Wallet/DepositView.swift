@@ -203,8 +203,16 @@ struct TokenNetworkSelector: View {
                                 .frame(width: 16, height: 16)
                             
                             VStack(alignment: .leading, spacing: 2) {
-                                Text("\(token.symbol) - \(token.blockchain.name)")
-                                    .font(.system(size: 14, weight: .medium))
+                                HStack(spacing: 4) {
+                                    Text("\(token.symbol)")
+                                        .font(.system(size: 14, weight: .medium))
+                                    if let proto = token.tokenProtocol {
+                                        TokenProtocolBadge(tokenProtocol: proto, size: .small)
+                                    }
+                                    Text("- \(token.blockchain.name)")
+                                        .font(.system(size: 14))
+                                        .foregroundColor(.secondary)
+                                }
                                 Text("\(String(format: "%.4f", token.balance)) \(token.symbol)")
                                     .font(.system(size: 12))
                                     .foregroundColor(.secondary)

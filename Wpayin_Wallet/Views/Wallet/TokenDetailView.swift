@@ -218,6 +218,59 @@ struct TokenDetailView: View {
                         )
                     }
                 }
+                
+                // Recent Transactions Section
+                VStack(alignment: .leading, spacing: 16) {
+                    HStack {
+                        Text("Recent Transactions")
+                            .font(.system(size: 20, weight: .bold))
+                            .foregroundColor(WpayinColors.text)
+                        
+                        Spacer()
+                        
+                        NavigationLink(destination: 
+                            AllTransactionsView(token: token)
+                                .environmentObject(walletManager)
+                                .environmentObject(settingsManager)
+                        ) {
+                            HStack(spacing: 4) {
+                                Text("View All")
+                                    .font(.system(size: 15, weight: .semibold))
+                                Image(systemName: "chevron.right")
+                                    .font(.system(size: 13, weight: .semibold))
+                            }
+                            .foregroundColor(WpayinColors.primary)
+                        }
+                    }
+                    
+                    if recentTransactions.isEmpty {
+                        VStack(spacing: 12) {
+                            Image(systemName: "clock.arrow.circlepath")
+                                .font(.system(size: 40))
+                                .foregroundColor(WpayinColors.textTertiary)
+                            
+                            Text("No transactions yet")
+                                .font(.system(size: 15))
+                                .foregroundColor(WpayinColors.textSecondary)
+                        }
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 40)
+                        .background(
+                            RoundedRectangle(cornerRadius: 16)
+                                .fill(WpayinColors.surface)
+                        )
+                    } else {
+                        VStack(spacing: 1) {
+                            ForEach(recentTransactions.prefix(3)) { transaction in
+                                TransactionRow(transaction: transaction)
+                                    .environmentObject(settingsManager)
+                                    .background(WpayinColors.surface)
+                            }
+                        }
+                        .background(WpayinColors.surface)
+                        .cornerRadius(16)
+                    }
+                }
                 .padding(20)
             }
             .background(WpayinColors.background)
@@ -232,6 +285,12 @@ struct TokenDetailView: View {
                 }
             }
         }
+    }
+    
+    private var recentTransactions: [Transaction] {
+        walletManager.transactions
+            .filter { $0.token == token.symbol }
+            .sorted { $0.timestamp > $1.timestamp }
     }
 
     private var allTokensForSymbol: [Token] {

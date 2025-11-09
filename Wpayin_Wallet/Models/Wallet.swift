@@ -151,6 +151,18 @@ struct DerivationPaths {
             return ethereum(accountIndex: accountIndex)
         case .bitcoin:
             return bitcoin(accountIndex: accountIndex)
+        case .litecoin:
+            return "m/84'/2'/0'/0/\(accountIndex)"  // BIP84 for Litecoin
+        case .bitcoinCash:
+            return "m/44'/145'/0'/0/\(accountIndex)"
+        case .eCash:
+            return "m/44'/899'/0'/0/\(accountIndex)"
+        case .dash:
+            return "m/44'/5'/0'/0/\(accountIndex)"
+        case .zcash:
+            return "m/44'/133'/0'/0/\(accountIndex)"
+        case .monero:
+            return "m/44'/128'/0'/0/\(accountIndex)"
         case .solana:
             return solana(accountIndex: accountIndex)
         case .polygon:
@@ -165,6 +177,12 @@ struct DerivationPaths {
             return avalanche(accountIndex: accountIndex)
         case .base:
             return base(accountIndex: accountIndex)
+        case .gnosis:
+            return "m/44'/60'/0'/0/\(accountIndex)"  // Same as Ethereum
+        case .zkSync:
+            return "m/44'/60'/0'/0/\(accountIndex)"  // Same as Ethereum
+        case .fantom:
+            return "m/44'/60'/0'/0/\(accountIndex)"  // Same as Ethereum
         }
     }
 }

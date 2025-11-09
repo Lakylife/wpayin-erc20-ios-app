@@ -126,62 +126,27 @@ struct NetworkConfig: Identifiable, Codable, Equatable {
 
     // Color for network
     var color: Color {
-        switch blockchain {
-        case .ethereum:
-            return Color.blue
-        case .bitcoin:
-            return Color.orange
-        case .arbitrum:
-            return Color.cyan
-        case .polygon:
-            return Color.purple
-        case .bsc:
-            return Color.yellow
-        case .optimism:
-            return Color.red
-        case .avalanche:
-            return Color(red: 0.91, green: 0.24, blue: 0.20)
-        case .base:
-            return Color(red: 0.0, green: 0.46, blue: 0.87)
-        case .solana:
-            return Color(red: 0.56, green: 0.24, blue: 0.85)
-        }
+        BlockchainPlatform(rawValue: blockchain.rawValue)?.color ?? .gray
     }
 
     // Network icon/symbol
     var iconSymbol: String {
-        switch blockchain {
-        case .ethereum:
-            return "Ξ"  // Ethereum symbol
-        case .bitcoin:
-            return "₿"  // Bitcoin symbol
-        case .arbitrum:
-            return "A"
-        case .polygon:
-            return "⬡"  // Polygon/hexagon
-        case .bsc:
-            return "B"
-        case .optimism:
-            return "O"
-        case .avalanche:
-            return "A"
-        case .base:
-            return "◼︎"  // Square for Base
-        case .solana:
-            return "S"
-        }
+        BlockchainPlatform(rawValue: blockchain.rawValue)?.displayIcon ?? "?"
     }
 }
 
 // Manager for network configurations
 class NetworkConfigManager: ObservableObject {
     @Published var networks: [NetworkConfig] = []
+    @Published var enabledNetworks: Set<String> = []  // Store enabled network IDs
 
     private let userDefaults = UserDefaults.standard
     private let networksKey = "SavedNetworkConfigs"
+    private let enabledNetworksKey = "EnabledNetworks"
 
     init() {
         loadNetworks()
+        loadEnabledNetworks()
     }
 
     private func loadNetworks() {
@@ -196,6 +161,24 @@ class NetworkConfigManager: ObservableObject {
             networks = NetworkConfig.defaultNetworks
         }
     }
+    
+    private func loadEnabledNetworks() {
+        if let data = userDefaults.data(forKey: enabledNetworksKey),
+           let saved = try? JSONDecoder().decode(Set<String>.self, from: data) {
+            enabledNetworks = saved
+        } else {
+            // Default: Enable Ethereum and Bitcoin
+            enabledNetworks = Set(networks.filter { 
+                $0.blockchain == .ethereum || $0.blockchain == .bitcoin 
+            }.map { $0.id.uuidString })
+        }
+    }
+    
+    private func saveEnabledNetworks() {
+        if let data = try? JSONEncoder().encode(enabledNetworks) {
+            userDefaults.set(data, forKey: enabledNetworksKey)
+        }
+    }
 
     func saveNetworks() {
         // Only save custom networks
@@ -203,6 +186,23 @@ class NetworkConfigManager: ObservableObject {
         if let data = try? JSONEncoder().encode(customNetworks) {
             userDefaults.set(data, forKey: networksKey)
         }
+    }
+    
+    func isNetworkEnabled(_ network: NetworkConfig) -> Bool {
+        return enabledNetworks.contains(network.id.uuidString)
+    }
+    
+    func setNetworkEnabled(_ network: NetworkConfig, enabled: Bool) {
+        if enabled {
+            enabledNetworks.insert(network.id.uuidString)
+        } else {
+            enabledNetworks.remove(network.id.uuidString)
+        }
+        saveEnabledNetworks()
+    }
+    
+    func getEnabledNetworks() -> [NetworkConfig] {
+        return networks.filter { isNetworkEnabled($0) }
     }
 
     func updateNetwork(_ network: NetworkConfig) {
@@ -223,7 +223,9 @@ class NetworkConfigManager: ObservableObject {
         // Only allow deleting custom networks
         guard network.isCustom else { return }
         networks.removeAll { $0.id == network.id }
+        enabledNetworks.remove(network.id.uuidString)
         saveNetworks()
+        saveEnabledNetworks()
     }
 
     func getNetwork(for blockchain: BlockchainType) -> NetworkConfig? {

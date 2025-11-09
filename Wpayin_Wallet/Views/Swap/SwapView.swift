@@ -685,6 +685,10 @@ struct TokenPickerView: View {
                                                 .font(.system(size: 16, weight: .semibold))
                                                 .foregroundColor(WpayinColors.text)
                                             
+                                            if let proto = token.tokenProtocol {
+                                                TokenProtocolBadge(tokenProtocol: proto, size: .small)
+                                            }
+                                            
                                             // Network badge
                                             Circle()
                                                 .fill(tokenPlatform.color)
