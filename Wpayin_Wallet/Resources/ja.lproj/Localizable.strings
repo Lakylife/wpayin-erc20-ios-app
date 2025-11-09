@@ -39,5 +39,6 @@
 "action.receive" = "受信";
 "action.swap" = "スワップ";
 "action.buy" = "購入";
+"action.sell" = "売却";
 "action.cancel" = "キャンセル";
 "action.done" = "完了";

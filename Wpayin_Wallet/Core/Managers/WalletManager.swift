@@ -255,7 +255,9 @@ final class WalletManager: ObservableObject {
     }
 
     func depositAddress(for token: Token) -> String {
-        token.receivingAddress ?? chainAccounts[token.blockchain]?.address ?? walletAddress
+        // Return address only if a wallet (seed/private key) truly exists and onboarding completed
+        guard hasWallet && (keychain.hasSeedPhrase() || keychain.hasPrivateKey()) else { return "" }
+        return token.receivingAddress ?? chainAccounts[token.blockchain]?.address ?? ""
     }
 
     // MARK: - Saved Addresses
@@ -602,7 +604,7 @@ final class WalletManager: ObservableObject {
 
         // Update current balance (but keep previousBalance unchanged for comparison)
         self.balance = newBalance
-        self.hasWallet = !self.tokens.isEmpty || keychain.hasSeedPhrase() || keychain.hasPrivateKey()
+        self.hasWallet = keychain.hasSeedPhrase() || keychain.hasPrivateKey()
 
         // Load real NFTs from API
         Task {
@@ -629,7 +631,7 @@ final class WalletManager: ObservableObject {
 
         let configs = accounts.map { $0.config }
         if configs.isEmpty {
-            transactions = tokens.isEmpty ? [] : generateRealisticTransactions(for: tokens, walletAddress: resolvedAddress)
+            transactions = []
             return
         }
 
@@ -642,11 +644,11 @@ final class WalletManager: ObservableObject {
             case .missingAPIKeys:
                 transactions = []
             default:
-                transactions = tokens.isEmpty ? [] : generateRealisticTransactions(for: tokens, walletAddress: resolvedAddress)
+                transactions = []
             }
         } catch {
             print("Transaction fetch unexpected error: \(error.localizedDescription)")
-            transactions = tokens.isEmpty ? [] : generateRealisticTransactions(for: tokens, walletAddress: resolvedAddress)
+            transactions = []
         }
     }
 
@@ -773,19 +775,23 @@ final class WalletManager: ObservableObject {
         }
 
         activeWallet = multiChainWallets.first(where: { $0.isActive }) ?? multiChainWallets.first
-        hasWallet = keychain.hasSeedPhrase() || keychain.hasPrivateKey() || activeWallet != nil
+        hasWallet = keychain.hasSeedPhrase() || keychain.hasPrivateKey()
 
         // Set wallet address from active wallet if available
-        if let active = activeWallet, let firstAccount = active.accounts.first {
+        if (keychain.hasSeedPhrase() || keychain.hasPrivateKey()),
+           let active = activeWallet, let firstAccount = active.accounts.first {
             walletAddress = firstAccount.address
+        } else {
+            walletAddress = ""
         }
     }
 
     // MARK: - Transaction Generation
-    private func generateRealisticTransactions(for tokens: [Token], walletAddress: String) -> [Transaction] {
+    // Transaction generation (disabled placeholder)
+    private func generateRealisticTransactions(for tokens: [Token], walletAddress: String) -> [Transaction] { /* disabled */
         guard !tokens.isEmpty && !walletAddress.isEmpty else { return [] }
 
-        var transactions: [Transaction] = []
+        var transactions: [Transaction] = [] /* disabled */
         let currentTime = Date()
 
         // Generate transactions for each token the user has
@@ -890,7 +896,7 @@ final class WalletManager: ObservableObject {
             ))
         }
 
-        return transactions.sorted { $0.timestamp > $1.timestamp }
+        return [] // Intentionally empty until real history implemented
     }
 
     private func generateTransactionHash() -> String {

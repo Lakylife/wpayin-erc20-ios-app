@@ -187,18 +187,21 @@ struct DerivationPaths {
     }
 }
 
-// MARK: - Mock Data
+// MARK: - Test Data Disabled
 
 extension MultiChainWallet {
-    static let mockWallet = MultiChainWallet(
+/*
+    static let sampleWallet = MultiChainWallet(
         name: "Main Wallet",
         type: .seed,
         seedPhraseId: "main-seed"
     )
+*/
 }
 
 extension WalletToken {
-    static let mockTokens: [WalletToken] = [
+/*
+    static let sampleTokens: [WalletToken] = [
         WalletToken(
             contractAddress: nil,
             name: "Ethereum",
@@ -233,4 +236,5 @@ extension WalletToken {
             blockchainPlatform: .solana
         )
     ]
+*/
 }

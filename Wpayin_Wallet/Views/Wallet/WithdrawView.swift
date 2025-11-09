@@ -1089,8 +1089,6 @@ struct WithdrawGasSettingsSheet: View {
 
 #Preview {
     let walletManager = WalletManager()
-    walletManager.tokens = Token.mockTokens
-
     return WithdrawView()
         .environmentObject(walletManager)
 }

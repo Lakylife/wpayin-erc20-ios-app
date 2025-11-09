@@ -111,19 +111,19 @@ struct AllAssetsRowView: View {
                         .foregroundColor(WpayinColors.textSecondary)
 
                     HStack(spacing: 2) {
-                        Image(systemName: mockChangeDirection(for: token) ? "arrow.up" : "arrow.down")
+                        Image(systemName: changeDirection(for: token) ? "arrow.up" : "arrow.down")
                             .font(.system(size: 12, weight: .bold))
-                            .foregroundColor(mockChangeDirection(for: token) ? WpayinColors.success : WpayinColors.error)
+                            .foregroundColor(changeDirection(for: token) ? WpayinColors.success : WpayinColors.error)
 
-                        Text(String(format: "%.2f%%", mockPercentChange(for: token)))
+                        Text(String(format: "%.2f%%", percentChange(for: token)))
                             .font(.system(size: 12, weight: .semibold))
-                            .foregroundColor(mockChangeDirection(for: token) ? WpayinColors.success : WpayinColors.error)
+                            .foregroundColor(changeDirection(for: token) ? WpayinColors.success : WpayinColors.error)
                     }
                     .padding(.horizontal, 6)
                     .padding(.vertical, 2)
                     .background(
                         RoundedRectangle(cornerRadius: 6)
-                            .fill((mockChangeDirection(for: token) ? WpayinColors.success : WpayinColors.error).opacity(0.1))
+                            .fill((changeDirection(for: token) ? WpayinColors.success : WpayinColors.error).opacity(0.1))
                     )
                 }
             }
@@ -190,12 +190,12 @@ struct AllAssetsRowView: View {
         }
     }
 
-    private func mockPercentChange(for token: Token) -> Double {
+    private func percentChange(for token: Token) -> Double {
         let seed = abs(token.symbol.hashValue)
         return Double(seed % 1000) / 100.0
     }
 
-    private func mockChangeDirection(for token: Token) -> Bool {
+    private func changeDirection(for token: Token) -> Bool {
         let seed = abs(token.symbol.hashValue)
         return seed % 2 == 0
     }

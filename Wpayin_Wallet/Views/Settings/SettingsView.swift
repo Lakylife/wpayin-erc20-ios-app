@@ -20,10 +20,11 @@ struct SettingsView: View {
     @State private var showLanguageSelection = false
     @State private var showAutoLockSelection = false
     @State private var showNetworkManagement = false
+    @State private var showHelpCenter = false
 
     var body: some View {
         ZStack {
-            // Background gradient matching mockup
+            // Background gradient matching design specification
             LinearGradient(
                 gradient: Gradient(colors: [
                     WpayinColors.backgroundGradientStart,
@@ -127,7 +128,7 @@ struct SettingsView: View {
                                 icon: "questionmark.circle.fill",
                                 title: "Help Center",
                                 subtitle: "Get help and support",
-                                action: { settingsManager.openHelpCenter() }
+                                action: { showHelpCenter = true }
                             )
 
                             SettingsRow(
@@ -162,7 +163,7 @@ struct SettingsView: View {
                                 .font(.wpayinCaption)
                                 .foregroundColor(WpayinColors.textSecondary)
 
-                            Text("Version 1.1.0")
+                            Text("Version 1.1.4")
                                 .font(.wpayinSmall)
                                 .foregroundColor(WpayinColors.textSecondary)
                         }
@@ -203,6 +204,9 @@ struct SettingsView: View {
         }
         .sheet(isPresented: $showAbout) {
             AboutView()
+        }
+        .sheet(isPresented: $showHelpCenter) {
+            HelpCenterView()
         }
         .alert("Delete Wallet", isPresented: $showDeleteWalletAlert) {
             Button("Cancel", role: .cancel) { }
@@ -420,7 +424,7 @@ struct AboutView: View {
                                     .font(.wpayinTitle)
                                     .foregroundColor(WpayinColors.text)
 
-                                Text("Version 1.1.0")
+                                Text("Version 1.1.4")
                                     .font(.wpayinSubheadline)
                                     .foregroundColor(WpayinColors.textSecondary)
                             }

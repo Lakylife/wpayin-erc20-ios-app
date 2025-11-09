@@ -19,7 +19,7 @@ extension Color {
     static let wpayinError = Color(red: 0.957, green: 0.263, blue: 0.212) // #f44336
     static let wpayinWarning = Color(red: 1.0, green: 0.8, blue: 0.0)
 
-    // Token colors from mockup
+    // Token colors from design specification
     static let tokenEth = Color(red: 0.384, green: 0.494, blue: 0.918) // #627eea
     static let tokenUsdt = Color(red: 0.149, green: 0.635, blue: 0.482) // #26a17b
     static let tokenBnb = Color(red: 0.953, green: 0.729, blue: 0.184) // #f3ba2f
@@ -28,7 +28,7 @@ extension Color {
 }
 
 struct WpayinColors {
-    // Primary colors matching the mockup
+    // Primary colors matching the design specification
     static let primary = Color.wpayinBlue
     static let primaryDark = Color.wpayinBlueDark
     static let secondary = Color.wpayinWhite

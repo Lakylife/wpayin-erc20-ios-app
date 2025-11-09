@@ -283,7 +283,7 @@ struct RealAssetHeaderView: View {
                         .resizable()
                         .aspectRatio(contentMode: .fill)
                 } placeholder: {
-                    TokenIconView(symbol: token.symbol, blockchain: token.blockchain)
+                    TokenIconView(token: token, size: 64, showNetworkBadge: false)
                 }
                 .frame(width: 64, height: 64)
                 .clipShape(Circle())
@@ -792,6 +792,6 @@ struct AssetTransactionHistoryView: View {
 
 
 #Preview {
-    AssetDetailView(token: Token.mockTokens[0])
+    AssetDetailView(token: Token(contractAddress: nil, name: "", symbol: "", decimals: 18, balance: 0, price: 0, iconUrl: nil, blockchain: .ethereum, isNative: true))
         .environmentObject(WalletManager())
 }

@@ -258,6 +258,35 @@ enum BlockchainPlatform: String, CaseIterable, Codable, Identifiable {
         }
     }
     
+    var assetIconName: String? {
+        switch self {
+        case .ethereum:
+            return "ethereum_trx_32"
+        case .bitcoin:
+            return "bitcoin"
+        case .polygon:
+            return "polygon-pos_trx_32"
+        case .bsc:
+            return "binance-smart-chain_trx_32"
+        case .arbitrum:
+            return "arbitrum-one_trx_32"
+        case .optimism:
+            return "optimistic-ethereum_trx_32"
+        case .avalanche:
+            return "avalanche_trx_32"
+        case .base:
+            return "base_trx_32"
+        case .gnosis:
+            return "gnosis_trx_32"
+        case .zkSync:
+            return "zksync_trx_32"
+        case .fantom:
+            return "fantom_trx_32"
+        default:
+            return nil
+        }
+    }
+    
     // Blockchain category for UI grouping
     enum Category {
         case baseLayer1      // Bitcoin, Ethereum, Litecoin, etc.

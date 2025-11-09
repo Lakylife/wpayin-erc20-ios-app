@@ -334,9 +334,8 @@ class BitcoinService {
         print("   Amount: \(amount) satoshis")
         print("   Fee: \(feeRate) sat/vB")
         
-        // Mock transaction hex for demo
-        let mockTxHex = Data(UUID().uuidString.utf8).hexString
-        return mockTxHex
+        // TODO: implement real transaction construction
+        return ""
     }
 
     /// Broadcast signed transaction

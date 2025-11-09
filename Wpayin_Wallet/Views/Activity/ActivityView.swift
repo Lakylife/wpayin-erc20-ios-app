@@ -48,7 +48,7 @@ struct ActivityView: View {
 
     var body: some View {
         ZStack {
-            // Background gradient matching mockup
+            // Background gradient matching design specification
             LinearGradient(
                 gradient: Gradient(colors: [
                     WpayinColors.backgroundGradientStart,
@@ -429,7 +429,7 @@ struct EmptyStateView: View {
     ActivityView()
         .environmentObject({
             let manager = WalletManager()
-            manager.transactions = Transaction.mockTransactions
+            // manager.transactions = Transaction.sampleTransactions // disabled
             return manager
         }())
 }

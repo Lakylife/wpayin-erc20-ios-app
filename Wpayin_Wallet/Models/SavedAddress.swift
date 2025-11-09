@@ -37,11 +37,4 @@ struct SavedAddress: Identifiable, Codable, Sendable {
     }
 }
 
-// Mock data for preview
-extension SavedAddress {
-    static let mockAddresses = [
-        SavedAddress(name: "My Other Wallet", address: "0x742d35Cc6D06b73494d45e5d2b0542f2f25b3f66"),
-        SavedAddress(name: "Friends Wallet", address: "0x8ba1f109551bD432803012645Hac136c22C"),
-        SavedAddress(name: "Exchange Wallet", address: "0x9f8cc3C47aF014a21f109551bD432803012645A7")
-    ]
-}
+
