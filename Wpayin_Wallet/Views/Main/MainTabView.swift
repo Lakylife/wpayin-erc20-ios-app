@@ -1,3 +1,5 @@
+// Autor Lukas Helebrandt, 2026
+
 //
 //  MainTabView.swift
 //  Wpayin_Wallet
@@ -44,8 +46,8 @@ struct MainTabView: View {
                     }
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .id(settingsManager.refreshID) // Force redraw on settings change (language, etc.)
 
-                // HTML-Style Bottom Navigation (Fixed to bottom, no rounded container)
                 ModernBottomNavigation(selectedTab: $selectedTab)
             }
         }
@@ -66,36 +68,41 @@ struct ModernBottomNavigation: View {
     }
 
     var body: some View {
-        // HTML CSS: position: fixed; bottom: 0; padding: 12px 8px;
-        // background: rgba(10, 10, 10, 0.95); backdrop-filter: blur(20px);
-        // border-top: 1px solid rgba(255, 255, 255, 0.05);
-        HStack(spacing: 0) {
-            ForEach(tabItems, id: \.index) { item in
-                ModernNavItem(
-                    icon: item.icon,
-                    title: item.title,
-                    isSelected: selectedTab == item.index,
-                    onTap: { selectedTab = item.index }
-                )
+        VStack(spacing: 0) {
+            HStack(spacing: 4) {
+                ForEach(tabItems, id: \.index) { item in
+                    ModernNavItem(
+                        icon: item.icon,
+                        title: item.title,
+                        isSelected: selectedTab == item.index,
+                        onTap: { selectedTab = item.index }
+                    )
+                }
             }
+            .padding(6)
+            .background(
+                Capsule()
+                    .fill(WpayinColors.navBackground)
+                    .background(.ultraThinMaterial, in: Capsule())
+                    .overlay(
+                        Capsule()
+                            .stroke(WpayinColors.navBorder, lineWidth: 1)
+                    )
+                    .shadow(color: Color.black.opacity(0.35), radius: 18, x: 0, y: 8)
+            )
+            .padding(.horizontal, 18)
+            .padding(.top, 8)
+            .padding(.bottom, 8)
         }
-        .padding(.horizontal, 8)
-        .padding(.top, 8)
-        .padding(.bottom, 4)
         .background(
-            // Match HTML: rgba(10, 10, 10, 0.95) with blur
-            Color(red: 10/255, green: 10/255, blue: 10/255)
-                .opacity(0.95)
-                .background(.ultraThinMaterial)
-                .overlay(
-                    // Border-top only
-                    VStack {
-                        Rectangle()
-                            .fill(Color.white.opacity(0.05))
-                            .frame(height: 1)
-                        Spacer()
-                    }
-                )
+            LinearGradient(
+                colors: [
+                    Color.clear,
+                    WpayinColors.background.opacity(0.82)
+                ],
+                startPoint: .top,
+                endPoint: .bottom
+            )
                 .ignoresSafeArea()
         )
     }
@@ -109,25 +116,34 @@ struct ModernNavItem: View {
 
     var body: some View {
         Button(action: onTap) {
-            // HTML: Each nav-item has border-radius: 12px when active
-            VStack(spacing: 4) {
+            VStack(spacing: 3) {
                 Image(systemName: icon)
-                    .font(.system(size: 22, weight: .medium))
-                    .foregroundColor(isSelected ? WpayinColors.primary : WpayinColors.textTertiary)
-                    .frame(width: 24, height: 24)
-
-                Text(title)
-                    .font(.system(size: 10, weight: .medium))
+                    .font(.system(size: 18, weight: isSelected ? .semibold : .medium))
                     .foregroundColor(isSelected ? WpayinColors.text : WpayinColors.textTertiary)
+                    .frame(width: 34, height: 24)
+
+                Text(title.localized)
+                    .font(.system(size: 10, weight: isSelected ? .semibold : .medium))
+                    .foregroundColor(isSelected ? WpayinColors.text : WpayinColors.textTertiary)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.75)
                     .multilineTextAlignment(.center)
             }
             .frame(maxWidth: .infinity)
-            .padding(.vertical, 8)
-            .padding(.horizontal, 8)
+            .padding(.vertical, 7)
+            .contentShape(Rectangle())
             .background(
-                RoundedRectangle(cornerRadius: 12)
-                    .fill(isSelected ? Color.white.opacity(0.1) : Color.clear)
+                Capsule()
+                    .fill(isSelected ? WpayinColors.primary.opacity(0.18) : Color.clear)
             )
+            .overlay(alignment: .top) {
+                if isSelected {
+                    Capsule()
+                        .fill(WpayinColors.primary)
+                        .frame(width: 18, height: 3)
+                        .offset(y: -2)
+                }
+            }
         }
         .buttonStyle(PlainButtonStyle())
         .animation(.easeInOut(duration: 0.2), value: isSelected)

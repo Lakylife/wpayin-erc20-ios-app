@@ -1,3 +1,5 @@
+// Autor Lukas Helebrandt, 2026
+
 //
 //  CompareProvidersView.swift
 //  Wpayin_Wallet
@@ -11,6 +13,7 @@ struct CompareProvidersView: View {
     let crypto: String
     let amount: Double
     let walletAddress: String
+    @EnvironmentObject var settingsManager: SettingsManager
     @Environment(\.dismiss) private var dismiss
     @State private var selectedProvider: FiatRampProvider?
     @State private var showFiatRamp = false
@@ -37,7 +40,7 @@ struct CompareProvidersView: View {
                                 .font(.wpayinTitle)
                                 .foregroundColor(WpayinColors.text)
                             
-                            Text("Best rates for \(String(format: "$%.2f", amount)) of \(crypto)")
+                            Text("Best rates for \(amount.formatted(as: settingsManager.selectedCurrency)) of \(crypto)")
                                 .font(.wpayinBody)
                                 .foregroundColor(WpayinColors.textSecondary)
                                 .multilineTextAlignment(.center)
@@ -81,7 +84,8 @@ struct CompareProvidersView: View {
                 FiatRampView(config: FiatRampConfig(
                     provider: provider,
                     crypto: crypto,
-                    walletAddress: walletAddress
+                    walletAddress: walletAddress,
+                    fiatCurrency: settingsManager.selectedCurrency.rawValue
                 ))
             }
         }
@@ -126,6 +130,7 @@ struct ProviderQuote: Identifiable {
 struct CompareCard: View {
     let quote: ProviderQuote
     let action: () -> Void
+    @EnvironmentObject var settingsManager: SettingsManager
     
     var isBestRate: Bool {
         // First item is always best due to sorting
@@ -189,7 +194,7 @@ struct CompareCard: View {
                             .font(.wpayinCaption)
                             .foregroundColor(WpayinColors.textSecondary)
                         
-                        Text("$\(String(format: "%.2f", quote.youGet))")
+                        Text(quote.youGet.formatted(as: settingsManager.selectedCurrency))
                             .font(.system(size: 18, weight: .bold))
                             .foregroundColor(WpayinColors.text)
                         
@@ -252,7 +257,7 @@ struct CompareInfoRow: View {
                 .foregroundColor(WpayinColors.primary)
                 .frame(width: 16)
             
-            Text(text)
+            Text(text.localized)
                 .font(.wpayinCaption)
                 .foregroundColor(WpayinColors.textSecondary)
         }
@@ -265,4 +270,5 @@ struct CompareInfoRow: View {
         amount: 100,
         walletAddress: "0x1234567890123456789012345678901234567890"
     )
+    .environmentObject(SettingsManager())
 }

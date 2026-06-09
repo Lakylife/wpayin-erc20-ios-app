@@ -1,3 +1,5 @@
+// Autor Lukas Helebrandt, 2026
+
 //
 //  TransactionDetailView.swift
 //  Wpayin_Wallet
@@ -114,7 +116,7 @@ struct TransactionDetailView: View {
                             Image(systemName: "arrow.up.right.square")
                                 .font(.system(size: 16, weight: .semibold))
 
-                            Text("View on Explorer")
+                            Text("View on Explorer".localized)
                                 .font(.system(size: 16, weight: .semibold))
                         }
                         .foregroundColor(WpayinColors.primary)
@@ -135,7 +137,7 @@ struct TransactionDetailView: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .principal) {
-                    Text("Transaction Details")
+                    Text("Transaction Details".localized)
                         .font(.system(size: 17, weight: .semibold))
                         .foregroundColor(WpayinColors.text)
                 }
@@ -200,7 +202,7 @@ struct DetailRow: View {
 
     var body: some View {
         HStack(alignment: .top, spacing: 12) {
-            Text(title)
+            Text(title.localized)
                 .font(.system(size: 14))
                 .foregroundColor(WpayinColors.textSecondary)
                 .frame(width: 100, alignment: .leading)

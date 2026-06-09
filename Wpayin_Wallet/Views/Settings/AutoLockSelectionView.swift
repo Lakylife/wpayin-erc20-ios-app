@@ -1,3 +1,5 @@
+// Autor Lukas Helebrandt, 2026
+
 //
 //  AutoLockSelectionView.swift
 //  Wpayin_Wallet
@@ -62,7 +64,7 @@ struct AutoLockRow: View {
                     .foregroundColor(WpayinColors.primary)
                     .frame(width: 24, height: 24)
 
-                Text(duration.displayName)
+                Text(duration.displayName.localized)
                     .font(.wpayinBody)
                     .foregroundColor(WpayinColors.text)
 

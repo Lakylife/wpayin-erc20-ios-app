@@ -1,3 +1,5 @@
+// Autor Lukas Helebrandt, 2026
+
 //
 //  WpayinButton.swift
 //  Wpayin_Wallet
@@ -50,7 +52,7 @@ struct WpayinButton: View {
         Button(action: action) {
             HStack {
                 Spacer()
-                Text(title)
+                Text(title.localized)
                     .font(.wpayinSubheadline)
                     .foregroundColor(style.foregroundColor)
                 Spacer()

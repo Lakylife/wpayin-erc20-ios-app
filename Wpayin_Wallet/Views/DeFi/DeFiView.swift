@@ -1,3 +1,5 @@
+// Autor Lukas Helebrandt, 2026
+
 //
 //  DeFiView.swift
 //  Wpayin_Wallet
@@ -58,7 +60,7 @@ struct DeFiTabSelector: View {
                     Button(action: {
                         selectedTab = index
                     }) {
-                        Text(tab)
+                        Text(tab.localized)
                             .font(.wpayinBody)
                             .foregroundColor(selectedTab == index ? WpayinColors.secondary : WpayinColors.textSecondary)
                             .padding(.horizontal, 16)
@@ -98,14 +100,16 @@ struct DeFiOverviewView: View {
 }
 
 struct DeFiPortfolioCard: View {
+    @EnvironmentObject var settingsManager: SettingsManager
+
     var body: some View {
         VStack(spacing: 20) {
             VStack(spacing: 8) {
-                Text("Total DeFi Value")
+                Text("Total DeFi Value".localized)
                     .font(.wpayinBody)
                     .foregroundColor(WpayinColors.textSecondary)
 
-                Text("$2,456.78")
+                Text(2_456.78.formatted(as: settingsManager.selectedCurrency))
                     .font(.system(size: 32, weight: .bold))
                     .foregroundColor(WpayinColors.text)
 
@@ -124,21 +128,21 @@ struct DeFiPortfolioCard: View {
             VStack(spacing: 12) {
                 PortfolioBreakdownRow(
                     title: "Lending",
-                    amount: "$1,234.56",
+                    amount: 1_234.56,
                     percentage: "50.2%",
                     color: WpayinColors.primary
                 )
 
                 PortfolioBreakdownRow(
                     title: "Staking",
-                    amount: "$789.12",
+                    amount: 789.12,
                     percentage: "32.1%",
                     color: WpayinColors.success
                 )
 
                 PortfolioBreakdownRow(
                     title: "Yield Farming",
-                    amount: "$433.10",
+                    amount: 433.10,
                     percentage: "17.7%",
                     color: Color.orange
                 )
@@ -152,9 +156,10 @@ struct DeFiPortfolioCard: View {
 
 struct PortfolioBreakdownRow: View {
     let title: String
-    let amount: String
+    let amount: Double
     let percentage: String
     let color: Color
+    @EnvironmentObject var settingsManager: SettingsManager
 
     var body: some View {
         HStack {
@@ -163,7 +168,7 @@ struct PortfolioBreakdownRow: View {
                     .fill(color)
                     .frame(width: 8, height: 8)
 
-                Text(title)
+                Text(title.localized)
                     .font(.wpayinBody)
                     .foregroundColor(WpayinColors.text)
             }
@@ -171,7 +176,7 @@ struct PortfolioBreakdownRow: View {
             Spacer()
 
             VStack(alignment: .trailing, spacing: 2) {
-                Text(amount)
+                Text(amount.formatted(as: settingsManager.selectedCurrency))
                     .font(.wpayinBody)
                     .foregroundColor(WpayinColors.text)
 
@@ -186,7 +191,7 @@ struct PortfolioBreakdownRow: View {
 struct DeFiQuickActionsView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
-            Text("Quick Actions")
+            Text("Quick Actions".localized)
                 .font(.wpayinHeadline)
                 .foregroundColor(WpayinColors.text)
 
@@ -237,11 +242,11 @@ struct DeFiActionButton: View {
                     .foregroundColor(color)
 
                 VStack(spacing: 4) {
-                    Text(title)
+                    Text(title.localized)
                         .font(.wpayinBody)
                         .foregroundColor(WpayinColors.text)
 
-                    Text(subtitle)
+                    Text(subtitle.localized)
                         .font(.wpayinCaption)
                         .foregroundColor(WpayinColors.textSecondary)
                 }
@@ -258,7 +263,7 @@ struct DeFiActionButton: View {
 struct DeFiMarketOverview: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
-            Text("Market Overview")
+            Text("Market Overview".localized)
                 .font(.wpayinHeadline)
                 .foregroundColor(WpayinColors.text)
 
@@ -305,7 +310,7 @@ struct MarketOverviewRow: View {
                     .font(.wpayinBody)
                     .foregroundColor(WpayinColors.text)
 
-                Text("APY: \(apy)")
+                Text("APY: %@".localized(apy))
                     .font(.wpayinCaption)
                     .foregroundColor(WpayinColors.textSecondary)
             }
@@ -331,7 +336,7 @@ struct MarketOverviewRow: View {
 struct RecentDeFiActivity: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
-            Text("Recent Activity")
+            Text("Recent Activity".localized)
                 .font(.wpayinHeadline)
                 .foregroundColor(WpayinColors.text)
 
@@ -384,7 +389,7 @@ struct DeFiActivityRow: View {
             }
 
             VStack(alignment: .leading, spacing: 4) {
-                Text(action)
+                Text(action.localized)
                     .font(.wpayinBody)
                     .foregroundColor(WpayinColors.text)
 
@@ -400,7 +405,7 @@ struct DeFiActivityRow: View {
                     .font(.wpayinBody)
                     .foregroundColor(WpayinColors.text)
 
-                Text(time)
+                Text(time.localized)
                     .font(.wpayinCaption)
                     .foregroundColor(WpayinColors.textSecondary)
             }
@@ -448,11 +453,11 @@ struct DeFiLendingView: View {
     var body: some View {
         ScrollView {
             VStack(spacing: 20) {
-                Text("Lending Protocols")
+                Text("Lending Protocols".localized)
                     .font(.wpayinHeadline)
                     .foregroundColor(WpayinColors.text)
 
-                Text("DeFi lending features coming soon...")
+                Text("DeFi lending features coming soon...".localized)
                     .font(.wpayinBody)
                     .foregroundColor(WpayinColors.textSecondary)
                     .padding(.top, 40)
@@ -467,11 +472,11 @@ struct DeFiStakingView: View {
     var body: some View {
         ScrollView {
             VStack(spacing: 20) {
-                Text("Staking Opportunities")
+                Text("Staking Opportunities".localized)
                     .font(.wpayinHeadline)
                     .foregroundColor(WpayinColors.text)
 
-                Text("Staking features coming soon...")
+                Text("Staking features coming soon...".localized)
                     .font(.wpayinBody)
                     .foregroundColor(WpayinColors.textSecondary)
                     .padding(.top, 40)
@@ -486,11 +491,11 @@ struct DeFiYieldFarmingView: View {
     var body: some View {
         ScrollView {
             VStack(spacing: 20) {
-                Text("Yield Farming")
+                Text("Yield Farming".localized)
                     .font(.wpayinHeadline)
                     .foregroundColor(WpayinColors.text)
 
-                Text("Yield farming features coming soon...")
+                Text("Yield farming features coming soon...".localized)
                     .font(.wpayinBody)
                     .foregroundColor(WpayinColors.textSecondary)
                     .padding(.top, 40)
@@ -504,4 +509,5 @@ struct DeFiYieldFarmingView: View {
 #Preview {
     DeFiView()
         .environmentObject(WalletManager())
+        .environmentObject(SettingsManager())
 }

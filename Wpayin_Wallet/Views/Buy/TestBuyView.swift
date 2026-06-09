@@ -1,3 +1,5 @@
+// Autor Lukas Helebrandt, 2026
+
 //
 //  TestBuyView.swift
 //  Wpayin_Wallet
@@ -67,7 +69,7 @@ struct TestProviderButton: View {
     
     var body: some View {
         Button {
-            print("🧪 Testing \(name)")
+            Logger.log("🧪 Testing \(name)")
             showWidget = true
         } label: {
             HStack {
@@ -92,9 +94,9 @@ struct TestProviderButton: View {
             FiatRampView(config: config)
                 .onAppear {
                     if let url = FiatRampService.shared.generateURL(for: config) {
-                        print("✅ Generated URL: \(url.absoluteString)")
+                        Logger.log("✅ Generated URL: \(url.absoluteString)")
                     } else {
-                        print("❌ Failed to generate URL for \(name)")
+                        Logger.log("❌ Failed to generate URL for \(name)")
                     }
                 }
         }

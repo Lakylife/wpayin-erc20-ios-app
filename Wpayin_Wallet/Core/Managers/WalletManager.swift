@@ -1,3 +1,5 @@
+// Autor Lukas Helebrandt, 2026
+
 //
 //  WalletManager.swift
 //  Wpayin_Wallet
@@ -12,6 +14,7 @@
 import Foundation
 import Combine
 import WalletCore
+import UserNotifications
 
 final class WalletManager: ObservableObject {
     struct ChainAccount: Identifiable, Sendable {
@@ -58,11 +61,13 @@ final class WalletManager: ObservableObject {
     private let blockchainsStorageKey = "AvailableBlockchainConfigs"
     private let favoritesStorageKey = "FavoriteTokens"
     private let selectedBlockchainsKey = "SelectedBlockchains"  // NEW: Persistence key
+    private let cachedTokenPricesKey = "CachedTokenPrices"
+    private let seenTransactionsPrefix = "SeenTransactionHashes"
 
     private var chainAccounts: [BlockchainType: ChainAccount] = [:]
     private var cancellables = Set<AnyCancellable>()
     private var priceUpdateTimer: Timer?
-    private let priceUpdateInterval: TimeInterval = 30 // Update prices every 30 seconds
+    private let priceUpdateInterval: TimeInterval = 120 // Update prices every 2 minutes
     private var savedCustomTokens: [Token] = []
 
     // Public access to chain accounts for deposit address generation
@@ -70,24 +75,37 @@ final class WalletManager: ObservableObject {
         return chainAccounts
     }
 
+    var visibleTokens: [Token] {
+        tokens.filter { token in
+            guard let platform = BlockchainPlatform(rawValue: token.blockchain.rawValue) else {
+                return false
+            }
+            return selectedBlockchains.contains(platform) && hasActiveAccount(for: token.blockchain)
+        }
+    }
+
+    var visibleSupportedTokens: [Token] {
+        mergedSupportedTokens(with: visibleTokens)
+    }
+
     // Computed property to group tokens by symbol and combine balances
     var groupedTokens: [Token] {
-        let grouped = Dictionary(grouping: tokens, by: { $0.symbol })
+        groupedTokens(from: tokens)
+    }
+
+    // Filtered grouped tokens - only show from selected blockchains
+    var visibleGroupedTokens: [Token] {
+        groupedTokens(from: visibleTokens)
+    }
+
+    private func groupedTokens(from sourceTokens: [Token]) -> [Token] {
+        let grouped = Dictionary(grouping: sourceTokens, by: { $0.symbol.uppercased() })
         return grouped.compactMap { symbol, tokens in
             guard let firstToken = tokens.first else { return nil }
 
             let totalBalance = tokens.reduce(0) { $0 + $1.balance }
 
-            // For ETH and other cross-chain tokens, use the same price across all networks
-            let unifiedPrice: Double
-            if symbol == "ETH" {
-                // All Ethereum-based networks should have the same ETH price
-                unifiedPrice = tokens.first?.price ?? 0
-            } else {
-                // For other tokens, calculate average price
-                let totalValue = tokens.reduce(0) { $0 + $1.totalValue }
-                unifiedPrice = totalBalance > 0 ? totalValue / totalBalance : tokens.first?.price ?? 0
-            }
+            let unifiedPrice = unifiedPrice(for: symbol, tokens: tokens, totalBalance: totalBalance)
 
             // Use the primary blockchain for the symbol (Ethereum for ETH, Bitcoin for BTC, etc.)
             let primaryBlockchain = getPrimaryBlockchain(for: symbol)
@@ -108,32 +126,95 @@ final class WalletManager: ObservableObject {
         }.sorted { $0.totalValue > $1.totalValue }
     }
 
+    private func unifiedPrice(for symbol: String, tokens: [Token], totalBalance: Double) -> Double {
+        if symbol == "ETH",
+           let mainnetEthPrice = tokens.first(where: { $0.blockchain == .ethereum && $0.price > 1 })?.price {
+            return mainnetEthPrice
+        }
+
+        let meaningfulPrices = tokens.map { $0.price }.filter { isMeaningfulPrice($0, for: symbol) }
+        if let highestMeaningfulPrice = meaningfulPrices.max() {
+            return highestMeaningfulPrice
+        }
+
+        let totalValue = tokens.reduce(0) { $0 + $1.totalValue }
+        if totalBalance > 0, totalValue > 0 {
+            return totalValue / totalBalance
+        }
+
+        return tokens.first(where: { $0.price > 0 })?.price ?? 0
+    }
+
+    private func isMeaningfulPrice(_ price: Double, for symbol: String) -> Bool {
+        guard price > 0 else { return false }
+        switch symbol.uppercased() {
+        case "ETH", "WETH", "BTC", "BNB", "SOL", "AVAX", "MATIC":
+            return price > 10
+        default:
+            return true
+        }
+    }
+
     // Available blockchains for the selected platforms
     var availableBlockchainsForPlatforms: [BlockchainConfig] {
         availableBlockchains.filter { config in
-            selectedBlockchains.contains(config.platform) && config.isEnabled && config.network == .mainnet
+            selectedBlockchains.contains(config.platform) && config.network == .mainnet
         }
+    }
+
+    private func mergedSupportedTokens(with existingTokens: [Token]) -> [Token] {
+        var tokenMap: [String: Token] = [:]
+        for token in existingTokens {
+            tokenMap[tokenIdentityKey(for: token)] = token
+        }
+
+        for config in availableBlockchainsForPlatforms {
+            guard let blockchain = config.blockchainType else { continue }
+            let accountAddress = chainAccounts[blockchain]?.address
+            guard let accountAddress, !accountAddress.isEmpty else { continue }
+            let nativeKey = "\(blockchain.rawValue):native"
+
+            if tokenMap[nativeKey] == nil {
+                tokenMap[nativeKey] = Token(
+                    contractAddress: nil,
+                    name: blockchain.name,
+                    symbol: blockchain.nativeToken,
+                    decimals: blockchain.nativeDecimals,
+                    balance: 0,
+                    price: cachedPrice(for: blockchain.nativeToken) ?? 0,
+                    iconUrl: cachedIconUrl(for: blockchain.nativeToken) ?? getDefaultIconUrl(for: blockchain.nativeToken),
+                    blockchain: blockchain,
+                    isNative: true,
+                    receivingAddress: accountAddress
+                )
+            }
+
+            for tokenInfo in knownERC20Tokens(for: config.platform) {
+                let key = "\(blockchain.rawValue):\(tokenInfo.contractAddress.lowercased())"
+                if tokenMap[key] == nil {
+                    tokenMap[key] = Token(
+                        contractAddress: tokenInfo.contractAddress,
+                        name: tokenInfo.name,
+                        symbol: tokenInfo.symbol,
+                        decimals: tokenInfo.decimals,
+                        balance: 0,
+                        price: cachedPrice(for: tokenInfo.symbol) ?? 0,
+                        iconUrl: cachedIconUrl(for: tokenInfo.symbol) ?? getDefaultIconUrl(for: tokenInfo.symbol),
+                        blockchain: blockchain,
+                        isNative: false,
+                        receivingAddress: accountAddress
+                    )
+                }
+            }
+        }
+
+        return Array(tokenMap.values)
+    }
+
+    private func tokenIdentityKey(for token: Token) -> String {
+        "\(token.blockchain.rawValue):\((token.contractAddress ?? "native").lowercased())"
     }
     
-    // Filtered tokens - only show tokens from selected blockchains
-    var visibleTokens: [Token] {
-        tokens.filter { token in
-            guard let platform = BlockchainPlatform(rawValue: token.blockchain.rawValue) else {
-                return false
-            }
-            return selectedBlockchains.contains(platform)
-        }
-    }
-    
-    // Filtered grouped tokens - only show from selected blockchains
-    var visibleGroupedTokens: [Token] {
-        groupedTokens.filter { token in
-            guard let platform = BlockchainPlatform(rawValue: token.blockchain.rawValue) else {
-                return false
-            }
-            return selectedBlockchains.contains(platform)
-        }
-    }
 
     init() {
         setupDefaultBlockchains()
@@ -180,6 +261,9 @@ final class WalletManager: ObservableObject {
 
         if hasWallet {
             await refreshWalletData()
+            startPriceUpdates()
+        } else {
+            stopPriceUpdates()
         }
 
         await MainActor.run {
@@ -208,7 +292,7 @@ final class WalletManager: ObservableObject {
             }
             return success
         } catch {
-            print("Import wallet error: \(error.localizedDescription)")
+            Logger.log("Import wallet error: \(error.localizedDescription)")
             return false
         }
     }
@@ -231,10 +315,15 @@ final class WalletManager: ObservableObject {
         } else {
             resetState()
         }
+
+        if hasWallet {
+            startPriceUpdates()
+        }
     }
 
     @MainActor
     func deleteWallet() {
+        stopPriceUpdates()
         keychain.deleteSeedPhrase()
         keychain.deletePrivateKey()
         resetState()
@@ -257,7 +346,13 @@ final class WalletManager: ObservableObject {
     func depositAddress(for token: Token) -> String {
         // Return address only if a wallet (seed/private key) truly exists and onboarding completed
         guard hasWallet && (keychain.hasSeedPhrase() || keychain.hasPrivateKey()) else { return "" }
-        return token.receivingAddress ?? chainAccounts[token.blockchain]?.address ?? ""
+        return chainAccounts[token.blockchain]?.address ?? ""
+    }
+
+    func hasActiveAccount(for blockchain: BlockchainType) -> Bool {
+        guard hasWallet && (keychain.hasSeedPhrase() || keychain.hasPrivateKey()) else { return false }
+        guard let address = chainAccounts[blockchain]?.address else { return false }
+        return !address.isEmpty
     }
 
     // MARK: - Saved Addresses
@@ -305,12 +400,12 @@ final class WalletManager: ObservableObject {
         })
         
         if hasDataForBlockchain {
-            print("✅ Already have data for \(platform.name)")
+            Logger.log("✅ Already have data for \(platform.name)")
             return
         }
         
         // Fetch data for new blockchain
-        print("🔄 Fetching data for newly enabled blockchain: \(platform.name)")
+        Logger.log("🔄 Fetching data for newly enabled blockchain: \(platform.name)")
         await refreshWalletData()
     }
 
@@ -359,31 +454,31 @@ final class WalletManager: ObservableObject {
     @MainActor
     private func refreshFromMnemonic(_ mnemonic: String) async {
         do {
-            print("🔄 refreshFromMnemonic started")
+            Logger.log("🔄 refreshFromMnemonic started")
             let wallet = try mnemonicService.loadWallet(from: mnemonic)
 
             // Get account index for the active wallet
             let accountIndex = activeWallet.map { getAccountIndex(for: $0) } ?? 0
-            print("📊 Account index: \(accountIndex)")
+            Logger.log("📊 Account index: \(accountIndex)")
 
             let accounts = deriveAccounts(using: wallet, accountIndex: accountIndex)
             chainAccounts = accounts
-            print("⛓️ Derived accounts for \(accounts.count) blockchains")
+            Logger.log("⛓️ Derived accounts for \(accounts.count) blockchains")
 
             // Only fetch balances for the selected blockchain platforms
             let selectedPlatformAccounts = accounts.values.filter { account in
                 selectedBlockchains.contains(account.config.platform) && account.config.network == .mainnet
             }
-            print("✅ Selected \(selectedPlatformAccounts.count) platform accounts from \(selectedBlockchains.count) selected blockchains")
+            Logger.log("✅ Selected \(selectedPlatformAccounts.count) platform accounts from \(selectedBlockchains.count) selected blockchains")
 
             let requests = selectedPlatformAccounts.map { NativeBalanceRequest(config: $0.config, tokenType: $0.tokenType, address: $0.address) }
-            print("📡 Fetching native assets for \(requests.count) requests...")
+            Logger.log("📡 Fetching native assets for \(requests.count) requests...")
             var fetchedTokens = await apiService.getNativeAssets(for: requests)
-            print("💰 Fetched \(fetchedTokens.count) native tokens")
+            Logger.log("💰 Fetched \(fetchedTokens.count) native tokens")
 
             // Load Bitcoin balance if selected
             if let btcAccount = accounts[.bitcoin], selectedBlockchains.contains(.bitcoin) {
-                print("🪙 Bitcoin account found, loading BTC balance...")
+                Logger.log("🪙 Bitcoin account found, loading BTC balance...")
                 do {
                     let btcBalanceResult = try await BitcoinService.shared.fetchBalance(address: btcAccount.address)
                     let btcBalance = BitcoinService.shared.satoshisToBTC(btcBalanceResult.confirmed)
@@ -406,30 +501,27 @@ final class WalletManager: ObservableObject {
                         receivingAddress: btcAccount.address
                     )
                     fetchedTokens.append(btcToken)
-                    print("✅ Bitcoin balance loaded: \(btcBalance) BTC")
+                    Logger.log("✅ Bitcoin balance loaded: \(btcBalance) BTC")
                 } catch {
-                    print("❌ Failed to load Bitcoin balance: \(error)")
+                    Logger.log("❌ Failed to load Bitcoin balance: \(error)")
                 }
             }
 
-            // Load basic ERC-20 tokens (USDT, USDC, WETH)
-            if let ethAccount = accounts[.ethereum] {
-                print("🔍 Ethereum account found, loading ERC-20 tokens...")
-                let ethConfig = ethAccount.config
-                let knownTokens = await loadKnownERC20Tokens(for: ethAccount.address, config: ethConfig)
-                print("📦 Loaded \(knownTokens.count) ERC-20 tokens")
+            // Load known ERC-20 tokens per enabled EVM network (USDT, USDC, WETH where supported).
+            for account in selectedPlatformAccounts where account.tokenType.isEVM {
+                Logger.log("🔍 Loading known tokens on \(account.tokenType.name)...")
+                let knownTokens = await loadKnownERC20Tokens(for: account.address, config: account.config)
+                Logger.log("📦 Loaded \(knownTokens.count) known tokens on \(account.tokenType.name)")
                 fetchedTokens.append(contentsOf: knownTokens)
-            } else {
-                print("⚠️ No Ethereum account found in accounts")
             }
 
-            print("🎯 Total tokens before updateState: \(fetchedTokens.count)")
+            Logger.log("🎯 Total tokens before updateState: \(fetchedTokens.count)")
             let defaultAddress = accounts[.ethereum]?.address ?? accounts.values.first?.address
 
             await updateState(with: fetchedTokens, accounts: selectedPlatformAccounts, defaultAddress: defaultAddress)
-            print("✅ refreshFromMnemonic completed")
+            Logger.log("✅ refreshFromMnemonic completed")
         } catch {
-            print("❌ Failed to refresh wallet data: \(error.localizedDescription)")
+            Logger.log("❌ Failed to refresh wallet data: \(error.localizedDescription)")
             resetState()
         }
     }
@@ -461,26 +553,25 @@ final class WalletManager: ObservableObject {
 
             await updateState(with: fetchedTokens, accounts: evmAccounts, defaultAddress: primaryAddress)
         } catch {
-            print("Failed to refresh legacy wallet: \(error.localizedDescription)")
+            Logger.log("Failed to refresh legacy wallet: \(error.localizedDescription)")
             resetState()
         }
     }
 
     @MainActor
     private func loadKnownERC20Tokens(for address: String, config: BlockchainConfig) async -> [Token] {
-        print("🔍 Loading base ERC-20 tokens for address: \(address)")
+        Logger.log("🔍 Loading known ERC-20 tokens for \(config.platform.name): \(address)")
 
-        // Known Ethereum mainnet token contract addresses
-        let knownTokens: [(symbol: String, name: String, contractAddress: String, decimals: Int)] = [
-            ("USDT", "Tether USD", "0xdac17f958d2ee523a2206206994597c13d831ec7", 6),
-            ("USDC", "USD Coin", "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48", 6),
-            ("WETH", "Wrapped Ether", "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2", 18)
-        ]
+        let knownTokens = knownERC20Tokens(for: config.platform)
+        guard !knownTokens.isEmpty else {
+            Logger.log("ℹ️ No known ERC-20 allowlist for \(config.platform.name)")
+            return []
+        }
 
         var tokens: [Token] = []
 
         for tokenInfo in knownTokens {
-            print("🔎 Checking balance for \(tokenInfo.symbol) at \(tokenInfo.contractAddress)")
+            Logger.log("🔎 Checking balance for \(tokenInfo.symbol) at \(tokenInfo.contractAddress)")
             do {
                 let token = try await apiService.getERC20TokenBalance(
                     address: address,
@@ -491,24 +582,72 @@ final class WalletManager: ObservableObject {
                     decimals: tokenInfo.decimals
                 )
                 if let token = token {
-                    print("✅ \(tokenInfo.symbol): balance=\(token.balance), price=$\(token.price), totalValue=$\(token.totalValue)")
+                    Logger.log("✅ \(tokenInfo.symbol): balance=\(token.balance), price=$\(token.price), totalValue=$\(token.totalValue)")
                     // Always add the token, even with 0 balance, so users can see it
                     tokens.append(token)
                 } else {
-                    print("⚠️ API returned nil for \(tokenInfo.symbol)")
+                    Logger.log("⚠️ API returned nil for \(tokenInfo.symbol)")
                 }
             } catch {
-                print("❌ Error getting balance for \(tokenInfo.symbol): \(error)")
+                Logger.log("❌ Error getting balance for \(tokenInfo.symbol): \(error)")
             }
         }
 
-        print("📦 Loaded \(tokens.count) base tokens (USDT, USDC, WETH)")
+        Logger.log("📦 Loaded \(tokens.count) known ERC-20 tokens")
         return tokens
+    }
+
+    private func knownERC20Tokens(for platform: BlockchainPlatform) -> [(symbol: String, name: String, contractAddress: String, decimals: Int)] {
+        switch platform {
+        case .ethereum:
+            return [
+                ("USDT", "Tether USD", "0xdac17f958d2ee523a2206206994597c13d831ec7", 6),
+                ("USDC", "USD Coin", "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48", 6),
+                ("WETH", "Wrapped Ether", "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2", 18)
+            ]
+        case .arbitrum:
+            return [
+                ("USDT", "Tether USD", "0xfd086bc7cd5c481dcc9c85ebe478a1c0b69fcbb9", 6),
+                ("USDC", "USD Coin", "0xaf88d065e77c8cc2239327c5edb3a432268e5831", 6),
+                ("WETH", "Wrapped Ether", "0x82af49447d8a07e3bd95bd0d56f35241523fbab1", 18)
+            ]
+        case .optimism:
+            return [
+                ("USDT", "Tether USD", "0x94b008aa00579c1307b0ef2c499ad98a8ce58e58", 6),
+                ("USDC", "USD Coin", "0x0b2c639c533813f4aa9d7837caf62653d097ff85", 6),
+                ("WETH", "Wrapped Ether", "0x4200000000000000000000000000000000000006", 18)
+            ]
+        case .base:
+            return [
+                ("USDT", "Tether USD", "0xfde4c96c8593536e31f229ea8f37b2ada2699bb2", 6),
+                ("USDC", "USD Coin", "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913", 6),
+                ("WETH", "Wrapped Ether", "0x4200000000000000000000000000000000000006", 18)
+            ]
+        case .polygon:
+            return [
+                ("USDT", "Tether USD", "0xc2132d05d31c914a87c6611c10748aeb04b58e8f", 6),
+                ("USDC", "USD Coin", "0x3c499c542cef5e3811e1192ce70d8cc03d5c3359", 6),
+                ("WETH", "Wrapped Ether", "0x7ceb23fd6bc0add59e62ac25578270cff1b9f619", 18)
+            ]
+        case .bsc:
+            return [
+                ("USDT", "Tether USD", "0x55d398326f99059ff775485246999027b3197955", 18),
+                ("USDC", "USD Coin", "0x8ac76a51cc950d9822d68b83fe1ad97b32cd580d", 18)
+            ]
+        case .avalanche:
+            return [
+                ("USDT", "Tether USD", "0x9702230a8ea53601f5cd2dc00fdbc13d4df4a8c7", 6),
+                ("USDC", "USD Coin", "0xb97ef9ef8734c71904d8002f8b6bc66dd9c48a6e", 6),
+                ("WETH", "Wrapped Ether", "0x49d5c2bdffac6ce2bfdb6640f4f80f226bc10bab", 18)
+            ]
+        default:
+            return []
+        }
     }
 
     @MainActor
     private func updateState(with tokens: [Token], accounts: [ChainAccount], defaultAddress: String?) async {
-        print("📊 updateState called with \(tokens.count) tokens")
+        Logger.log("📊 updateState called with \(tokens.count) tokens")
 
         // Instead of replacing all tokens, merge new tokens with existing ones
         var existingTokensMap = Dictionary(uniqueKeysWithValues: self.tokens.map { 
@@ -519,28 +658,39 @@ final class WalletManager: ObservableObject {
         for token in tokens {
             let key = token.blockchain.rawValue + (token.contractAddress ?? "native")
             
-            // If updating existing token and new token has no icon, preserve old icon
-            if let existingToken = existingTokensMap[key],
-               token.iconUrl == nil,
-               let existingIconUrl = existingToken.iconUrl {
-                
-                // Create new token with preserved iconUrl
-                let updatedToken = Token(
+            if let existingToken = existingTokensMap[key] {
+                let cachedPrice = cachedPrice(for: token.symbol)
+                let resolvedPrice = isMeaningfulPrice(token.price, for: token.symbol)
+                    ? token.price
+                    : (isMeaningfulPrice(existingToken.price, for: token.symbol) ? existingToken.price : cachedPrice ?? token.price)
+                let resolvedIconUrl = token.iconUrl ?? existingToken.iconUrl ?? cachedIconUrl(for: token.symbol)
+
+                existingTokensMap[key] = Token(
                     contractAddress: token.contractAddress,
                     name: token.name,
                     symbol: token.symbol,
                     decimals: token.decimals,
                     balance: token.balance,
-                    price: token.price,
-                    iconUrl: existingIconUrl,  // Preserve existing icon
+                    price: resolvedPrice,
+                    iconUrl: resolvedIconUrl,
                     blockchain: token.blockchain,
                     isNative: token.isNative,
                     receivingAddress: token.receivingAddress
                 )
-                existingTokensMap[key] = updatedToken
             } else {
-                // Use new token as-is (has icon or is completely new)
-                existingTokensMap[key] = token
+                let cachedPrice = cachedPrice(for: token.symbol)
+                existingTokensMap[key] = Token(
+                    contractAddress: token.contractAddress,
+                    name: token.name,
+                    symbol: token.symbol,
+                    decimals: token.decimals,
+                    balance: token.balance,
+                    price: isMeaningfulPrice(token.price, for: token.symbol) ? token.price : cachedPrice ?? token.price,
+                    iconUrl: token.iconUrl ?? cachedIconUrl(for: token.symbol),
+                    blockchain: token.blockchain,
+                    isNative: token.isNative,
+                    receivingAddress: token.receivingAddress
+                )
             }
         }
 
@@ -553,41 +703,42 @@ final class WalletManager: ObservableObject {
         }
 
         self.tokens = Array(existingTokensMap.values)
-        print("📊 Total tokens after merging: \(self.tokens.count)")
+        saveCachedPrices(from: self.tokens)
+        Logger.log("📊 Total tokens after merging: \(self.tokens.count)")
 
         // Debug: print all tokens and their values
         for token in self.tokens {
-            print("  💎 \(token.symbol): balance=\(token.balance), price=$\(token.price), totalValue=$\(token.totalValue)")
+            Logger.log("  💎 \(token.symbol): balance=\(token.balance), price=$\(token.price), totalValue=$\(token.totalValue)")
         }
 
         // Resolve address first - use visible tokens only
         let resolvedAddress = defaultAddress ?? self.visibleTokens.first?.receivingAddress ?? walletAddress
         self.walletAddress = resolvedAddress
-        print("📍 Wallet address: \(resolvedAddress)")
+        Logger.log("📍 Wallet address: \(resolvedAddress)")
 
         // Calculate new balance from visible tokens only (respecting selectedBlockchains)
         let newBalance = self.visibleTokens.reduce(0) { $0 + $1.totalValue }
-        print("💰 New balance calculated: $\(newBalance) (from \(self.visibleTokens.count) visible tokens)")
+        Logger.log("💰 New balance calculated: $\(newBalance) (from \(self.visibleTokens.count) visible tokens)")
 
         // Load previous balance from UserDefaults only once (on first load)
         let savedPreviousBalance = UserDefaults.standard.double(forKey: "previousBalance_\(resolvedAddress)")
-        print("📖 Saved previous balance from UserDefaults: $\(savedPreviousBalance)")
-        print("🧠 In-memory previous balance: $\(previousBalance)")
+        Logger.log("📖 Saved previous balance from UserDefaults: $\(savedPreviousBalance)")
+        Logger.log("🧠 In-memory previous balance: $\(previousBalance)")
 
         // If we don't have previousBalance in memory yet, load from UserDefaults or set new baseline
         if previousBalance == 0.0 {
             if savedPreviousBalance > 0 {
                 // Use saved previous balance from UserDefaults
                 previousBalance = savedPreviousBalance
-                print("✅ Loaded previous balance from UserDefaults: $\(savedPreviousBalance)")
+                Logger.log("✅ Loaded previous balance from UserDefaults: $\(savedPreviousBalance)")
             } else {
                 // No saved balance - this is truly the first time, set baseline
                 previousBalance = newBalance
-                print("🆕 Setting new baseline: $\(newBalance)")
+                Logger.log("🆕 Setting new baseline: $\(newBalance)")
                 // Only save if newBalance > 0 to avoid saving 0 as baseline
                 if newBalance > 0 {
                     UserDefaults.standard.set(newBalance, forKey: "previousBalance_\(resolvedAddress)")
-                    print("💾 Saved baseline to UserDefaults")
+                    Logger.log("💾 Saved baseline to UserDefaults")
                 }
             }
         }
@@ -596,10 +747,10 @@ final class WalletManager: ObservableObject {
         // Calculate percentage change
         if previousBalance > 0 && newBalance != previousBalance {
             balanceChangePercentage = ((newBalance - previousBalance) / previousBalance) * 100
-            print("📈 Balance change: \(balanceChangePercentage)% (from $\(previousBalance) to $\(newBalance))")
+            Logger.log("📈 Balance change: \(balanceChangePercentage)% (from $\(previousBalance) to $\(newBalance))")
         } else {
             balanceChangePercentage = 0 // No change
-            print("➖ No balance change (previous: $\(previousBalance), new: $\(newBalance))")
+            Logger.log("➖ No balance change (previous: $\(previousBalance), new: $\(newBalance))")
         }
 
         // Update current balance (but keep previousBalance unchanged for comparison)
@@ -612,14 +763,14 @@ final class WalletManager: ObservableObject {
                 let fetchedNFTs = try await APIService.shared.fetchNFTs(for: resolvedAddress)
                 await MainActor.run {
                     self.nfts = fetchedNFTs
-                    print("✅ Loaded \(fetchedNFTs.count) NFTs for wallet")
+                    Logger.log("✅ Loaded \(fetchedNFTs.count) NFTs for wallet")
                 }
             } catch {
-                print("Failed to load NFTs: \(error)")
+                Logger.log("Failed to load NFTs: \(error)")
                 await MainActor.run {
                     // Don't show fake data - just empty array if fetch fails
                     self.nfts = []
-                    print("❌ NFT fetch failed, showing empty list")
+                    Logger.log("❌ NFT fetch failed, showing empty list")
                 }
             }
         }
@@ -637,9 +788,10 @@ final class WalletManager: ObservableObject {
 
         do {
             let fetchedTransactions = try await apiService.getTransactions(for: resolvedAddress, using: configs)
+            notifyForNewTransactions(fetchedTransactions, walletAddress: resolvedAddress)
             transactions = fetchedTransactions
         } catch let apiError as APIError {
-            print("Transaction fetch error: \(apiError.localizedDescription)")
+            Logger.log("Transaction fetch error: \(apiError.localizedDescription)")
             switch apiError {
             case .missingAPIKeys:
                 transactions = []
@@ -647,18 +799,50 @@ final class WalletManager: ObservableObject {
                 transactions = []
             }
         } catch {
-            print("Transaction fetch unexpected error: \(error.localizedDescription)")
+            Logger.log("Transaction fetch unexpected error: \(error.localizedDescription)")
             transactions = []
         }
+    }
+
+    private func notifyForNewTransactions(_ fetchedTransactions: [Transaction], walletAddress: String) {
+        guard UserDefaults.standard.bool(forKey: "NotificationsEnabled") else { return }
+
+        let key = "\(seenTransactionsPrefix)_\(walletAddress)"
+        let existing = Set(UserDefaults.standard.stringArray(forKey: key) ?? [])
+        let fetchedHashes = Set(fetchedTransactions.map { $0.hash })
+
+        guard !existing.isEmpty else {
+            UserDefaults.standard.set(Array(fetchedHashes), forKey: key)
+            return
+        }
+
+        let newTransactions = fetchedTransactions.filter { !existing.contains($0.hash) }
+        guard !newTransactions.isEmpty else { return }
+
+        for transaction in newTransactions.prefix(3) {
+            let content = UNMutableNotificationContent()
+            content.title = "Transaction Update".localized
+            content.body = "%@ %@ %@".localized(transaction.type.displayName, String(format: "%.4f", transaction.amount), transaction.token)
+            content.sound = .default
+
+            let request = UNNotificationRequest(
+                identifier: "tx_\(transaction.hash)",
+                content: content,
+                trigger: nil
+            )
+            UNUserNotificationCenter.current().add(request)
+        }
+
+        UserDefaults.standard.set(Array(existing.union(fetchedHashes)), forKey: key)
     }
 
     private func deriveAccounts(using wallet: HDWallet, accountIndex: Int = 0) -> [BlockchainType: ChainAccount] {
         var result: [BlockchainType: ChainAccount] = [:]
 
-        // Derive accounts for all networks but prioritize selected network
-        for config in availableBlockchains where config.isEnabled {
+        // Derive mainnet accounts for supported chains; Manage Networks controls visibility/fetching.
+        for config in availableBlockchains where config.network == .mainnet {
             guard let tokenType = config.blockchainType else { continue }
-            guard tokenType.isEVM || tokenType == .bitcoin else { continue }
+            guard tokenType.isEVM || tokenType == .bitcoin || tokenType == .solana else { continue }
             let coinType = config.coinType
             let address: String
 
@@ -743,7 +927,7 @@ final class WalletManager: ObservableObject {
         // If we have a seed phrase/private key in keychain but no wallets in the new system,
         // create a "Main Wallet" entry automatically
         if multiChainWallets.isEmpty && (keychain.hasSeedPhrase() || keychain.hasPrivateKey()) {
-            print("🔄 Migrating old keychain wallet to multi-wallet system...")
+            Logger.log("🔄 Migrating old keychain wallet to multi-wallet system...")
 
             // We'll create the wallet placeholder - actual accounts will be loaded during refreshWalletData
             let walletType: WalletType = keychain.hasSeedPhrase() ? .seed : .imported
@@ -755,13 +939,13 @@ final class WalletManager: ObservableObject {
             mainWallet.isActive = true
             multiChainWallets.append(mainWallet)
             saveWallets()
-            print("✅ Main Wallet created and set as active")
+            Logger.log("✅ Main Wallet created and set as active")
         }
 
         // Ensure only ONE wallet is active
         let activeWallets = multiChainWallets.filter { $0.isActive }
         if activeWallets.count > 1 {
-            print("⚠️ Found multiple active wallets! Fixing...")
+            Logger.log("⚠️ Found multiple active wallets! Fixing...")
             // Deactivate all
             for i in 0..<multiChainWallets.count {
                 multiChainWallets[i].isActive = false
@@ -771,7 +955,7 @@ final class WalletManager: ObservableObject {
                 multiChainWallets[0].isActive = true
             }
             saveWallets()
-            print("✅ Fixed: Only one wallet is now active")
+            Logger.log("✅ Fixed: Only one wallet is now active")
         }
 
         activeWallet = multiChainWallets.first(where: { $0.isActive }) ?? multiChainWallets.first
@@ -1016,7 +1200,7 @@ final class WalletManager: ObservableObject {
     func addCustomToken(_ token: Token) {
         // Check if token already exists
         if tokens.contains(where: { $0.contractAddress?.lowercased() == token.contractAddress?.lowercased() }) {
-            print("⚠️ Token already exists: \(token.symbol)")
+            Logger.log("⚠️ Token already exists: \(token.symbol)")
             return
         }
 
@@ -1029,14 +1213,14 @@ final class WalletManager: ObservableObject {
         // Notify user
         NotificationManager.shared.notifyTokenAdded(name: token.name)
 
-        print("✅ Custom token added: \(token.name) (\(token.symbol))")
+        Logger.log("✅ Custom token added: \(token.name) (\(token.symbol))")
     }
 
     /// Remove a custom token from the wallet
     func removeCustomToken(_ token: Token) {
         tokens.removeAll { $0.contractAddress?.lowercased() == token.contractAddress?.lowercased() }
         saveCustomTokens()
-        print("🗑️ Custom token removed: \(token.symbol)")
+        Logger.log("🗑️ Custom token removed: \(token.symbol)")
     }
 
     private func saveCustomTokens() {
@@ -1044,7 +1228,7 @@ final class WalletManager: ObservableObject {
         let customTokens = tokens.filter { !$0.isNative }
         if let data = try? JSONEncoder().encode(customTokens) {
             UserDefaults.standard.set(data, forKey: "CustomTokens")
-            print("💾 Saved \(customTokens.count) custom tokens")
+            Logger.log("💾 Saved \(customTokens.count) custom tokens")
         }
     }
 
@@ -1052,13 +1236,46 @@ final class WalletManager: ObservableObject {
         // Load custom tokens from UserDefaults
         guard let data = UserDefaults.standard.data(forKey: "CustomTokens"),
               let customTokens = try? JSONDecoder().decode([Token].self, from: data) else {
-            print("📭 No custom tokens to load")
+            Logger.log("📭 No custom tokens to load")
             savedCustomTokens = []
             return
         }
 
         savedCustomTokens = customTokens
-        print("📦 Loaded \(customTokens.count) custom tokens from storage")
+        Logger.log("📦 Loaded \(customTokens.count) custom tokens from storage")
+    }
+
+    private struct CachedTokenPrice: Codable {
+        let price: Double
+        let iconUrl: String?
+    }
+
+    private func cachedPrice(for symbol: String) -> Double? {
+        loadCachedPrices()[symbol.uppercased()]?.price
+    }
+
+    private func cachedIconUrl(for symbol: String) -> String? {
+        loadCachedPrices()[symbol.uppercased()]?.iconUrl
+    }
+
+    private func loadCachedPrices() -> [String: CachedTokenPrice] {
+        guard let data = UserDefaults.standard.data(forKey: cachedTokenPricesKey),
+              let cached = try? JSONDecoder().decode([String: CachedTokenPrice].self, from: data) else {
+            return [:]
+        }
+        return cached
+    }
+
+    private func saveCachedPrices(from tokens: [Token]) {
+        var cached = loadCachedPrices()
+        for token in tokens where isMeaningfulPrice(token.price, for: token.symbol) {
+            let key = token.symbol.uppercased()
+            cached[key] = CachedTokenPrice(price: token.price, iconUrl: token.iconUrl ?? cached[key]?.iconUrl)
+        }
+
+        if let data = try? JSONEncoder().encode(cached) {
+            UserDefaults.standard.set(data, forKey: cachedTokenPricesKey)
+        }
     }
 
     // MARK: - Multi-Account Management (MetaMask style)
@@ -1066,12 +1283,12 @@ final class WalletManager: ObservableObject {
     /// Create a new account from the same seed phrase with next account index
     func createNewAccount(name: String? = nil) async -> Bool {
         guard let seedPhrase = keychain.getSeedPhrase() else {
-            print("❌ No seed phrase available")
+            Logger.log("❌ No seed phrase available")
             return false
         }
 
         guard let hdWallet = try? mnemonicService.loadWallet(from: seedPhrase) else {
-            print("❌ Failed to load wallet from seed phrase")
+            Logger.log("❌ Failed to load wallet from seed phrase")
             return false
         }
 
@@ -1079,12 +1296,12 @@ final class WalletManager: ObservableObject {
         let seedWallets = multiChainWallets.filter { $0.type == .seed && $0.seedPhraseId == "main-seed" }
         let nextAccountIndex = seedWallets.count
 
-        // Derive addresses for all enabled blockchains with the new account index
+        // Derive addresses for all supported mainnet blockchains with the new account index.
         var chainAccounts: [BlockchainType: ChainAccount] = [:]
 
-        for config in availableBlockchains where config.isEnabled {
+        for config in availableBlockchains where config.network == .mainnet {
             guard let tokenType = config.blockchainType else { continue }
-            guard tokenType.isEVM || tokenType == .bitcoin else { continue }
+            guard tokenType.isEVM || tokenType == .bitcoin || tokenType == .solana else { continue }
             guard let coinType = config.coinType else { continue }
 
             let address = mnemonicService.address(for: coinType, wallet: hdWallet, accountIndex: nextAccountIndex)
@@ -1094,7 +1311,7 @@ final class WalletManager: ObservableObject {
 
         // Get primary address (Ethereum)
         guard chainAccounts[.ethereum]?.address != nil else {
-            print("❌ Failed to derive Ethereum address")
+            Logger.log("❌ Failed to derive Ethereum address")
             return false
         }
 
@@ -1156,10 +1373,10 @@ final class WalletManager: ObservableObject {
     func toggleFavorite(for tokenSymbol: String) {
         if favoriteTokenSymbols.contains(tokenSymbol) {
             favoriteTokenSymbols.remove(tokenSymbol)
-            print("🌟 Removed \(tokenSymbol) from favorites")
+            Logger.log("🌟 Removed \(tokenSymbol) from favorites")
         } else {
             favoriteTokenSymbols.insert(tokenSymbol)
-            print("⭐️ Added \(tokenSymbol) to favorites")
+            Logger.log("⭐️ Added \(tokenSymbol) to favorites")
         }
         saveFavorites()
     }
@@ -1174,7 +1391,7 @@ final class WalletManager: ObservableObject {
         if let data = UserDefaults.standard.data(forKey: favoritesStorageKey),
            let favorites = try? JSONDecoder().decode(Set<String>.self, from: data) {
             favoriteTokenSymbols = favorites
-            print("📚 Loaded \(favorites.count) favorite tokens")
+            Logger.log("📚 Loaded \(favorites.count) favorite tokens")
         }
     }
 
@@ -1192,11 +1409,11 @@ final class WalletManager: ObservableObject {
         if let data = UserDefaults.standard.data(forKey: selectedBlockchainsKey),
            let blockchains = try? JSONDecoder().decode(Set<BlockchainPlatform>.self, from: data) {
             selectedBlockchains = blockchains
-            print("🌐 Loaded \(blockchains.count) selected blockchains: \(blockchains.map { $0.rawValue }.joined(separator: ", "))")
+            Logger.log("🌐 Loaded \(blockchains.count) selected blockchains: \(blockchains.map { $0.rawValue }.joined(separator: ", "))")
         } else {
             // Default to Ethereum if nothing saved
             selectedBlockchains = [.ethereum]
-            print("🌐 No saved blockchains, defaulting to Ethereum")
+            Logger.log("🌐 No saved blockchains, defaulting to Ethereum")
         }
     }
     
@@ -1204,7 +1421,7 @@ final class WalletManager: ObservableObject {
     private func saveSelectedBlockchains() {
         if let data = try? JSONEncoder().encode(selectedBlockchains) {
             UserDefaults.standard.set(data, forKey: selectedBlockchainsKey)
-            print("💾 Saved \(selectedBlockchains.count) selected blockchains")
+            Logger.log("💾 Saved \(selectedBlockchains.count) selected blockchains")
         }
     }
 
@@ -1216,20 +1433,20 @@ final class WalletManager: ObservableObject {
 
         priceUpdateTimer = Timer.scheduledTimer(withTimeInterval: priceUpdateInterval, repeats: true) { [weak self] _ in
             guard let self = self else { return }
-            print("🔄 Auto-refreshing prices...")
+            Logger.log("🔄 Auto-refreshing prices...")
             Task {
                 await self.refreshPricesOnly()
             }
         }
 
-        print("✅ Price auto-refresh started (every \(Int(priceUpdateInterval))s)")
+        Logger.log("✅ Price auto-refresh started (every \(Int(priceUpdateInterval))s)")
     }
 
     /// Stop automatic price updates
     func stopPriceUpdates() {
         priceUpdateTimer?.invalidate()
         priceUpdateTimer = nil
-        print("⏸️ Price auto-refresh stopped")
+        Logger.log("⏸️ Price auto-refresh stopped")
     }
 
     /// Refresh only prices, not balances (lighter operation)
@@ -1237,13 +1454,35 @@ final class WalletManager: ObservableObject {
     private func refreshPricesOnly() async {
         guard !tokens.isEmpty else { return }
 
-        // Update prices for existing tokens
-        let symbols = Set(tokens.map { $0.symbol })
-        print("📊 Updating prices for \(symbols.count) tokens...")
+        let coinIds = Array(Set(tokens.map { APIService.getCoinId(for: $0.symbol) }))
+        Logger.log("📊 Updating prices/logos for \(coinIds.count) assets...")
 
-        // This would call price API
-        // For now we trigger full refresh but you could optimize to only update prices
-        // await refreshWalletData()
+        do {
+            let lookup = try await apiService.fetchPricesAndLogos(for: coinIds)
+            tokens = tokens.map { token in
+                let coinId = APIService.getCoinId(for: token.symbol)
+                guard let priceInfo = lookup[coinId] else { return token }
+
+                return Token(
+                    contractAddress: token.contractAddress,
+                    name: token.name,
+                    symbol: token.symbol,
+                    decimals: token.decimals,
+                    balance: token.balance,
+                    price: priceInfo.price,
+                    iconUrl: token.iconUrl ?? priceInfo.imageUrl,
+                    blockchain: token.blockchain,
+                    isNative: token.isNative,
+                    receivingAddress: token.receivingAddress
+                )
+            }
+            saveCachedPrices(from: tokens)
+
+            balance = visibleTokens.reduce(0) { $0 + $1.totalValue }
+            Logger.log("✅ Price/logo refresh completed")
+        } catch {
+            Logger.log("❌ Price/logo refresh failed: \(error.localizedDescription)")
+        }
     }
 
     deinit {

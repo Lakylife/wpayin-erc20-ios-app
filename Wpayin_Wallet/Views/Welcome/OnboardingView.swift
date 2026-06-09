@@ -1,3 +1,5 @@
+// Autor Lukas Helebrandt, 2026
+
 //
 //  OnboardingView.swift
 //  Wpayin_Wallet
@@ -179,12 +181,12 @@ struct OnboardingStep1View: View {
 
             // Content
             VStack(spacing: 20) {
-                Text("Secure & Private")
+                Text(L10n.Onboarding.secureTitle.localized)
                     .font(.system(size: 28, weight: .bold))
                     .foregroundColor(WpayinColors.text)
                     .multilineTextAlignment(.center)
 
-                Text("Your keys, your crypto. We use industry-standard encryption to keep your assets safe. Your private keys never leave your device.")
+                Text(L10n.Onboarding.secureDesc.localized)
                     .font(.system(size: 16))
                     .foregroundColor(WpayinColors.textSecondary)
                     .multilineTextAlignment(.center)
@@ -277,7 +279,7 @@ struct OnboardingActionButtons: View {
         VStack(spacing: 16) {
             // Next/Get Started button
             Button(action: onNext) {
-                Text(currentStep == totalSteps - 1 ? "Get Started" : "Continue")
+                Text(currentStep == totalSteps - 1 ? L10n.Action.getStarted.localized : L10n.Action.continue.localized)
                     .font(.system(size: 18, weight: .semibold))
                     .foregroundColor(.white)
                     .frame(maxWidth: .infinity)
@@ -297,7 +299,7 @@ struct OnboardingActionButtons: View {
 
             // Skip button (only show if not last step)
             if currentStep < totalSteps - 1 {
-                Button("Skip", action: onSkip)
+                Button(L10n.Action.skip.localized, action: onSkip)
                     .font(.system(size: 16, weight: .medium))
                     .foregroundColor(WpayinColors.textSecondary)
             }

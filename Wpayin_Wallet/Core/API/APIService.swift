@@ -1,3 +1,4 @@
+// Autor Lukas Helebrandt, 2026
 //
 //  APIService.swift
 //  Wpayin_Wallet
@@ -162,7 +163,7 @@ class APIService: ObservableObject {
                     )
                 }
             } catch {
-                print("⚠️ Failed to fetch balance for \(request.tokenType.name): \(error)")
+                Logger.log("⚠️ Failed to fetch balance for \(request.tokenType.name): \(error)")
             }
 
             let priceAndLogo = request.tokenType.coingeckoId.flatMap { priceAndLogoLookup[$0] }
@@ -205,7 +206,7 @@ class APIService: ObservableObject {
             guard let endpoint = etherscanEndpoint(for: config.platform) else { continue }
 
             guard let apiKey = endpoint.resolveAPIKey() else {
-                print("⚠️ Missing API key for \(config.platform.name)")
+                Logger.log("⚠️ Missing API key for \(config.platform.name)")
                 continue
             }
 
@@ -237,7 +238,7 @@ class APIService: ObservableObject {
                 if firstFailure == nil {
                     firstFailure = error
                 }
-                print("⚠️ Transaction fetch failed for \(config.platform.name): \(error)")
+                Logger.log("⚠️ Transaction fetch failed for \(config.platform.name): \(error)")
             }
         }
 
@@ -587,7 +588,7 @@ class APIService: ObservableObject {
             balance: balance,
             price: price,
             iconUrl: iconUrl,
-            blockchain: .ethereum,
+            blockchain: config.blockchainType ?? .ethereum,
             isNative: false  // ERC-20 tokens are not native
         )
     }
@@ -631,7 +632,7 @@ class APIService: ObservableObject {
 
     /// Fetch ERC-20 token information (name, symbol, decimals) from contract address
     func getTokenInfo(contractAddress: String, config: BlockchainConfig? = nil) async throws -> TokenInfo {
-        print("🔍 Fetching token info for contract: \(contractAddress)")
+        Logger.log("🔍 Fetching token info for contract: \(contractAddress)")
         
         let blockchainConfig = config ?? BlockchainConfig.defaultConfigs.first(where: { $0.platform == .ethereum })!
 
@@ -646,7 +647,7 @@ class APIService: ObservableObject {
 
         let (tokenName, tokenSymbol, tokenDecimals) = try await (name, symbol, decimals)
 
-        print("✅ Token info: \(tokenName) (\(tokenSymbol)) - \(tokenDecimals) decimals")
+        Logger.log("✅ Token info: \(tokenName) (\(tokenSymbol)) - \(tokenDecimals) decimals")
 
         return TokenInfo(
             address: contractAddress,
@@ -762,7 +763,7 @@ class APIService: ObservableObject {
     // MARK: - NFT Methods
 
     func fetchNFTs(for address: String) async throws -> [NFT] {
-        print("🎨 Fetching NFTs for address: \(address)")
+        Logger.log("🎨 Fetching NFTs for address: \(address)")
 
         // Use Alchemy NFT API (v3) - free tier, more reliable
         // API key loaded from AppConfig
@@ -770,7 +771,7 @@ class APIService: ObservableObject {
         let alchemyUrl = "https://eth-mainnet.g.alchemy.com/nft/v3/\(alchemyApiKey)/getNFTsForOwner"
 
         guard var urlComponents = URLComponents(string: alchemyUrl) else {
-            print("❌ Invalid Alchemy URL")
+            Logger.log("❌ Invalid Alchemy URL")
             throw APIError.invalidURL
         }
 
@@ -781,7 +782,7 @@ class APIService: ObservableObject {
         ]
 
         guard let url = urlComponents.url else {
-            print("❌ Failed to construct URL")
+            Logger.log("❌ Failed to construct URL")
             throw APIError.invalidURL
         }
 
@@ -790,19 +791,19 @@ class APIService: ObservableObject {
         request.timeoutInterval = 30.0
 
         do {
-            print("🚀 Making Alchemy NFT API request to: \(url)")
+            Logger.log("🚀 Making Alchemy NFT API request to: \(url)")
             let (data, response) = try await URLSession.shared.data(for: request)
 
             guard let httpResponse = response as? HTTPURLResponse else {
-                print("❌ Invalid HTTP response")
+                Logger.log("❌ Invalid HTTP response")
                 throw APIError.invalidResponse
             }
 
-            print("📡 NFT API Response status: \(httpResponse.statusCode)")
+            Logger.log("📡 NFT API Response status: \(httpResponse.statusCode)")
 
             if httpResponse.statusCode != 200 {
                 if let responseString = String(data: data, encoding: .utf8) {
-                    print("❌ API Error Response: \(responseString)")
+                    Logger.log("❌ API Error Response: \(responseString)")
                 }
                 return []
             }
@@ -811,22 +812,23 @@ class APIService: ObservableObject {
 
             do {
                 let alchemyResponse = try decoder.decode(AlchemyNFTResponse.self, from: data)
-                print("✅ Successfully decoded \(alchemyResponse.ownedNfts.count) NFTs from Alchemy")
+                Logger.log("✅ Successfully decoded \(alchemyResponse.ownedNfts.count) NFTs from Alchemy")
 
                 let fetchedNFTs: [NFT] = alchemyResponse.ownedNfts.compactMap { nft in
                     // Get image from metadata
-                    let imageUrl = nft.image?.thumbnailUrl ?? nft.image?.cachedUrl ?? nft.image?.originalUrl
+                    let img = nft.image
+                    let imageUrl = img?.thumbnailUrl ?? img?.cachedUrl ?? img?.originalUrl
 
                     // Get name and description from metadata
-                    let name = nft.name ?? nft.title ?? "NFT #\(nft.tokenId)"
-                    let description = nft.description ?? ""
+                    let nftName = nft.name ?? nft.title ?? "NFT #\(nft.tokenId)"
+                    let nftDescription = nft.description ?? ""
                     let collectionName = nft.contract.name ?? nft.contract.symbol ?? "Unknown Collection"
 
                     return NFT(
                         contractAddress: nft.contract.address,
                         tokenId: nft.tokenId,
-                        name: name,
-                        description: description,
+                        name: nftName,
+                        description: nftDescription,
                         imageUrl: imageUrl,
                         collectionName: collectionName,
                         blockchain: .ethereum,
@@ -834,17 +836,17 @@ class APIService: ObservableObject {
                     )
                 }
 
-                print("🎨 Parsed \(fetchedNFTs.count) NFTs with valid data")
+                Logger.log("🎨 Parsed \(fetchedNFTs.count) NFTs with valid data")
                 return fetchedNFTs
             } catch {
-                print("❌ Failed to decode Alchemy response: \(error)")
+                Logger.log("❌ Failed to decode Alchemy response: \(error)")
                 if let responseString = String(data: data, encoding: .utf8) {
-                    print("📄 Response data: \(responseString.prefix(1000))")
+                    Logger.log("📄 Response data: \(responseString.prefix(1000))")
                 }
                 return []
             }
         } catch {
-            print("❌ Network error fetching NFTs: \(error)")
+            Logger.log("❌ Network error fetching NFTs: \(error)")
             return []
         }
     }
@@ -864,26 +866,26 @@ class APIService: ObservableObject {
         ]
 
         guard let url = components.url else {
-            print("❌ Invalid URL: \(endpoint)")
+            Logger.log("❌ Invalid URL: \(endpoint)")
             throw APIError.invalidURL
         }
 
-        print("🔍 Fetching coin data from: \(url.absoluteString)")
+        Logger.log("🔍 Fetching coin data from: \(url.absoluteString)")
 
         do {
             let (data, response) = try await session.data(from: url)
 
             if let httpResponse = response as? HTTPURLResponse {
-                print("📡 Response status: \(httpResponse.statusCode)")
+                Logger.log("📡 Response status: \(httpResponse.statusCode)")
 
                 if httpResponse.statusCode == 429 {
-                    print("⚠️ Rate limit exceeded")
+                    Logger.log("⚠️ Rate limit exceeded")
                     throw APIError.rateLimitExceeded
                 }
 
                 if httpResponse.statusCode != 200 {
                     let responseString = String(data: data, encoding: .utf8) ?? "No response data"
-                    print("❌ HTTP Error \(httpResponse.statusCode): \(responseString)")
+                    Logger.log("❌ HTTP Error \(httpResponse.statusCode): \(responseString)")
                     throw APIError.invalidResponse
                 }
             }
@@ -891,10 +893,10 @@ class APIService: ObservableObject {
             let decoder = JSONDecoder()
             return try decoder.decode(CoinData.self, from: data)
         } catch let decodingError as DecodingError {
-            print("❌ Decoding error: \(decodingError)")
+            Logger.log("❌ Decoding error: \(decodingError)")
             throw APIError.decodingError
         } catch {
-            print("❌ Network error: \(error)")
+            Logger.log("❌ Network error: \(error)")
             throw error
         }
     }
@@ -908,26 +910,26 @@ class APIService: ObservableObject {
         ]
 
         guard let url = components.url else {
-            print("❌ Invalid chart URL: \(endpoint)")
+            Logger.log("❌ Invalid chart URL: \(endpoint)")
             throw APIError.invalidURL
         }
 
-        print("📈 Fetching chart data from: \(url.absoluteString)")
+        Logger.log("📈 Fetching chart data from: \(url.absoluteString)")
 
         do {
             let (data, response) = try await session.data(from: url)
 
             if let httpResponse = response as? HTTPURLResponse {
-                print("📊 Chart response status: \(httpResponse.statusCode)")
+                Logger.log("📊 Chart response status: \(httpResponse.statusCode)")
 
                 if httpResponse.statusCode == 429 {
-                    print("⚠️ Chart rate limit exceeded")
+                    Logger.log("⚠️ Chart rate limit exceeded")
                     throw APIError.rateLimitExceeded
                 }
 
                 if httpResponse.statusCode != 200 {
                     let responseString = String(data: data, encoding: .utf8) ?? "No response data"
-                    print("❌ Chart HTTP Error \(httpResponse.statusCode): \(responseString)")
+                    Logger.log("❌ Chart HTTP Error \(httpResponse.statusCode): \(responseString)")
                     throw APIError.invalidResponse
                 }
             }
@@ -935,10 +937,10 @@ class APIService: ObservableObject {
             let decoder = JSONDecoder()
             return try decoder.decode(CoinChartData.self, from: data)
         } catch let decodingError as DecodingError {
-            print("❌ Chart decoding error: \(decodingError)")
+            Logger.log("❌ Chart decoding error: \(decodingError)")
             throw APIError.decodingError
         } catch {
-            print("❌ Chart network error: \(error)")
+            Logger.log("❌ Chart network error: \(error)")
             throw error
         }
     }
@@ -1007,7 +1009,7 @@ extension String {
 
 // MARK: - API Models
 
-private extension APIService {
+extension APIService {
     struct RPCResponse<Result: Decodable>: Decodable {
         struct RPCError: Decodable {
             let code: Int

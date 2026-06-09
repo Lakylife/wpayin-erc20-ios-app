@@ -1,3 +1,5 @@
+// Autor Lukas Helebrandt, 2026
+
 //
 //  NetworkConfig.swift
 //  Wpayin_Wallet
@@ -45,6 +47,7 @@ struct NetworkConfig: Identifiable, Codable, Equatable {
     static let defaultNetworks: [NetworkConfig] = [
         // Ethereum Mainnet
         NetworkConfig(
+            id: UUID(uuidString: "11111111-1111-1111-1111-111111111111")!,
             name: "Ethereum",
             chainId: 1,
             rpcUrl: "https://eth.llamarpc.com",
@@ -55,6 +58,7 @@ struct NetworkConfig: Identifiable, Codable, Equatable {
 
         // Arbitrum
         NetworkConfig(
+            id: UUID(uuidString: "22222222-2222-2222-2222-222222222222")!,
             name: "Arbitrum One",
             chainId: 42161,
             rpcUrl: "https://arb1.arbitrum.io/rpc",
@@ -65,6 +69,7 @@ struct NetworkConfig: Identifiable, Codable, Equatable {
 
         // Base
         NetworkConfig(
+            id: UUID(uuidString: "33333333-3333-3333-3333-333333333333")!,
             name: "Base",
             chainId: 8453,
             rpcUrl: "https://mainnet.base.org",
@@ -75,6 +80,7 @@ struct NetworkConfig: Identifiable, Codable, Equatable {
 
         // Optimism
         NetworkConfig(
+            id: UUID(uuidString: "44444444-4444-4444-4444-444444444444")!,
             name: "Optimism",
             chainId: 10,
             rpcUrl: "https://mainnet.optimism.io",
@@ -85,6 +91,7 @@ struct NetworkConfig: Identifiable, Codable, Equatable {
 
         // Polygon
         NetworkConfig(
+            id: UUID(uuidString: "55555555-5555-5555-5555-555555555555")!,
             name: "Polygon",
             chainId: 137,
             rpcUrl: "https://polygon-rpc.com",
@@ -95,6 +102,7 @@ struct NetworkConfig: Identifiable, Codable, Equatable {
 
         // BSC
         NetworkConfig(
+            id: UUID(uuidString: "66666666-6666-6666-6666-666666666666")!,
             name: "BNB Smart Chain",
             chainId: 56,
             rpcUrl: "https://bsc-dataseed.binance.org",
@@ -105,6 +113,7 @@ struct NetworkConfig: Identifiable, Codable, Equatable {
 
         // Avalanche C-Chain
         NetworkConfig(
+            id: UUID(uuidString: "77777777-7777-7777-7777-777777777777")!,
             name: "Avalanche C-Chain",
             chainId: 43114,
             rpcUrl: "https://api.avax.network/ext/bc/C/rpc",
@@ -115,12 +124,24 @@ struct NetworkConfig: Identifiable, Codable, Equatable {
         
         // Bitcoin
         NetworkConfig(
+            id: UUID(uuidString: "88888888-8888-8888-8888-888888888888")!,
             name: "Bitcoin",
             chainId: 0,  // Bitcoin doesn't use chain ID
             rpcUrl: "https://blockstream.info/api",
             symbol: "BTC",
             blockExplorerUrl: "https://blockstream.info",
             blockchain: .bitcoin
+        ),
+
+        // Solana
+        NetworkConfig(
+            id: UUID(uuidString: "99999999-9999-9999-9999-999999999999")!,
+            name: "Solana",
+            chainId: 0,
+            rpcUrl: "https://api.mainnet-beta.solana.com",
+            symbol: "SOL",
+            blockExplorerUrl: "https://explorer.solana.com",
+            blockchain: .solana
         )
     ]
 
@@ -165,13 +186,23 @@ class NetworkConfigManager: ObservableObject {
     private func loadEnabledNetworks() {
         if let data = userDefaults.data(forKey: enabledNetworksKey),
            let saved = try? JSONDecoder().decode(Set<String>.self, from: data) {
-            enabledNetworks = saved
+            let validSaved = saved.filter { id in
+                networks.contains { $0.id.uuidString == id }
+            }
+            if validSaved.isEmpty {
+                enabledNetworks = defaultEnabledNetworkIds()
+            } else {
+                enabledNetworks = Set(validSaved)
+            }
         } else {
-            // Default: Enable Ethereum and Bitcoin
-            enabledNetworks = Set(networks.filter { 
-                $0.blockchain == .ethereum || $0.blockchain == .bitcoin 
-            }.map { $0.id.uuidString })
+            enabledNetworks = defaultEnabledNetworkIds()
         }
+    }
+
+    private func defaultEnabledNetworkIds() -> Set<String> {
+        Set(networks.filter {
+            $0.blockchain == .ethereum || $0.blockchain == .bitcoin
+        }.map { $0.id.uuidString })
     }
     
     private func saveEnabledNetworks() {

@@ -1,3 +1,5 @@
+// Autor Lukas Helebrandt, 2026
+
 //
 //  AllTransactionsView.swift
 //  Wpayin_Wallet
@@ -34,11 +36,11 @@ struct AllTransactionsView: View {
                             .font(.system(size: 60))
                             .foregroundColor(WpayinColors.textTertiary)
                         
-                        Text("No Transactions")
+                        Text("No Transactions".localized)
                             .font(.system(size: 24, weight: .bold))
                             .foregroundColor(WpayinColors.text)
                         
-                        Text("Your \(token.symbol) transactions will appear here")
+                        Text("Your %@ transactions will appear here".localized(token.symbol))
                             .font(.system(size: 16))
                             .foregroundColor(WpayinColors.textSecondary)
                             .multilineTextAlignment(.center)
@@ -93,7 +95,7 @@ struct AllTransactionsView: View {
                     }
                 }
             }
-            .navigationTitle("\(token.symbol) Transactions")
+            .navigationTitle("%@ Transactions".localized(token.symbol))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
@@ -137,7 +139,7 @@ struct StatCard: View {
                 .font(.system(size: 22, weight: .bold))
                 .foregroundColor(WpayinColors.text)
             
-            Text(title)
+            Text(title.localized)
                 .font(.system(size: 12, weight: .medium))
                 .foregroundColor(WpayinColors.textSecondary)
         }
@@ -303,7 +305,7 @@ struct TransactionDetailSheet: View {
                             Link(destination: explorerUrl) {
                                 HStack {
                                     Image(systemName: "arrow.up.right.square")
-                                    Text("View on Explorer")
+                                    Text("View on Explorer".localized)
                                 }
                                 .font(.system(size: 16, weight: .semibold))
                                 .foregroundColor(.white)
@@ -321,7 +323,7 @@ struct TransactionDetailSheet: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
-                    Button("Done") {
+                    Button("Done".localized) {
                         dismiss()
                     }
                     .foregroundColor(WpayinColors.primary)
@@ -350,7 +352,7 @@ struct TransactionDetailRow: View {
     
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text(title)
+            Text(title.localized)
                 .font(.system(size: 13, weight: .medium))
                 .foregroundColor(WpayinColors.textSecondary)
             

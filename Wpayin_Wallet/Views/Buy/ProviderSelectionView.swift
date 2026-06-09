@@ -1,3 +1,5 @@
+// Autor Lukas Helebrandt, 2026
+
 //
 //  ProviderSelectionView.swift
 //  Wpayin_Wallet
@@ -10,6 +12,7 @@ import SwiftUI
 struct ProviderSelectionView: View {
     let crypto: String
     let walletAddress: String
+    @EnvironmentObject var settingsManager: SettingsManager
     @Environment(\.dismiss) private var dismiss
     @State private var selectedProvider: FiatRampProvider?
     @State private var showFiatRamp = false
@@ -72,7 +75,7 @@ struct ProviderSelectionView: View {
                                     provider: provider,
                                     isRecommended: provider == FiatRampService.shared.recommendedProvider(for: crypto)
                                 ) {
-                                    print("👆 Selected provider: \(provider.displayName)")
+                                    Logger.log("👆 Selected provider: \(provider.displayName)")
                                     selectedProvider = provider
                                     showFiatRamp = true
                                 }
@@ -80,10 +83,10 @@ struct ProviderSelectionView: View {
                         }
                         .padding(.horizontal)
                         .onAppear {
-                            print("🔍 ProviderSelectionView loaded")
-                            print("💰 Crypto: \(crypto)")
-                            print("📍 Wallet: \(walletAddress)")
-                            print("🏪 Available providers: \(availableProviders.map { $0.displayName })")
+                            Logger.log("🔍 ProviderSelectionView loaded")
+                            Logger.log("💰 Crypto: \(crypto)")
+                            Logger.log("📍 Wallet: \(walletAddress)")
+                            Logger.log("🏪 Available providers: \(availableProviders.map { $0.displayName })")
                         }
                         
                         if availableProviders.isEmpty {
@@ -123,6 +126,7 @@ struct ProviderSelectionView: View {
                     provider: provider,
                     crypto: crypto,
                     walletAddress: walletAddress,
+                    fiatCurrency: settingsManager.selectedCurrency.rawValue,
                     action: .buy
                 ))
             }
@@ -130,9 +134,10 @@ struct ProviderSelectionView: View {
         .sheet(isPresented: $showCompare) {
             CompareProvidersView(
                 crypto: crypto,
-                amount: 100, // Default $100
+                amount: 100, // Default purchase amount in USD before display conversion
                 walletAddress: walletAddress
             )
+            .environmentObject(settingsManager)
         }
     }
 }
@@ -248,7 +253,7 @@ struct ProviderInfoRow: View {
                 .foregroundColor(WpayinColors.primary)
                 .frame(width: 16)
             
-            Text(text)
+            Text(text.localized)
                 .font(.wpayinCaption)
                 .foregroundColor(WpayinColors.textSecondary)
         }

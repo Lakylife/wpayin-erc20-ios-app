@@ -1,3 +1,5 @@
+// Autor Lukas Helebrandt, 2026
+
 //
 //  WalletView.swift
 //  Wpayin_Wallet
@@ -21,6 +23,8 @@ struct WalletView: View {
     @State private var showAllAssets = false
     @State private var selectedToken: Token?
     @State private var showWalletSelector = false
+    @State private var showQRScanner = false
+    @State private var scannedRecipientAddress = ""
 
     var body: some View {
         ZStack {
@@ -40,7 +44,7 @@ struct WalletView: View {
                 ModernHeaderView(
                     walletManager: walletManager,
                     onMenuTap: { showMenuSheet = true },
-                    onQRTap: { showDepositSheet = true },
+                    onQRTap: { showQRScanner = true },
                     onWalletTap: { showWalletSelector = true }
                 )
                 .ignoresSafeArea(.all, edges: .top)
@@ -92,8 +96,18 @@ struct WalletView: View {
                 .environmentObject(settingsManager)
         }
         .sheet(isPresented: $showWithdrawSheet) {
-            WithdrawView()
+            WithdrawView(initialRecipientAddress: scannedRecipientAddress)
                 .environmentObject(walletManager)
+                .environmentObject(settingsManager)
+        }
+        .sheet(isPresented: $showQRScanner) {
+            QRScannerView(scannedAddress: $scannedRecipientAddress) { scannedAddress in
+                scannedRecipientAddress = scannedAddress
+                showQRScanner = false
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
+                    showWithdrawSheet = true
+                }
+            }
         }
         .sheet(isPresented: $showAddToken) {
             AddTokenView()
@@ -107,6 +121,7 @@ struct WalletView: View {
         .sheet(isPresented: $showSwapSheet) {
             SwapView()
                 .environmentObject(walletManager)
+                .environmentObject(settingsManager)
         }
         .sheet(isPresented: $showAllAssets) {
             AllAssetsView()
@@ -132,18 +147,18 @@ struct WalletView: View {
                 .environmentObject(walletManager)
         }
         .confirmationDialog(
-            walletManager.hasWallet ? "Wallet Options" : "Connect Wallet",
+            walletManager.hasWallet ? "Wallet Options".localized : "Connect Wallet".localized,
             isPresented: $showMenuSheet,
             titleVisibility: .visible
         ) {
             if walletManager.hasWallet {
-                Button("Add Token") { showAddToken = true }
-                Button("Manage Wallets") { showWalletSelector = true }
-                Button("Cancel", role: .cancel) { }
+                Button("Add Token".localized) { showAddToken = true }
+                Button("Manage Wallets".localized) { showWalletSelector = true }
+                Button("Cancel".localized, role: .cancel) { }
             } else {
-                Button("Create New Wallet") { showCreateWallet = true }
-                Button("Import Existing Wallet") { showImportWallet = true }
-                Button("Cancel", role: .cancel) { }
+                Button("Create New Wallet".localized) { showCreateWallet = true }
+                Button("Import Existing Wallet".localized) { showImportWallet = true }
+                Button("Cancel".localized, role: .cancel) { }
             }
         }
         .task {
@@ -263,7 +278,7 @@ struct ActionButton: View {
                     .font(.system(size: 24))
                     .foregroundColor(color)
 
-                Text(title)
+                Text(title.localized)
                     .font(.wpayinBody)
                     .foregroundColor(WpayinColors.text)
             }
@@ -281,7 +296,7 @@ struct TokensListView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
-            Text("Assets")
+            Text("Assets".localized)
                 .font(.wpayinHeadline)
                 .foregroundColor(WpayinColors.text)
 
@@ -324,7 +339,7 @@ struct TokenRowView: View {
 
             // Balance and Value
             VStack(alignment: .trailing, spacing: 4) {
-                Text(String(format: "%.4f", token.balance))
+                Text(TokenIconHelper.formattedBalance(token.balance))
                     .font(.wpayinBody)
                     .foregroundColor(WpayinColors.text)
 
@@ -390,7 +405,7 @@ struct ModernHeaderView: View {
                                 WpayinLogoView(size: 28)
 
                                 VStack(alignment: .leading, spacing: 2) {
-                                    Text("Main Wallet")
+                                    Text("Main Wallet".localized)
                                         .font(.system(size: 15, weight: .semibold))
                                         .foregroundColor(WpayinColors.text)
 
@@ -400,6 +415,18 @@ struct ModernHeaderView: View {
                                 }
 
                                 Spacer()
+
+                                Button {
+                                    UIPasteboard.general.string = walletManager.walletAddress
+                                } label: {
+                                    Image(systemName: "doc.on.doc")
+                                        .font(.system(size: 13, weight: .semibold))
+                                        .foregroundColor(WpayinColors.primary)
+                                        .frame(width: 28, height: 28)
+                                        .background(Circle().fill(WpayinColors.primary.opacity(0.12)))
+                                }
+                                .buttonStyle(PlainButtonStyle())
+                                .disabled(walletManager.walletAddress.isEmpty)
 
                                 Image(systemName: "chevron.down")
                                     .font(.system(size: 12, weight: .medium))
@@ -552,7 +579,7 @@ struct QuickActionButton: View {
                             .foregroundColor(WpayinColors.text)
                     )
 
-                Text(title)
+                Text(title.localized)
                     .font(.system(size: 12, weight: .medium))
                     .foregroundColor(WpayinColors.textSecondary)
             }
@@ -634,7 +661,7 @@ struct TabButton: View {
     var body: some View {
         Button(action: onTap) {
             VStack(spacing: 0) {
-                Text(title)
+                Text(title.localized)
                     .font(.system(size: 14, weight: .semibold))
                     .foregroundColor(isSelected ? WpayinColors.text : WpayinColors.textTertiary)
                     .padding(.vertical, 14)
@@ -682,17 +709,17 @@ struct TokensTabContent: View {
                         )
 
                     VStack(spacing: 8) {
-                        Text("No Tokens Found")
+                        Text("No Tokens Found".localized)
                             .font(.system(size: 18, weight: .semibold))
                             .foregroundColor(WpayinColors.text)
 
-                        Text("Add tokens to get started with your wallet")
+                        Text("Add tokens to get started with your wallet".localized)
                             .font(.system(size: 14))
                             .foregroundColor(WpayinColors.textSecondary)
                             .multilineTextAlignment(.center)
                     }
 
-                    Button("Load All Tokens") {
+                    Button("Load All Tokens".localized) {
                         // This will trigger auto token discovery
                         Task {
                             await walletManager.refreshWalletData()
@@ -733,13 +760,13 @@ struct NFTTabContent: View {
                 EmptyTabContent(title: "NFTs")
             } else {
                 HStack {
-                    Text("Your NFTs")
+                    Text("Your NFTs".localized)
                         .font(.system(size: 16, weight: .bold))
                         .foregroundColor(WpayinColors.text)
 
                     Spacer()
 
-                    Text("\(nfts.count) items")
+                    Text("%d items".localized(nfts.count))
                         .font(.system(size: 13, weight: .semibold))
                         .foregroundColor(WpayinColors.textSecondary)
                 }
@@ -767,11 +794,11 @@ struct EmptyTabContent: View {
                 )
 
             VStack(spacing: 8) {
-                Text("\(title) Portfolio")
+                Text("%@ Portfolio".localized(title.localized))
                     .font(.system(size: 18, weight: .semibold))
                     .foregroundColor(WpayinColors.textSecondary)
 
-                Text(title == "DeFi" ? "Connect to DeFi protocols" : "Your \(title.lowercased()) will appear here")
+                Text(title == "DeFi" ? "Connect to DeFi protocols".localized : "Your %@ will appear here".localized(title.localized.lowercased()))
                     .font(.system(size: 14))
                     .foregroundColor(WpayinColors.textTertiary)
             }
@@ -806,7 +833,7 @@ struct EnhancedWalletHeaderView: View {
                                 .font(.system(size: 16, weight: .semibold))
                                 .foregroundColor(WpayinColors.primary)
 
-                            Text("Total Portfolio")
+                            Text("Total Portfolio".localized)
                                 .font(.system(size: 15, weight: .semibold, design: .rounded))
                                 .foregroundColor(WpayinColors.text)
                         }
@@ -844,7 +871,7 @@ struct EnhancedWalletHeaderView: View {
                                 .progressViewStyle(CircularProgressViewStyle(tint: WpayinColors.primary))
                                 .scaleEffect(0.7)
 
-                            Text("Syncing...")
+                            Text("Syncing...".localized)
                                 .font(.system(size: 11, weight: .medium, design: .rounded))
                                 .foregroundColor(WpayinColors.textSecondary)
                         }
@@ -859,7 +886,7 @@ struct EnhancedWalletHeaderView: View {
                         .shadow(color: WpayinColors.primary.opacity(0.1), radius: 8, x: 0, y: 4)
 
                     if totalBalance > 0 {
-                        Text("USD")
+                        Text(settingsManager.selectedCurrency.rawValue)
                             .font(.system(size: 18, weight: .semibold, design: .rounded))
                             .foregroundColor(WpayinColors.textSecondary)
                             .offset(y: -8)
@@ -929,7 +956,7 @@ struct EnhancedWalletHeaderView: View {
                             }
 
                             VStack(alignment: .leading, spacing: 2) {
-                                Text("Wallet Address")
+                                Text("Wallet Address".localized)
                                     .font(.system(size: 11, weight: .medium, design: .rounded))
                                     .foregroundColor(WpayinColors.textSecondary)
                                     .textCase(.uppercase)
@@ -1144,7 +1171,7 @@ struct ElegantActionButton: View {
                         .foregroundColor(color)
                 }
 
-                Text(title)
+                Text(title.localized)
                     .font(.system(size: 11, weight: .medium, design: .rounded))
                     .foregroundColor(WpayinColors.text)
                     .lineLimit(1)
@@ -1202,11 +1229,11 @@ struct WalletEmptyStateView: View {
                 )
 
             VStack(spacing: 8) {
-                Text("No assets yet")
+                Text("No assets yet".localized)
                     .font(.wpayinHeadline)
                     .foregroundColor(WpayinColors.text)
 
-                Text("Connect a wallet or receive funds to populate your portfolio.")
+                Text("Connect a wallet or receive funds to populate your portfolio.".localized)
                     .font(.wpayinBody)
                     .foregroundColor(WpayinColors.textSecondary)
                     .multilineTextAlignment(.center)
@@ -1253,7 +1280,7 @@ struct WalletActionButton: View {
                     .font(.system(size: 24, weight: .medium))
                     .foregroundColor(color)
 
-                Text(title)
+                Text(title.localized)
                     .font(.wpayinCaption)
                     .foregroundColor(WpayinColors.text)
             }
@@ -1272,7 +1299,7 @@ struct EnhancedTokensListView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 20) {
             HStack {
-                Text("My Assets")
+                Text("My Assets".localized)
                     .font(.wpayinHeadline)
                     .foregroundColor(WpayinColors.text)
 
@@ -1319,7 +1346,7 @@ struct EnhancedTokenRow: View {
 
             // Balance and Value
             VStack(alignment: .trailing, spacing: 4) {
-                Text(String(format: "%.4f", token.balance))
+                Text(TokenIconHelper.formattedBalance(token.balance))
                     .font(.wpayinSubheadline)
                     .foregroundColor(WpayinColors.text)
 
@@ -1399,7 +1426,7 @@ struct BlockchainSwitcherView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("Active Blockchains")
+            Text("Active Blockchains".localized)
                 .font(.wpayinSubheadline)
                 .foregroundColor(WpayinColors.text)
 
@@ -1526,11 +1553,11 @@ struct WalletMenuSheet: View {
                 }
                 .padding(.top, 24)
             }
-            .navigationTitle("Menu")
+            .navigationTitle("Menu".localized)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
-                    Button("Done") {
+                    Button(L10n.Action.done.localized) {
                         dismiss()
                     }
                     .foregroundColor(WpayinColors.primary)
@@ -1563,11 +1590,11 @@ struct MenuButton: View {
 
                 // Text
                 VStack(alignment: .leading, spacing: 4) {
-                    Text(title)
+                    Text(title.localized)
                         .font(.system(size: 17, weight: .semibold))
                         .foregroundColor(WpayinColors.text)
 
-                    Text(subtitle)
+                    Text(subtitle.localized)
                         .font(.system(size: 14))
                         .foregroundColor(WpayinColors.textSecondary)
                 }

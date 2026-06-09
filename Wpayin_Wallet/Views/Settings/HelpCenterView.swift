@@ -1,3 +1,5 @@
+// Autor Lukas Helebrandt, 2026
+
 //
 //  HelpCenterView.swift
 //  Wpayin_Wallet
@@ -10,8 +12,6 @@ import SwiftUI
 struct HelpCenterView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var searchText = ""
-    @State private var selectedCategory: HelpCategory?
-    @State private var selectedArticle: HelpArticle?
     
     var body: some View {
         NavigationView {
@@ -25,7 +25,7 @@ struct HelpCenterView: View {
                             Image(systemName: "magnifyingglass")
                                 .foregroundColor(WpayinColors.textSecondary)
                             
-                            TextField("Search help articles...", text: $searchText)
+                            TextField(L10n.Help.search.localized, text: $searchText)
                                 .foregroundColor(WpayinColors.text)
                         }
                         .padding()
@@ -34,9 +34,18 @@ struct HelpCenterView: View {
                         .padding(.horizontal, 20)
                         .padding(.top, 10)
                         
-                        // Categories
+                        // Categories or Search Results
                         if searchText.isEmpty {
-                            categoriesView
+                            VStack(spacing: 16) {
+                                ForEach(HelpCategory.allCategories) { category in
+                                    NavigationLink {
+                                        HelpCategoryDetailView(category: category)
+                                    } label: {
+                                        HelpCategoryCard(category: category)
+                                    }
+                                }
+                            }
+                            .padding(.horizontal, 20)
                         } else {
                             searchResultsView
                         }
@@ -46,7 +55,7 @@ struct HelpCenterView: View {
                     }
                 }
             }
-            .navigationTitle("Help Center")
+            .navigationTitle(L10n.Settings.helpCenter.localized)
             .navigationBarTitleDisplayMode(.large)
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
@@ -57,25 +66,6 @@ struct HelpCenterView: View {
                             .foregroundColor(WpayinColors.textSecondary)
                     }
                 }
-            }
-            .sheet(item: $selectedArticle) { article in
-                HelpArticleDetailView(article: article)
-            }
-        }
-    }
-    
-    private var categoriesView: some View {
-        VStack(spacing: 16) {
-            ForEach(HelpCategory.allCategories) { category in
-                HelpCategoryCard(category: category) {
-                    selectedCategory = category
-                }
-            }
-        }
-        .padding(.horizontal, 20)
-        .sheet(item: $selectedCategory) { category in
-            HelpCategoryDetailView(category: category) { article in
-                selectedArticle = article
             }
         }
     }
@@ -90,19 +80,21 @@ struct HelpCenterView: View {
                         .font(.system(size: 48))
                         .foregroundColor(WpayinColors.textSecondary)
                     
-                    Text("No results found")
+                    Text(L10n.Help.noResults.localized)
                         .font(.wpayinHeadline)
                         .foregroundColor(WpayinColors.text)
                     
-                    Text("Try different keywords")
+                    Text(L10n.Help.tryDifferent.localized)
                         .font(.wpayinBody)
                         .foregroundColor(WpayinColors.textSecondary)
                 }
                 .padding(.top, 60)
             } else {
                 ForEach(results) { article in
-                    HelpArticleRow(article: article) {
-                        selectedArticle = article
+                    NavigationLink {
+                        HelpArticleDetailView(article: article)
+                    } label: {
+                        HelpArticleRow(article: article)
                     }
                 }
                 .padding(.horizontal, 20)
@@ -113,8 +105,8 @@ struct HelpCenterView: View {
     private func searchArticles(query: String) -> [HelpArticle] {
         let lowercaseQuery = query.lowercased()
         return HelpCategory.allCategories.flatMap { $0.articles }.filter { article in
-            article.title.lowercased().contains(lowercaseQuery) ||
-            article.content.lowercased().contains(lowercaseQuery)
+            article.title.localized.lowercased().contains(lowercaseQuery) ||
+            article.content.localized.lowercased().contains(lowercaseQuery)
         }
     }
 }
@@ -123,79 +115,64 @@ struct HelpCenterView: View {
 
 struct HelpCategoryCard: View {
     let category: HelpCategory
-    let action: () -> Void
     
     var body: some View {
-        Button(action: action) {
-            HStack(spacing: 16) {
-                ZStack {
-                    Circle()
-                        .fill(category.color.opacity(0.1))
-                        .frame(width: 56, height: 56)
-                    
-                    Image(systemName: category.icon)
-                        .font(.system(size: 24))
-                        .foregroundColor(category.color)
-                }
+        HStack(spacing: 16) {
+            ZStack {
+                Circle()
+                    .fill(category.color.opacity(0.1))
+                    .frame(width: 56, height: 56)
                 
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(category.title)
-                        .font(.wpayinHeadline)
-                        .foregroundColor(WpayinColors.text)
-                    
-                    Text("\(category.articles.count) articles")
-                        .font(.wpayinCaption)
-                        .foregroundColor(WpayinColors.textSecondary)
-                }
+                Image(systemName: category.icon)
+                    .font(.system(size: 24))
+                    .foregroundColor(category.color)
+            }
+            
+            VStack(alignment: .leading, spacing: 4) {
+                Text(category.title.localized)
+                    .font(.wpayinHeadline)
+                    .foregroundColor(WpayinColors.text)
                 
-                Spacer()
-                
-                Image(systemName: "chevron.right")
+                Text("\(category.articles.count) \(L10n.Help.articles.localized)")
+                    .font(.wpayinCaption)
                     .foregroundColor(WpayinColors.textSecondary)
             }
-            .padding(16)
-            .background(WpayinColors.surface)
-            .cornerRadius(12)
+            
+            Spacer()
+            
+            Image(systemName: "chevron.right")
+                .foregroundColor(WpayinColors.textSecondary)
         }
+        .padding(16)
+        .background(WpayinColors.surface)
+        .cornerRadius(12)
     }
 }
 
 // MARK: - Help Category Detail View
 
 struct HelpCategoryDetailView: View {
-    @Environment(\.dismiss) private var dismiss
     let category: HelpCategory
-    let onArticleSelected: (HelpArticle) -> Void
     
     var body: some View {
-        NavigationView {
-            ZStack {
-                WpayinColors.background.ignoresSafeArea()
-                
-                ScrollView {
-                    VStack(spacing: 12) {
-                        ForEach(category.articles) { article in
-                            HelpArticleRow(article: article) {
-                                onArticleSelected(article)
-                            }
+        ZStack {
+            WpayinColors.background.ignoresSafeArea()
+            
+            ScrollView {
+                VStack(spacing: 12) {
+                    ForEach(category.articles) { article in
+                        NavigationLink {
+                            HelpArticleDetailView(article: article)
+                        } label: {
+                            HelpArticleRow(article: article)
                         }
                     }
-                    .padding(20)
                 }
-            }
-            .navigationTitle(category.title)
-            .navigationBarTitleDisplayMode(.large)
-            .toolbar {
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    Button {
-                        dismiss()
-                    } label: {
-                        Image(systemName: "xmark.circle.fill")
-                            .foregroundColor(WpayinColors.textSecondary)
-                    }
-                }
+                .padding(20)
             }
         }
+        .navigationTitle(category.title.localized)
+        .navigationBarTitleDisplayMode(.inline)
     }
 }
 
@@ -203,135 +180,119 @@ struct HelpCategoryDetailView: View {
 
 struct HelpArticleRow: View {
     let article: HelpArticle
-    let action: () -> Void
     
     var body: some View {
-        Button(action: action) {
-            HStack {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(article.title)
-                        .font(.wpayinSubheadline)
-                        .foregroundColor(WpayinColors.text)
-                        .multilineTextAlignment(.leading)
-                    
-                    if let preview = article.preview {
-                        Text(preview)
-                            .font(.wpayinCaption)
-                            .foregroundColor(WpayinColors.textSecondary)
-                            .lineLimit(2)
-                    }
+        HStack {
+            VStack(alignment: .leading, spacing: 4) {
+                Text(article.title.localized)
+                    .font(.wpayinSubheadline)
+                    .foregroundColor(WpayinColors.text)
+                    .multilineTextAlignment(.leading)
+                
+                if let preview = article.preview {
+                    Text(preview.localized)
+                        .font(.wpayinCaption)
+                        .foregroundColor(WpayinColors.textSecondary)
+                        .lineLimit(2)
                 }
-                
-                Spacer()
-                
-                Image(systemName: "chevron.right")
-                    .font(.system(size: 14))
-                    .foregroundColor(WpayinColors.textSecondary)
             }
-            .padding(16)
-            .background(WpayinColors.surface)
-            .cornerRadius(12)
+            
+            Spacer()
+            
+            Image(systemName: "chevron.right")
+                .font(.system(size: 14))
+                .foregroundColor(WpayinColors.textSecondary)
         }
+        .padding(16)
+        .background(WpayinColors.surface)
+        .cornerRadius(12)
     }
 }
 
 // MARK: - Help Article Detail View
 
 struct HelpArticleDetailView: View {
-    @Environment(\.dismiss) private var dismiss
     let article: HelpArticle
     
     var body: some View {
-        NavigationView {
-            ZStack {
-                WpayinColors.background.ignoresSafeArea()
-                
-                ScrollView {
-                    VStack(alignment: .leading, spacing: 24) {
-                        // Title
-                        Text(article.title)
-                            .font(.system(size: 28, weight: .bold))
-                            .foregroundColor(WpayinColors.text)
-                        
-                        // Content
-                        Text(article.content)
-                            .font(.wpayinBody)
-                            .foregroundColor(WpayinColors.text)
-                            .lineSpacing(6)
-                        
-                        // Steps if available
-                        if !article.steps.isEmpty {
-                            VStack(alignment: .leading, spacing: 16) {
-                                Text("Step by Step:")
-                                    .font(.wpayinHeadline)
-                                    .foregroundColor(WpayinColors.text)
-                                
-                                ForEach(Array(article.steps.enumerated()), id: \.offset) { index, step in
-                                    HStack(alignment: .top, spacing: 12) {
-                                        ZStack {
-                                            Circle()
-                                                .fill(WpayinColors.primary.opacity(0.1))
-                                                .frame(width: 32, height: 32)
-                                            
-                                            Text("\(index + 1)")
-                                                .font(.system(size: 14, weight: .semibold))
-                                                .foregroundColor(WpayinColors.primary)
-                                        }
+        ZStack {
+            WpayinColors.background.ignoresSafeArea()
+            
+            ScrollView {
+                VStack(alignment: .leading, spacing: 24) {
+                    // Title
+                    Text(article.title.localized)
+                        .font(.system(size: 28, weight: .bold))
+                        .foregroundColor(WpayinColors.text)
+                    
+                    // Content
+                    Text(article.content.localized)
+                        .font(.wpayinBody)
+                        .foregroundColor(WpayinColors.text)
+                        .lineSpacing(6)
+                    
+                    // Steps if available
+                    if !article.steps.isEmpty {
+                        VStack(alignment: .leading, spacing: 16) {
+                            Text(L10n.Help.stepByStep.localized)
+                                .font(.wpayinHeadline)
+                                .foregroundColor(WpayinColors.text)
+                            
+                            ForEach(Array(article.steps.enumerated()), id: \.offset) { index, step in
+                                HStack(alignment: .top, spacing: 12) {
+                                    ZStack {
+                                        Circle()
+                                            .fill(WpayinColors.primary.opacity(0.1))
+                                            .frame(width: 32, height: 32)
                                         
-                                        Text(step)
-                                            .font(.wpayinBody)
-                                            .foregroundColor(WpayinColors.text)
-                                    }
-                                }
-                            }
-                            .padding(16)
-                            .background(WpayinColors.surface)
-                            .cornerRadius(12)
-                        }
-                        
-                        // Related Articles
-                        if !article.relatedArticles.isEmpty {
-                            VStack(alignment: .leading, spacing: 12) {
-                                Text("Related Articles:")
-                                    .font(.wpayinHeadline)
-                                    .foregroundColor(WpayinColors.text)
-                                
-                                ForEach(article.relatedArticles, id: \.self) { relatedTitle in
-                                    HStack {
-                                        Image(systemName: "doc.text")
+                                        Text("\(index + 1)")
+                                            .font(.system(size: 14, weight: .semibold))
                                             .foregroundColor(WpayinColors.primary)
-                                        
-                                        Text(relatedTitle)
-                                            .font(.wpayinBody)
-                                            .foregroundColor(WpayinColors.text)
-                                        
-                                        Spacer()
-                                        
-                                        Image(systemName: "arrow.right")
-                                            .foregroundColor(WpayinColors.textSecondary)
                                     }
-                                    .padding(12)
-                                    .background(WpayinColors.surface)
-                                    .cornerRadius(8)
+                                    
+                                    Text(step.localized)
+                                        .font(.wpayinBody)
+                                        .foregroundColor(WpayinColors.text)
                                 }
                             }
                         }
+                        .padding(16)
+                        .background(WpayinColors.surface)
+                        .cornerRadius(12)
                     }
-                    .padding(20)
-                }
-            }
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    Button {
-                        dismiss()
-                    } label: {
-                        Image(systemName: "xmark.circle.fill")
-                            .foregroundColor(WpayinColors.textSecondary)
+                    
+                    // Related Articles
+                    if !article.relatedArticles.isEmpty {
+                        VStack(alignment: .leading, spacing: 12) {
+                            Text(L10n.Help.related.localized)
+                                .font(.wpayinHeadline)
+                                .foregroundColor(WpayinColors.text)
+                            
+                            ForEach(article.relatedArticles, id: \.self) { relatedTitle in
+                                HStack {
+                                    Image(systemName: "doc.text")
+                                        .foregroundColor(WpayinColors.primary)
+                                    
+                                    Text(relatedTitle.localized)
+                                        .font(.wpayinBody)
+                                        .foregroundColor(WpayinColors.text)
+                                    
+                                    Spacer()
+                                    
+                                    Image(systemName: "arrow.right")
+                                        .foregroundColor(WpayinColors.textSecondary)
+                                }
+                                .padding(12)
+                                .background(WpayinColors.surface)
+                                .cornerRadius(8)
+                            }
+                        }
                     }
                 }
+                .padding(20)
             }
         }
+        .navigationBarTitleDisplayMode(.inline)
     }
 }
 
@@ -442,7 +403,7 @@ struct HelpArticle: Identifiable {
             
             CRITICAL SECURITY RULES:
             • NEVER share your seed phrase with anyone (including support)
-            • NEVER type it into websites or apps
+            • NEVER type into websites or apps
             • NEVER take screenshots or save digitally
             • ALWAYS write it on paper and store securely
             • Anyone with your seed phrase can steal ALL your funds
@@ -545,9 +506,9 @@ struct HelpArticle: Identifiable {
             
             NEVER:
             • Share your seed phrase or private key
-            • Send crypto to "verify" your wallet
+            • Send crypto to \"verify\" your wallet
             • Click suspicious links in emails/texts
-            • Trust "support" that contacts you first
+            • Trust \"support\" that contacts you first
             • Use seed phrases generated by websites
             
             Common Scam Types:
@@ -559,10 +520,10 @@ struct HelpArticle: Identifiable {
             Fake websites that look like real crypto services. Always verify URLs carefully.
             
             3. AIRDROP SCAMS
-            Fake tokens sent to your wallet with instructions to "claim" them on a website. These steal your funds!
+            Fake tokens sent to your wallet with instructions to \"claim\" them on a website. These steal your funds!
             
             4. INVESTMENT SCAMS
-            "Guaranteed returns" or "doubling" schemes. If it sounds too good to be true, it is.
+            \"Guaranteed returns\" or \"doubling\" schemes. If it sounds too good to be true, it is.
             
             5. ROMANCE SCAMS
             Online relationships that eventually ask you to invest in crypto. Block and report immediately.
@@ -785,7 +746,7 @@ struct HelpArticle: Identifiable {
             • Optimism
             • Base
             
-            Important: Your Ethereum address works on all L2s, but tokens on L2 are separate from Ethereum mainnet. You need to "bridge" to move between networks.
+            Important: Your Ethereum address works on all L2s, but tokens on L2 are separate from Ethereum mainnet. You need to \"bridge\" to move between networks.
             """,
             relatedArticles: ["What are Blockchain Networks?", "How to Bridge Between Networks"]
         )
@@ -908,7 +869,7 @@ struct HelpArticle: Identifiable {
             title: "Transaction is Stuck or Pending",
             preview: "What to do when transactions don't confirm",
             content: """
-            If your transaction is stuck in "Pending" status:
+            If your transaction is stuck in \"Pending\" status:
             
             Common Causes:
             • Gas fee too low
@@ -922,7 +883,7 @@ struct HelpArticle: Identifiable {
             Most transactions confirm within 30 minutes. During high network usage, it can take hours.
             
             2. CHECK GAS FEE
-            If you used "Slow" speed during high network activity, it might take longer.
+            If you used \"Slow\" speed during high network activity, it might take longer.
             
             3. VERIFY ON BLOCKCHAIN
             Check the transaction on Etherscan or other explorer. It will show actual status.
@@ -934,7 +895,7 @@ struct HelpArticle: Identifiable {
             Some blockchains allow speeding up transactions by replacing with higher gas. This feature coming soon to this wallet.
             
             Prevention:
-            • Use "Standard" or "Fast" gas speeds for important transactions
+            • Use \"Standard\" or \"Fast\" gas speeds for important transactions
             • Check network status before sending
             • Avoid sending during NFT mints or major events
             """,
@@ -947,7 +908,7 @@ struct HelpArticle: Identifiable {
             Unfortunately, blockchain transactions are PERMANENT and IRREVERSIBLE.
             
             The Reality:
-            • No "undo" button exists
+            • No \"undo\" button exists
             • No customer support can reverse it
             • Blockchain is designed to be immutable
             • Sent to wrong address = funds are gone
@@ -1001,7 +962,7 @@ struct HelpArticle: Identifiable {
             ⚠️ Real support will NEVER:
             • Ask for your seed phrase
             • Ask for your private key
-            • Ask you to send crypto to "verify"
+            • Ask you to send crypto to \"verify\"
             • Contact you first via DM
             • Request remote access to your device
             

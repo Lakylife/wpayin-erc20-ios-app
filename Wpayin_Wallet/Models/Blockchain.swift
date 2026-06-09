@@ -1,3 +1,5 @@
+// Autor Lukas Helebrandt, 2026
+
 //
 //  Blockchain.swift
 //  Wpayin_Wallet
@@ -263,11 +265,11 @@ enum BlockchainPlatform: String, CaseIterable, Codable, Identifiable {
         case .ethereum:
             return "ethereum_trx_32"
         case .bitcoin:
-            return "bitcoin"
+            return "BTC"
         case .polygon:
-            return "polygon-pos_trx_32"
+            return "polygon-pos_eip20_32"
         case .bsc:
-            return "binance-smart-chain_trx_32"
+            return "BNB"
         case .arbitrum:
             return "arbitrum-one_trx_32"
         case .optimism:
@@ -296,11 +298,11 @@ enum BlockchainPlatform: String, CaseIterable, Codable, Identifiable {
         var displayName: String {
             switch self {
             case .baseLayer1:
-                return "Base Layer 1"
+                return "Base Layer 1".localized
             case .evmChain:
-                return "EVM Chains"
+                return "EVM Chains".localized
             case .altLayer1:
-                return "Other L1s"
+                return "Other L1s".localized
             }
         }
     }

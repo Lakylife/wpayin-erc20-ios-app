@@ -1,3 +1,5 @@
+// Autor Lukas Helebrandt, 2026
+
 //
 //  TransactionService.swift
 //  Wpayin_Wallet

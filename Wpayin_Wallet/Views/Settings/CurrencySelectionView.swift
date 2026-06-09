@@ -1,3 +1,5 @@
+// Autor Lukas Helebrandt, 2026
+
 //
 //  CurrencySelectionView.swift
 //  Wpayin_Wallet
@@ -67,7 +69,7 @@ struct CurrencyRow: View {
                         .font(.wpayinBody)
                         .foregroundColor(WpayinColors.text)
 
-                    Text(currency.name)
+                    Text(currency.name.localized)
                         .font(.wpayinCaption)
                         .foregroundColor(WpayinColors.textSecondary)
                 }

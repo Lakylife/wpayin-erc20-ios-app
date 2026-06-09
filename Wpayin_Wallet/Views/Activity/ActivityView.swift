@@ -1,3 +1,5 @@
+// Autor Lukas Helebrandt, 2026
+
 //
 //  ActivityView.swift
 //  Wpayin_Wallet
@@ -104,10 +106,10 @@ struct ActivityView: View {
                         LazyVStack(spacing: 12) {
                             ForEach(filteredTransactions) { transaction in
                                 Button(action: {
-                                    print("🔵 Transaction tapped: \(transaction.hash)")
+                                    Logger.log("🔵 Transaction tapped: \(transaction.hash)")
                                     selectedTransaction = transaction
                                     showTransactionDetail = true
-                                    print("🔵 showTransactionDetail set to: \(showTransactionDetail)")
+                                    Logger.log("🔵 showTransactionDetail set to: \(showTransactionDetail)")
                                 }) {
                                     TransactionRowView(transaction: transaction)
                                 }
@@ -132,27 +134,32 @@ struct ActivityView: View {
                 TransactionDetailView(transaction: transaction)
                     .environmentObject(settingsManager)
                     .onAppear {
-                        print("🟢 TransactionDetailView opened for: \(transaction.hash)")
+                        Logger.log("🟢 TransactionDetailView opened for: \(transaction.hash)")
                     }
             }
         }
         .onChange(of: showTransactionDetail) { newValue in
-            print("🟡 showTransactionDetail changed to: \(newValue)")
+            Logger.log("🟡 showTransactionDetail changed to: \(newValue)")
             if !newValue {
-                print("🔴 Sheet dismissed")
+                Logger.log("🔴 Sheet dismissed")
             }
         }
     }
 }
 
-enum TransactionFilter: String, CaseIterable {
-    case all = "All"
-    case sent = "Sent"
-    case received = "Received"
-    case swapped = "Swapped"
+enum TransactionFilter: CaseIterable {
+    case all
+    case sent
+    case received
+    case swapped
 
     var displayName: String {
-        return self.rawValue
+        switch self {
+        case .all: return "All".localized
+        case .sent: return "Sent".localized
+        case .received: return "Received".localized
+        case .swapped: return "Swapped".localized
+        }
     }
 }
 
@@ -164,7 +171,7 @@ struct SearchBar: View {
             Image(systemName: "magnifyingglass")
                 .foregroundColor(WpayinColors.textSecondary)
 
-            TextField("Search transactions...", text: $text)
+            TextField("Search transactions...".localized, text: $text)
                 .font(.wpayinBody)
                 .foregroundColor(WpayinColors.text)
 
@@ -211,7 +218,7 @@ struct FilterTab: View {
 
     var body: some View {
         Button(action: action) {
-            Text(title)
+            Text(title.localized)
                 .font(.wpayinBody)
                 .foregroundColor(isSelected ? WpayinColors.secondary : WpayinColors.textSecondary)
                 .padding(.horizontal, 20)
@@ -400,27 +407,27 @@ struct EmptyStateView: View {
 
     private var emptyTitle: String {
         if !searchText.isEmpty {
-            return "No Results Found"
+            return L10n.Help.noResults.localized
         }
 
         switch filter {
         case .all:
-            return "No Transactions Yet"
+            return L10n.Activity.noTransactions.localized
         case .sent:
-            return "No Sent Transactions"
+            return "No Sent Transactions".localized
         case .received:
-            return "No Received Transactions"
+            return "No Received Transactions".localized
         case .swapped:
-            return "No Swap Transactions"
+            return "No Swap Transactions".localized
         }
     }
 
     private var emptyMessage: String {
         if !searchText.isEmpty {
-            return "Try adjusting your search terms or filters"
+            return L10n.Activity.tryAdjusting.localized
         }
 
-        return "Your transaction history will appear here once you start using your wallet."
+        return L10n.Activity.emptyDesc.localized
     }
 }
 

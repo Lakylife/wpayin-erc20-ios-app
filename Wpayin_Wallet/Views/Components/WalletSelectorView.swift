@@ -1,3 +1,5 @@
+// Autor Lukas Helebrandt, 2026
+
 //
 //  WalletSelectorView.swift
 //  Wpayin_Wallet
@@ -21,20 +23,20 @@ struct WalletSelectorView: View {
                 // Header
                 VStack(spacing: 16) {
                     HStack {
-                        Text("Select Wallet")
+                        Text("Select Wallet".localized)
                             .font(.system(size: 28, weight: .bold))
                             .foregroundColor(WpayinColors.text)
 
                         Spacer()
 
-                        Button("Done") {
+                        Button("Done".localized) {
                             dismiss()
                         }
                         .font(.system(size: 16, weight: .semibold))
                         .foregroundColor(WpayinColors.primary)
                     }
 
-                    Text("Choose which wallet to use or add a new one")
+                    Text("Choose which wallet to use or add a new one".localized)
                         .font(.system(size: 16))
                         .foregroundColor(WpayinColors.textSecondary)
                         .frame(maxWidth: .infinity, alignment: .leading)
@@ -64,11 +66,11 @@ struct WalletSelectorView: View {
                                     .font(.system(size: 48))
                                     .foregroundColor(WpayinColors.textTertiary)
 
-                                Text("No Wallets")
+                                Text("No Wallets".localized)
                                     .font(.system(size: 20, weight: .semibold))
                                     .foregroundColor(WpayinColors.text)
 
-                                Text("Create or import a wallet to get started")
+                                Text("Create or import a wallet to get started".localized)
                                     .font(.system(size: 16))
                                     .foregroundColor(WpayinColors.textSecondary)
                                     .multilineTextAlignment(.center)
@@ -82,23 +84,23 @@ struct WalletSelectorView: View {
                             if walletManager.keychain.hasSeedPhrase() {
                                 AddWalletButton(
                                     icon: "person.badge.plus.fill",
-                                    title: "Create Account",
-                                    subtitle: "Add a new account from your recovery phrase",
+                                    title: "Create Account".localized,
+                                    subtitle: "Add a new account from your recovery phrase".localized,
                                     action: { showCreateAccount = true }
                                 )
                             }
 
                             AddWalletButton(
                                 icon: "plus.circle.fill",
-                                title: "Create New Wallet",
-                                subtitle: "Generate a new wallet with recovery phrase",
+                                title: "Create New Wallet".localized,
+                                subtitle: "Generate a new wallet with recovery phrase".localized,
                                 action: { showCreateWallet = true }
                             )
 
                             AddWalletButton(
                                 icon: "square.and.arrow.down.fill",
-                                title: "Import Wallet",
-                                subtitle: "Import using recovery phrase or private key",
+                                title: "Import Wallet".localized,
+                                subtitle: "Import using recovery phrase or private key".localized,
                                 action: { showImportWallet = true }
                             )
                         }
@@ -151,6 +153,7 @@ struct WalletCard: View {
     let wallet: MultiChainWallet
     let isActive: Bool
     let onSelect: () -> Void
+    @EnvironmentObject var settingsManager: SettingsManager
 
     var body: some View {
         Button(action: onSelect) {
@@ -170,7 +173,7 @@ struct WalletCard: View {
                                     .fill(WpayinColors.success)
                                     .frame(width: 8, height: 8)
 
-                                Text("ACTIVE")
+                                Text("Active".localized)
                                     .font(.system(size: 11, weight: .bold))
                                     .foregroundColor(WpayinColors.success)
                                     .textCase(.uppercase)
@@ -190,7 +193,7 @@ struct WalletCard: View {
                             .foregroundColor(WpayinColors.textSecondary)
                     }
 
-                    Text("$0.00") // TODO: Calculate wallet balance
+                    Text(0.0.formatted(as: settingsManager.selectedCurrency)) // TODO: Calculate wallet balance
                         .font(.system(size: 16, weight: .semibold))
                         .foregroundColor(WpayinColors.text)
                 }
@@ -269,11 +272,11 @@ struct AddWalletButton: View {
                     )
 
                 VStack(alignment: .leading, spacing: 4) {
-                    Text(title)
+                    Text(title.localized)
                         .font(.system(size: 16, weight: .semibold))
                         .foregroundColor(WpayinColors.text)
 
-                    Text(subtitle)
+                    Text(subtitle.localized)
                         .font(.system(size: 14))
                         .foregroundColor(WpayinColors.textSecondary)
                         .multilineTextAlignment(.leading)
@@ -326,11 +329,11 @@ struct CreateAccountView: View {
                                     .foregroundColor(WpayinColors.primary)
                             )
 
-                        Text("Create Account")
+                        Text("Create Account".localized)
                             .font(.system(size: 28, weight: .bold))
                             .foregroundColor(WpayinColors.text)
 
-                        Text("Add a new account from your existing recovery phrase")
+                        Text("Add a new account from your existing recovery phrase".localized)
                             .font(.system(size: 16))
                             .foregroundColor(WpayinColors.textSecondary)
                             .multilineTextAlignment(.center)
@@ -340,7 +343,7 @@ struct CreateAccountView: View {
 
                     // Account Name Input
                     VStack(alignment: .leading, spacing: 12) {
-                        Text("Account Name (Optional)")
+                        Text("Account Name (Optional)".localized)
                             .font(.system(size: 14, weight: .medium))
                             .foregroundColor(WpayinColors.textSecondary)
 
@@ -358,7 +361,7 @@ struct CreateAccountView: View {
                             )
                             .focused($isNameFieldFocused)
 
-                        Text("If left empty, the account will be named \"Account 2\", \"Account 3\", etc.")
+                        Text("If left empty, the account will be named \"Account 2\", \"Account 3\", etc.".localized)
                             .font(.system(size: 13))
                             .foregroundColor(WpayinColors.textTertiary)
                     }
@@ -377,7 +380,7 @@ struct CreateAccountView: View {
                                     ProgressView()
                                         .progressViewStyle(CircularProgressViewStyle(tint: .white))
                                 } else {
-                                    Text("Create Account")
+                                    Text("Create Account".localized)
                                         .font(.system(size: 18, weight: .semibold))
                                         .foregroundColor(.white)
                                 }
@@ -391,7 +394,7 @@ struct CreateAccountView: View {
                         }
                         .disabled(isCreating)
 
-                        Button("Cancel") {
+                        Button("Cancel".localized) {
                             dismiss()
                         }
                         .font(.system(size: 16, weight: .medium))
@@ -410,4 +413,5 @@ struct CreateAccountView: View {
 #Preview {
     WalletSelectorView()
         .environmentObject(WalletManager())
+        .environmentObject(SettingsManager())
 }

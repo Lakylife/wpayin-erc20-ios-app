@@ -1,3 +1,5 @@
+// Autor Lukas Helebrandt, 2026
+
 //
 //  BuyView.swift
 //  Wpayin_Wallet
@@ -10,6 +12,7 @@ import WebKit
 
 struct BuyView: View {
     @EnvironmentObject var walletManager: WalletManager
+    @EnvironmentObject var settingsManager: SettingsManager
     @State private var selectedCrypto: String = ""
     @State private var showWidget = false
     
@@ -72,7 +75,7 @@ struct BuyView: View {
                             ForEach(cryptos, id: \.self) { crypto in
                                 Button {
                                     let addr = addressFor(crypto)
-                                    print("🔵 Buying \(crypto) using address: \(addr)")
+                                    Logger.log("🔵 Buying \(crypto) using address: \(addr)")
                                     selectedCrypto = crypto
                                     showWidget = true
                                 } label: {
@@ -139,18 +142,18 @@ struct BuyView: View {
                     crypto: selectedCrypto,
                     walletAddress: addressFor(selectedCrypto)
                 )
+                .environmentObject(settingsManager)
             }
         }
     }
     
     private func iconAssetName(for crypto: String) -> String? {
         let assetMap: [String: String] = [
-            "BTC": "bitcoin",
-            "ETH": "ethereum_trx_32",
-            "BNB": "binance-smart-chain_trx_32",
-            "MATIC": "polygon-pos_trx_32",
+            "BTC": "BTC",
+            "ETH": "ETH",
+            "BNB": "BNB",
+            "MATIC": "polygon-pos_eip20_32",
             "AVAX": "avalanche_trx_32",
-            "SOL": "solana_trx_32"
         ]
         return assetMap[crypto]
     }
@@ -214,7 +217,7 @@ struct SimpleWebView: UIViewRepresentable {
         webView.backgroundColor = .systemBackground
         webView.isOpaque = true
         
-        print("🌐 Creating WebView for: \(url.absoluteString)")
+        Logger.log("🌐 Creating WebView for: \(url.absoluteString)")
         
         return webView
     }
@@ -223,7 +226,7 @@ struct SimpleWebView: UIViewRepresentable {
         if webView.url == nil {
             let request = URLRequest(url: url)
             webView.load(request)
-            print("📥 Loading URL: \(url.absoluteString)")
+            Logger.log("📥 Loading URL: \(url.absoluteString)")
         }
     }
     
@@ -240,17 +243,17 @@ struct SimpleWebView: UIViewRepresentable {
         
         func webView(_ webView: WKWebView, didStartProvisionalNavigation navigation: WKNavigation!) {
             parent.isLoading = true
-            print("🔄 Navigation started")
+            Logger.log("🔄 Navigation started")
         }
         
         func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
             parent.isLoading = false
-            print("✅ Navigation finished: \(webView.url?.absoluteString ?? "unknown")")
+            Logger.log("✅ Navigation finished: \(webView.url?.absoluteString ?? "unknown")")
         }
         
         func webView(_ webView: WKWebView, didFail navigation: WKNavigation!, withError error: Error) {
             parent.isLoading = false
-            print("❌ Navigation failed: \(error.localizedDescription)")
+            Logger.log("❌ Navigation failed: \(error.localizedDescription)")
         }
     }
 }
@@ -258,4 +261,5 @@ struct SimpleWebView: UIViewRepresentable {
 #Preview {
     BuyView()
         .environmentObject(WalletManager())
+        .environmentObject(SettingsManager())
 }

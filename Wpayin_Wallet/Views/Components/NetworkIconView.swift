@@ -1,3 +1,5 @@
+// Autor Lukas Helebrandt, 2026
+
 //
 //  NetworkIconView.swift
 //  Wpayin_Wallet
@@ -12,7 +14,13 @@ struct NetworkIconView: View {
     let size: CGFloat
     
     var body: some View {
-        BlockchainIconHelper.icon(for: blockchain, size: size)
+        if blockchain == .solana {
+            SolanaIconMark(size: size)
+        } else if blockchain == .polygon {
+            PolygonIconMark(size: size)
+        } else {
+            BlockchainIconHelper.icon(for: blockchain, size: size)
+        }
     }
     
     private var blockchainColor: Color {
@@ -132,15 +140,25 @@ struct TokenIconView: View {
             // Main token icon - Priority: local asset > iconUrl > colored placeholder > blockchain icon
             
             Group {
+                if token.symbol.uppercased() == "WETH" {
+                    WrappedEthIconMark(size: size)
+                } else if token.symbol.uppercased() == "USDT" {
+                    StablecoinIconMark(size: size, symbol: "₮", color: Color(red: 0.20, green: 0.63, blue: 0.54))
+                } else if token.symbol.uppercased() == "USDC" {
+                    StablecoinIconMark(size: size, symbol: "$", color: Color(red: 0.16, green: 0.52, blue: 0.95))
+                } else if token.symbol.uppercased() == "SOL" {
+                    SolanaIconMark(size: size)
+                } else if token.symbol.uppercased() == "MATIC" {
+                    PolygonIconMark(size: size)
+                }
                 // 1. ALWAYS try local asset FIRST (regardless of iconUrl)
-                if let localIconName = TokenIconHelper.iconName(symbol: token.symbol, blockchain: token.blockchain) {
+                else if let localIconName = TokenIconHelper.iconName(symbol: token.symbol, blockchain: token.blockchain) {
                     Image(localIconName)
                         .resizable()
                         .scaledToFit()
                         .frame(width: size, height: size)
-                        .background(Color.black.opacity(0.05)) // Debug: show image bounds
                         .onAppear {
-                            print("✅ TokenIcon: Loading \(localIconName) for \(token.symbol)")
+                            Logger.log("✅ TokenIcon: Loading \(localIconName) for \(token.symbol)")
                         }
                 }
                 // 2. If no local asset, try iconUrl from API
@@ -203,9 +221,154 @@ struct TokenIconView: View {
                 .frame(width: size, height: size)
             
             Text(TokenIconHelper.symbolLetter(symbol: token.symbol))
-                .font(.system(size: size * 0.5, weight: .bold))
+                .font(.system(size: token.symbol.uppercased() == "USDC" ? size * 0.42 : size * 0.5, weight: .bold))
                 .foregroundColor(.white)
         }
+    }
+}
+
+struct SolanaIconMark: View {
+    let size: CGFloat
+
+    var body: some View {
+        ZStack {
+            Circle()
+                .fill(Color.black)
+                .frame(width: size, height: size)
+
+            VStack(spacing: size * 0.08) {
+                solanaBar(colors: [Color(red: 0.00, green: 1.00, blue: 0.64), Color(red: 0.56, green: 0.25, blue: 1.00)])
+                    .offset(x: size * 0.04)
+                solanaBar(colors: [Color(red: 0.56, green: 0.25, blue: 1.00), Color(red: 0.00, green: 0.78, blue: 1.00)])
+                    .offset(x: -size * 0.04)
+                solanaBar(colors: [Color(red: 0.00, green: 0.78, blue: 1.00), Color(red: 0.00, green: 1.00, blue: 0.64)])
+                    .offset(x: size * 0.04)
+            }
+        }
+    }
+
+    private func solanaBar(colors: [Color]) -> some View {
+        RoundedRectangle(cornerRadius: size * 0.04)
+            .fill(
+                LinearGradient(
+                    colors: colors,
+                    startPoint: .leading,
+                    endPoint: .trailing
+                )
+            )
+            .frame(width: size * 0.58, height: size * 0.11)
+            .rotationEffect(.degrees(-8))
+    }
+}
+
+struct WrappedEthIconMark: View {
+    let size: CGFloat
+
+    var body: some View {
+        ZStack {
+            Circle()
+                .fill(
+                    LinearGradient(
+                        colors: [
+                            Color(red: 0.27, green: 0.42, blue: 1.0),
+                            Color(red: 0.08, green: 0.14, blue: 0.36)
+                        ],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    )
+                )
+                .frame(width: size, height: size)
+
+            Circle()
+                .stroke(Color.white.opacity(0.9), lineWidth: max(1.2, size * 0.055))
+                .frame(width: size * 0.76, height: size * 0.76)
+
+            EthereumDiamondMark(size: size * 0.5)
+                .foregroundColor(.white)
+        }
+    }
+}
+
+struct EthereumDiamondMark: View {
+    let size: CGFloat
+
+    var body: some View {
+        VStack(spacing: 0) {
+            Path { path in
+                path.move(to: CGPoint(x: size * 0.5, y: 0))
+                path.addLine(to: CGPoint(x: size, y: size * 0.48))
+                path.addLine(to: CGPoint(x: size * 0.5, y: size * 0.68))
+                path.addLine(to: CGPoint(x: 0, y: size * 0.48))
+                path.closeSubpath()
+            }
+            .fill(Color.white)
+            .frame(width: size, height: size * 0.68)
+
+            Path { path in
+                path.move(to: CGPoint(x: 0, y: 0))
+                path.addLine(to: CGPoint(x: size * 0.5, y: size * 0.3))
+                path.addLine(to: CGPoint(x: size, y: 0))
+                path.addLine(to: CGPoint(x: size * 0.5, y: size * 0.72))
+                path.closeSubpath()
+            }
+            .fill(Color.white.opacity(0.82))
+            .frame(width: size, height: size * 0.36)
+        }
+        .frame(width: size, height: size * 1.04)
+    }
+}
+
+struct StablecoinIconMark: View {
+    let size: CGFloat
+    let symbol: String
+    let color: Color
+
+    var body: some View {
+        ZStack {
+            Circle()
+                .fill(color)
+                .frame(width: size, height: size)
+
+            Circle()
+                .stroke(Color.white.opacity(0.9), lineWidth: max(1, size * 0.07))
+                .frame(width: size * 0.68, height: size * 0.68)
+
+            Text(symbol)
+                .font(.system(size: size * 0.46, weight: .bold))
+                .foregroundColor(.white)
+                .lineLimit(1)
+                .minimumScaleFactor(0.6)
+        }
+    }
+}
+
+struct PolygonIconMark: View {
+    let size: CGFloat
+
+    var body: some View {
+        ZStack {
+            Circle()
+                .fill(Color(red: 0.51, green: 0.29, blue: 0.93))
+                .frame(width: size, height: size)
+
+            HStack(spacing: size * 0.02) {
+                hexagon
+                hexagon
+                    .offset(y: size * 0.11)
+            }
+            .overlay(
+                Rectangle()
+                    .fill(Color.white)
+                    .frame(width: size * 0.24, height: size * 0.07)
+                    .rotationEffect(.degrees(-22))
+            )
+        }
+    }
+
+    private var hexagon: some View {
+        Image(systemName: "hexagon")
+            .font(.system(size: size * 0.35, weight: .bold))
+            .foregroundColor(.white)
     }
 }
 

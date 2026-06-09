@@ -1,3 +1,5 @@
+// Autor Lukas Helebrandt, 2026
+
 //
 //  BitcoinService.swift
 //  Wpayin_Wallet
@@ -328,11 +330,11 @@ class BitcoinService {
         // For MVP: Simplified implementation
         // In production: Use proper UTXO selection and WalletCore Bitcoin signing
         
-        print("⚠️ Bitcoin transaction simplified for MVP")
-        print("   From: \(fromAddress)")
-        print("   To: \(toAddress)")
-        print("   Amount: \(amount) satoshis")
-        print("   Fee: \(feeRate) sat/vB")
+        Logger.log("⚠️ Bitcoin transaction simplified for MVP")
+        Logger.log("   From: \(fromAddress)")
+        Logger.log("   To: \(toAddress)")
+        Logger.log("   Amount: \(amount) satoshis")
+        Logger.log("   Fee: \(feeRate) sat/vB")
         
         // TODO: implement real transaction construction
         return ""

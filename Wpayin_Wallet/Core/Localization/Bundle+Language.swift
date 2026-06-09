@@ -1,3 +1,5 @@
+// Autor Lukas Helebrandt, 2026
+
 //
 //  Bundle+Language.swift
 //  Wpayin_Wallet

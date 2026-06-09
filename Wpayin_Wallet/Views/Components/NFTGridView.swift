@@ -1,3 +1,5 @@
+// Autor Lukas Helebrandt, 2026
+
 //
 //  NFTGridView.swift
 //  Wpayin_Wallet
@@ -58,7 +60,7 @@ struct NFTCard: View {
                                         ProgressView()
                                             .progressViewStyle(CircularProgressViewStyle(tint: WpayinColors.primary))
                                             .scaleEffect(0.7)
-                                        Text("Loading...")
+                                        Text("Loading...".localized)
                                             .font(.system(size: 10))
                                             .foregroundColor(WpayinColors.textTertiary)
                                     }
@@ -202,7 +204,7 @@ struct NFTDetailView: View {
                                         Image(systemName: "exclamationmark.triangle")
                                             .font(.system(size: 48))
                                             .foregroundColor(WpayinColors.error)
-                                        Text("Failed to load NFT image")
+                                        Text("Failed to load NFT image".localized)
                                             .font(.system(size: 14))
                                             .foregroundColor(WpayinColors.textSecondary)
                                     }
@@ -215,7 +217,7 @@ struct NFTDetailView: View {
                                     VStack(spacing: 12) {
                                         ProgressView()
                                             .progressViewStyle(CircularProgressViewStyle(tint: WpayinColors.primary))
-                                        Text("Loading NFT...")
+                                        Text("Loading NFT...".localized)
                                             .font(.system(size: 14))
                                             .foregroundColor(WpayinColors.textSecondary)
                                     }
@@ -258,7 +260,7 @@ struct NFTDetailView: View {
 
                             Spacer()
 
-                            Text("Token ID: \(nft.tokenId)")
+                            Text("Token ID: %@".localized(nft.tokenId))
                                 .font(.system(size: 12, design: .monospaced))
                                 .foregroundColor(WpayinColors.textTertiary)
                         }
@@ -270,7 +272,7 @@ struct NFTDetailView: View {
 
                         // Contract Address
                         VStack(alignment: .leading, spacing: 8) {
-                            Text("Contract Address")
+                            Text("Contract Address".localized)
                                 .font(.system(size: 12, weight: .medium))
                                 .foregroundColor(WpayinColors.textSecondary)
                                 .textCase(.uppercase)
@@ -302,11 +304,11 @@ struct NFTDetailView: View {
                 .padding(20)
             }
             .background(WpayinColors.background)
-            .navigationTitle("NFT Details")
+            .navigationTitle("NFT Details".localized)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
-                    Button("Done") {
+                    Button("Done".localized) {
                         dismiss()
                     }
                     .foregroundColor(WpayinColors.primary)

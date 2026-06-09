@@ -1,3 +1,5 @@
+// Autor Lukas Helebrandt, 2026
+
 //
 //  TermsAndConditionsStep.swift
 //  Wpayin_Wallet
@@ -105,7 +107,7 @@ struct TermsSection: View {
                 .frame(width: 24, height: 24)
 
             VStack(alignment: .leading, spacing: 8) {
-                Text(title)
+                Text(title.localized)
                     .font(.wpayinSubheadline)
                     .foregroundColor(WpayinColors.text)
 

@@ -1,3 +1,5 @@
+// Autor Lukas Helebrandt, 2026
+
 //
 //  BuyDebugView.swift
 //  Wpayin_Wallet

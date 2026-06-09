@@ -1,3 +1,5 @@
+// Autor Lukas Helebrandt, 2026
+
 //
 //  SwapView.swift
 //  Wpayin_Wallet
@@ -8,9 +10,17 @@
 import SwiftUI
 
 enum GasSpeed: String, CaseIterable {
-    case slow = "Slow"
-    case standard = "Standard"
-    case fast = "Fast"
+    case slow
+    case standard
+    case fast
+
+    var displayName: String {
+        switch self {
+        case .slow: return "🐢 \("Slow".localized)"
+        case .standard: return "🐰 \("Standard".localized)"
+        case .fast: return "⚡ \("Fast".localized)"
+        }
+    }
 
     var multiplier: Double {
         switch self {
@@ -32,6 +42,7 @@ enum GasSpeed: String, CaseIterable {
 struct SwapView: View {
     @EnvironmentObject var walletManager: WalletManager
     @EnvironmentObject var settingsManager: SettingsManager
+    private let initialFromToken: Token?
     @State private var selectedFromToken: Token?
     @State private var selectedToToken: Token?
     @State private var fromAmount = ""
@@ -46,10 +57,17 @@ struct SwapView: View {
     @State private var selectedNetwork: BlockchainPlatform = .ethereum
     @State private var showNetworkSelector = false
 
+    init(initialFromToken: Token? = nil) {
+        self.initialFromToken = initialFromToken
+        let initialNetwork = initialFromToken.flatMap { BlockchainPlatform(rawValue: $0.blockchain.rawValue) } ?? .ethereum
+        _selectedNetwork = State(initialValue: initialNetwork)
+        _selectedFromToken = State(initialValue: initialFromToken)
+    }
+
     private var availableTokens: [Token] {
-        walletManager.visibleTokens.filter { 
+        walletManager.visibleSupportedTokens.filter {
             $0.blockchain.rawValue == selectedNetwork.rawValue && 
-            $0.blockchain != .bitcoin  // Bitcoin doesn't support swaps
+            Self.supportedSwapBlockchains.contains($0.blockchain)
         }
     }
     
@@ -57,11 +75,20 @@ struct SwapView: View {
         walletManager.availableBlockchains
             .filter { 
                 $0.network == .mainnet && 
-                $0.isEnabled &&
-                $0.blockchainType != .bitcoin  // Exclude Bitcoin from swap networks
+                walletManager.selectedBlockchains.contains($0.platform) &&
+                ($0.blockchainType.map { Self.supportedSwapBlockchains.contains($0) } ?? false)
             }
             .map { $0.platform }
     }
+
+    private static let supportedSwapBlockchains: Set<BlockchainType> = [
+        .ethereum,
+        .bsc,
+        .polygon,
+        .arbitrum,
+        .optimism,
+        .base
+    ]
 
     private var swapRate: Double {
         guard let fromToken = selectedFromToken,
@@ -133,11 +160,11 @@ struct SwapView: View {
                 // Header
                 HStack {
                     VStack(alignment: .leading, spacing: 4) {
-                        Text("Swap")
+                        Text(L10n.Swap.title.localized)
                             .font(.system(size: 28, weight: .bold))
                             .foregroundColor(WpayinColors.text)
 
-                        Text("Exchange tokens instantly")
+                        Text(L10n.Swap.subtitle.localized)
                             .font(.system(size: 16))
                             .foregroundColor(WpayinColors.textSecondary)
                     }
@@ -164,7 +191,7 @@ struct SwapView: View {
                         VStack(spacing: 0) {
                             // From Token Section
                             ModernTokenSelector(
-                                title: "From",
+                                title: L10n.Swap.from.localized,
                                 selectedToken: selectedFromToken,
                                 amount: $fromAmount,
                                 isInput: true,
@@ -197,7 +224,7 @@ struct SwapView: View {
 
                             // To Token Section
                             ModernTokenSelector(
-                                title: "To (estimated)",
+                                title: L10n.Swap.to.localized,
                                 selectedToken: selectedToToken,
                                 amount: .constant(String(format: "%.6f", estimatedToAmount)),
                                 isInput: false,
@@ -239,14 +266,14 @@ struct SwapView: View {
                                 Button(action: { showGasSettings.toggle() }) {
                                     HStack {
                                         VStack(alignment: .leading, spacing: 2) {
-                                            Text("Network Fee")
+                                            Text(L10n.Swap.networkFee.localized)
                                                 .font(.system(size: 14))
                                                 .foregroundColor(WpayinColors.textSecondary)
 
                                             HStack(spacing: 4) {
                                                 Image(systemName: selectedGasSpeed.icon)
                                                     .font(.system(size: 10))
-                                                Text(selectedGasSpeed.rawValue)
+                                                Text(selectedGasSpeed.displayName)
                                                     .font(.system(size: 12))
                                             }
                                             .foregroundColor(WpayinColors.primary)
@@ -277,13 +304,13 @@ struct SwapView: View {
 
                                 // Slippage Settings
                                 HStack {
-                                    Text("Slippage: \(String(format: "%.1f", slippage))%")
+                                    Text("\(L10n.Swap.slippage.localized): \(String(format: "%.1f", slippage))%")
                                         .font(.system(size: 14))
                                         .foregroundColor(WpayinColors.textSecondary)
 
                                     Spacer()
 
-                                    Button("Edit") {
+                                    Button(L10n.Action.edit.localized) {
                                         showSlippageSettings = true
                                     }
                                     .font(.system(size: 14, weight: .medium))
@@ -315,7 +342,7 @@ struct SwapView: View {
                             performSwap()
                         }
                     }) {
-                        Text(isSwapping ? "Swapping..." : "Swap")
+                        Text(isSwapping ? "Swapping...".localized : L10n.Swap.title.localized)
                             .font(.system(size: 18, weight: .semibold))
                             .foregroundColor(.white)
                             .frame(maxWidth: .infinity)
@@ -362,33 +389,68 @@ struct SwapView: View {
             )
         }
         .onAppear {
+            ensureSelectedNetworkIsAvailable()
             if selectedFromToken == nil && !availableTokens.isEmpty {
                 selectedFromToken = availableTokens.first
             }
-            if selectedToToken == nil && availableTokens.count > 1 {
-                selectedToToken = availableTokens[1]
+            if selectedToToken == nil {
+                selectedToToken = firstAvailableToken(excluding: selectedFromToken)
             }
         }
         .onChange(of: selectedNetwork) { _ in
             // Reset token selection when network changes
             selectedFromToken = availableTokens.first
-            selectedToToken = availableTokens.count > 1 ? availableTokens[1] : nil
+            selectedToToken = firstAvailableToken(excluding: selectedFromToken)
             fromAmount = ""
+        }
+        .onChange(of: walletManager.selectedBlockchains) { _ in
+            ensureSelectedNetworkIsAvailable()
         }
     }
 
+    private func ensureSelectedNetworkIsAvailable() {
+        guard !availableNetworks.isEmpty else {
+            selectedFromToken = nil
+            selectedToToken = nil
+            return
+        }
+
+        if !availableNetworks.contains(selectedNetwork) {
+            selectedNetwork = availableNetworks.first ?? .ethereum
+        }
+
+        if selectedFromToken == nil || selectedFromToken?.blockchain.rawValue != selectedNetwork.rawValue {
+            selectedFromToken = availableTokens.first
+        }
+        if selectedToToken == nil || selectedToToken?.blockchain.rawValue != selectedNetwork.rawValue {
+            selectedToToken = firstAvailableToken(excluding: selectedFromToken)
+        }
+        if let from = selectedFromToken, let to = selectedToToken, tokenIdentity(from) == tokenIdentity(to) {
+            selectedToToken = firstAvailableToken(excluding: from)
+        }
+    }
+
+    private func firstAvailableToken(excluding token: Token?) -> Token? {
+        guard let token else { return availableTokens.first }
+        return availableTokens.first { tokenIdentity($0) != tokenIdentity(token) }
+    }
+
+    private func tokenIdentity(_ token: Token) -> String {
+        "\(token.blockchain.rawValue):\((token.contractAddress ?? "native").lowercased())"
+    }
+
     private var invalidSwapReason: String {
-        guard let from = selectedFromToken else { return "Select a token to swap from" }
-        guard let to = selectedToToken else { return "Select a token to swap to" }
-        guard let amount = Double(fromAmount) else { return "Enter a valid amount" }
+        guard let from = selectedFromToken else { return "Select a token to swap from".localized }
+        guard let to = selectedToToken else { return "Select a token to swap to".localized }
+        guard let amount = Double(fromAmount) else { return "Enter a valid amount".localized }
 
         if from.id == to.id {
-            return "Cannot swap the same token"
+            return "Cannot swap the same token".localized
         }
         if amount > from.balance {
-            return "Insufficient \(from.symbol) balance"
+            return L10n.Swap.insufficient.localized(from.symbol)
         }
-        return "Enter an amount to swap"
+        return "Enter an amount to swap".localized
     }
 
     private func swapTokens() {
@@ -413,7 +475,7 @@ struct SwapView: View {
                 }
 
                 // Get swap quote
-                print("📊 Getting swap quote...")
+                Logger.log("📊 Getting swap quote...")
                 let quote = try await SwapService.shared.getQuote(
                     fromToken: fromToken,
                     toToken: toToken,
@@ -421,19 +483,19 @@ struct SwapView: View {
                     slippage: slippage
                 )
 
-                print("✅ Quote received: \(quote.amountOut) \(toToken.symbol)")
-                print("💰 Minimum amount out: \(quote.amountOutMin)")
-                print("⛽ Estimated gas: \(quote.gasEstimate)")
+                Logger.log("✅ Quote received: \(quote.amountOut) \(toToken.symbol)")
+                Logger.log("💰 Minimum amount out: \(quote.amountOutMin)")
+                Logger.log("⛽ Estimated gas: \(quote.gasEstimate)")
 
                 // Execute swap
-                print("🔄 Executing swap...")
+                Logger.log("🔄 Executing swap...")
                 let result = try await SwapService.shared.executeSwap(
                     quote: quote,
                     fromToken: fromToken,
                     toToken: toToken
                 )
 
-                print("✅ Swap successful! TX: \(result.transactionHash)")
+                Logger.log("✅ Swap successful! TX: \(result.transactionHash)")
 
                 await MainActor.run {
                     isSwapping = false
@@ -445,7 +507,7 @@ struct SwapView: View {
                     }
                 }
             } catch {
-                print("❌ Swap failed: \(error.localizedDescription)")
+                Logger.log("❌ Swap failed: \(error.localizedDescription)")
                 await MainActor.run {
                     isSwapping = false
                     // Show error to user
@@ -467,9 +529,9 @@ struct ModernTokenSelector: View {
     @EnvironmentObject var settingsManager: SettingsManager
 
     var body: some View {
-        VStack(spacing: 16) {
+        VStack(spacing: 12) {
             HStack {
-                Text(title)
+                Text(title.localized)
                     .font(.system(size: 14, weight: .medium))
                     .foregroundColor(WpayinColors.textSecondary)
 
@@ -477,15 +539,15 @@ struct ModernTokenSelector: View {
 
                 if let token = selectedToken {
                     HStack(spacing: 8) {
-                        Text("Balance: \(String(format: "%.4f", token.balance))")
+                        Text("\(L10n.Tokens.balance.localized): \(TokenIconHelper.formattedBalance(token.balance))")
                             .font(.system(size: 12))
                             .foregroundColor(WpayinColors.textSecondary)
 
                         if isInput && token.balance > 0 {
                             Button(action: {
-                                amount = String(format: "%.6f", token.balance)
+                                amount = TokenIconHelper.formattedBalance(token.balance)
                             }) {
-                                Text("MAX")
+                                Text("MAX".localized)
                                     .font(.system(size: 11, weight: .bold))
                                     .foregroundColor(WpayinColors.primary)
                                     .padding(.horizontal, 8)
@@ -500,61 +562,42 @@ struct ModernTokenSelector: View {
                 }
             }
 
-            HStack(spacing: 16) {
+            HStack(spacing: 10) {
                 // Token Selector
                 Button(action: onTokenSelect) {
-                    HStack(spacing: 12) {
+                    HStack(spacing: 8) {
                         if let token = selectedToken {
-                            // Token Icon
-                            if let iconUrl = token.iconUrl, let url = URL(string: iconUrl) {
-                                AsyncImage(url: url) { image in
-                                    image
-                                        .resizable()
-                                        .aspectRatio(contentMode: .fill)
-                                } placeholder: {
-                                    Circle()
-                                        .fill(tokenGradient(for: token))
-                                        .overlay(
-                                            Text(token.symbol.prefix(2))
-                                                .font(.system(size: 12, weight: .bold))
-                                                .foregroundColor(.white)
-                                        )
-                                }
-                                .frame(width: 36, height: 36)
-                                .clipShape(Circle())
-                            } else {
-                                Circle()
-                                    .fill(tokenGradient(for: token))
-                                    .frame(width: 36, height: 36)
-                                    .overlay(
-                                        Text(token.symbol.prefix(2))
-                                            .font(.system(size: 12, weight: .bold))
-                                            .foregroundColor(.white)
-                                    )
-                            }
+                            TokenIconView(token: token, size: 30, showNetworkBadge: true)
 
                             VStack(alignment: .leading, spacing: 2) {
                                 Text(token.symbol)
-                                    .font(.system(size: 16, weight: .semibold))
+                                    .font(.system(size: 14, weight: .semibold))
                                     .foregroundColor(WpayinColors.text)
+                                    .lineLimit(1)
+                                    .minimumScaleFactor(0.75)
+                                    .fixedSize(horizontal: true, vertical: false)
 
                                 Text(token.name)
-                                    .font(.system(size: 12))
+                                    .font(.system(size: 10))
                                     .foregroundColor(WpayinColors.textSecondary)
                                     .lineLimit(1)
+                                    .minimumScaleFactor(0.7)
                             }
                         } else {
-                            Text("Select Token")
-                                .font(.system(size: 16, weight: .medium))
+                            Text(L10n.Tokens.selectToken.localized)
+                                .font(.system(size: 14, weight: .medium))
                                 .foregroundColor(WpayinColors.textSecondary)
+                                .lineLimit(1)
+                                .minimumScaleFactor(0.75)
                         }
 
                         Image(systemName: "chevron.down")
                             .font(.system(size: 12, weight: .medium))
                             .foregroundColor(WpayinColors.textTertiary)
                     }
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 8)
+                    .frame(width: 132, alignment: .leading)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 7)
                     .background(
                         RoundedRectangle(cornerRadius: 12)
                             .fill(WpayinColors.background)
@@ -567,14 +610,18 @@ struct ModernTokenSelector: View {
                 VStack(alignment: .trailing, spacing: 4) {
                     if isInput {
                         TextField("0.0", text: $amount)
-                            .font(.system(size: 24, weight: .semibold))
+                            .font(.system(size: 20, weight: .semibold))
                             .foregroundColor(WpayinColors.text)
                             .keyboardType(.decimalPad)
                             .multilineTextAlignment(.trailing)
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.7)
                     } else {
                         Text(amount.isEmpty || amount == "0.000000" ? "0.0" : amount)
-                            .font(.system(size: 24, weight: .semibold))
+                            .font(.system(size: 20, weight: .semibold))
                             .foregroundColor(WpayinColors.textSecondary)
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.7)
                     }
 
                     if let token = selectedToken, let amountValue = Double(amount), amountValue > 0 {
@@ -585,7 +632,7 @@ struct ModernTokenSelector: View {
                 }
             }
         }
-        .padding(20)
+        .padding(16)
     }
 
     private func tokenGradient(for token: Token) -> LinearGradient {
@@ -626,64 +673,44 @@ struct TokenPickerView: View {
                     }
                     .font(.system(size: 16, weight: .medium))
                     .foregroundColor(WpayinColors.primary)
+                    .frame(width: 64, alignment: .leading)
 
                     Spacer()
 
-                    Text("Select Token")
-                        .font(.system(size: 20, weight: .bold))
+                    Text(L10n.Tokens.selectToken.localized)
+                        .font(.system(size: 18, weight: .bold))
                         .foregroundColor(WpayinColors.text)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.75)
 
                     Spacer()
 
                     Text("")
                         .font(.system(size: 16, weight: .medium))
                         .foregroundColor(.clear)
+                        .frame(width: 64)
                 }
                 .padding(20)
 
                 // Token List
                 ScrollView {
-                    LazyVStack(spacing: 12) {
+                    LazyVStack(spacing: 8) {
                         ForEach(tokens) { token in
                             Button(action: {
                                 onSelect(token)
                                 dismiss()
                             }) {
-                                HStack(spacing: 16) {
-                                    // Token Icon
-                                    if let iconUrl = token.iconUrl, let url = URL(string: iconUrl) {
-                                        AsyncImage(url: url) { image in
-                                            image
-                                                .resizable()
-                                                .aspectRatio(contentMode: .fill)
-                                        } placeholder: {
-                                            Circle()
-                                                .fill(tokenGradient(for: token))
-                                                .overlay(
-                                                    Text(token.symbol.prefix(2))
-                                                        .font(.system(size: 14, weight: .bold))
-                                                        .foregroundColor(.white)
-                                                )
-                                        }
-                                        .frame(width: 40, height: 40)
-                                        .clipShape(Circle())
-                                    } else {
-                                        Circle()
-                                            .fill(tokenGradient(for: token))
-                                            .frame(width: 40, height: 40)
-                                            .overlay(
-                                                Text(token.symbol.prefix(2))
-                                                    .font(.system(size: 14, weight: .bold))
-                                                    .foregroundColor(.white)
-                                            )
-                                    }
+                                HStack(spacing: 12) {
+                                    TokenIconView(token: token, size: 34, showNetworkBadge: true)
 
                                     VStack(alignment: .leading, spacing: 4) {
                                         let tokenPlatform = BlockchainPlatform(rawValue: token.blockchain.rawValue) ?? .ethereum
                                         HStack(spacing: 6) {
                                             Text(token.symbol)
-                                                .font(.system(size: 16, weight: .semibold))
+                                                .font(.system(size: 14, weight: .semibold))
                                                 .foregroundColor(WpayinColors.text)
+                                                .lineLimit(1)
+                                                .minimumScaleFactor(0.75)
                                             
                                             if let proto = token.tokenProtocol {
                                                 TokenProtocolBadge(tokenProtocol: proto, size: .small)
@@ -700,26 +727,32 @@ struct TokenPickerView: View {
                                                 )
                                             
                                             Text(tokenPlatform.name)
-                                                .font(.system(size: 12))
+                                                .font(.system(size: 11))
                                                 .foregroundColor(WpayinColors.textSecondary)
+                                                .lineLimit(1)
                                         }
 
                                         Text(token.name)
-                                            .font(.system(size: 14))
+                                            .font(.system(size: 12))
                                             .foregroundColor(WpayinColors.textSecondary)
+                                            .lineLimit(1)
                                     }
-
-                                    Spacer()
+                                    .frame(maxWidth: .infinity, alignment: .leading)
 
                                     VStack(alignment: .trailing, spacing: 4) {
-                                        Text(String(format: "%.4f", token.balance))
-                                            .font(.system(size: 16, weight: .medium))
+                                        Text(TokenIconHelper.formattedBalance(token.balance))
+                                            .font(.system(size: 13, weight: .medium))
                                             .foregroundColor(WpayinColors.text)
+                                            .lineLimit(1)
+                                            .minimumScaleFactor(0.7)
 
                                         Text(token.totalValue.formatted(as: settingsManager.selectedCurrency))
-                                            .font(.system(size: 14))
+                                            .font(.system(size: 12))
                                             .foregroundColor(WpayinColors.textSecondary)
+                                            .lineLimit(1)
+                                            .minimumScaleFactor(0.75)
                                     }
+                                    .frame(width: 78, alignment: .trailing)
 
                                     if selectedToken?.id == token.id {
                                         Image(systemName: "checkmark.circle.fill")
@@ -727,7 +760,7 @@ struct TokenPickerView: View {
                                             .foregroundColor(WpayinColors.primary)
                                     }
                                 }
-                                .padding(16)
+                                .padding(12)
                                 .background(
                                     RoundedRectangle(cornerRadius: 12)
                                         .fill(selectedToken?.id == token.id ? WpayinColors.primary.opacity(0.1) : WpayinColors.surface)
@@ -797,7 +830,7 @@ struct GasSettingsSheet: View {
 
                                 // Info
                                 VStack(alignment: .leading, spacing: 4) {
-                                    Text(speed.rawValue)
+                                    Text(speed.displayName)
                                         .font(.system(size: 16, weight: .semibold))
                                         .foregroundColor(WpayinColors.text)
 
@@ -838,11 +871,11 @@ struct GasSettingsSheet: View {
                 Spacer()
             }
             .background(WpayinColors.background)
-            .navigationTitle("Gas Speed")
+            .navigationTitle(L10n.Swap.gasSpeed.localized)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
-                    Button("Done") {
+                    Button(L10n.Action.done.localized) {
                         dismiss()
                     }
                     .foregroundColor(WpayinColors.primary)
@@ -862,11 +895,11 @@ struct SlippageSettingsSheet: View {
     var body: some View {
         NavigationView {
             VStack(spacing: 24) {
-                Text("Slippage Tolerance")
+                Text(L10n.Swap.slippageTolerance.localized)
                     .font(.system(size: 24, weight: .bold))
                     .foregroundColor(WpayinColors.text)
 
-                Text("Your transaction will revert if the price changes unfavorably by more than this percentage")
+                Text(L10n.Swap.slippageWarning.localized)
                     .font(.system(size: 16))
                     .foregroundColor(WpayinColors.textSecondary)
                     .multilineTextAlignment(.center)
@@ -892,12 +925,12 @@ struct SlippageSettingsSheet: View {
                     }
 
                     HStack {
-                        TextField("Custom %", text: $customSlippage)
+                        TextField("Custom %".localized, text: $customSlippage)
                             .font(.system(size: 16))
                             .keyboardType(.decimalPad)
                             .textFieldStyle(RoundedBorderTextFieldStyle())
 
-                        Button("Set") {
+                        Button(L10n.Action.set.localized) {
                             if let value = Double(customSlippage), value > 0, value <= 50 {
                                 slippage = value
                             }
@@ -918,7 +951,7 @@ struct SlippageSettingsSheet: View {
             .navigationBarHidden(true)
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
-                    Button("Done") {
+                    Button(L10n.Action.done.localized) {
                         dismiss()
                     }
                 }
@@ -935,35 +968,14 @@ struct NetworkSelectorButton: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             // Header
-            Text("Select Network")
+            Text(L10n.Swap.selectNetwork.localized)
                 .font(.system(size: 14, weight: .medium))
                 .foregroundColor(WpayinColors.textSecondary)
             
             // Network Selector (styled like token selector)
             Button(action: onTap) {
                 HStack(spacing: 12) {
-                    // Network icon
-                    if let iconName = selectedNetwork.assetIconName {
-                        Image(iconName)
-                            .resizable()
-                            .aspectRatio(contentMode: .fit)
-                            .frame(width: 36, height: 36)
-                    } else {
-                        Circle()
-                            .fill(
-                                LinearGradient(
-                                    gradient: Gradient(colors: [selectedNetwork.color, selectedNetwork.color.opacity(0.7)]),
-                                    startPoint: .topLeading,
-                                    endPoint: .bottomTrailing
-                                )
-                            )
-                            .frame(width: 36, height: 36)
-                            .overlay(
-                                Image(systemName: selectedNetwork.iconName)
-                                    .font(.system(size: 16, weight: .medium))
-                                    .foregroundColor(.white)
-                            )
-                    }
+                    PlatformIconView(platform: selectedNetwork, size: 32)
                     
                     VStack(alignment: .leading, spacing: 2) {
                         Text(selectedNetwork.name)
@@ -1012,7 +1024,7 @@ struct NetworkSelectorSheet: View {
 
                     Spacer()
 
-                    Text("Select Network")
+                    Text(L10n.Swap.selectNetwork.localized)
                         .font(.system(size: 20, weight: .bold))
                         .foregroundColor(WpayinColors.text)
 
@@ -1033,28 +1045,7 @@ struct NetworkSelectorSheet: View {
                                 dismiss()
                             }) {
                                 HStack(spacing: 16) {
-                                    // Network icon
-                                    if let iconName = network.assetIconName {
-                                        Image(iconName)
-                                            .resizable()
-                                            .aspectRatio(contentMode: .fit)
-                                            .frame(width: 40, height: 40)
-                                    } else {
-                                        Circle()
-                                            .fill(
-                                                LinearGradient(
-                                                    gradient: Gradient(colors: [network.color, network.color.opacity(0.7)]),
-                                                    startPoint: .topLeading,
-                                                    endPoint: .bottomTrailing
-                                                )
-                                            )
-                                            .frame(width: 40, height: 40)
-                                            .overlay(
-                                                Image(systemName: network.iconName)
-                                                    .font(.system(size: 18, weight: .medium))
-                                                    .foregroundColor(.white)
-                                            )
-                                    }
+                                    PlatformIconView(platform: network, size: 36)
                                     
                                     VStack(alignment: .leading, spacing: 4) {
                                         Text(network.name)

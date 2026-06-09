@@ -1,3 +1,5 @@
+// Autor Lukas Helebrandt, 2026
+
 //
 //  CreateWalletFlow.swift
 //  Wpayin_Wallet

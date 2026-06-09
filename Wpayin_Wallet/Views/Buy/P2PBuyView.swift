@@ -1,3 +1,5 @@
+// Autor Lukas Helebrandt, 2026
+
 //
 //  P2PBuyView.swift
 //  Wpayin_Wallet
@@ -184,6 +186,11 @@ struct P2PBuyView: View {
                 }
             }
             .navigationBarTitleDisplayMode(.inline)
+            .onAppear {
+                if fiatCurrencies.contains(settingsManager.selectedCurrency.rawValue) {
+                    selectedFiatCurrency = settingsManager.selectedCurrency.rawValue
+                }
+            }
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
                     Button(L10n.Action.cancel.localized) {
@@ -358,11 +365,31 @@ struct P2POffersView: View {
     }
 
     private var p2pOffers: [P2POffer] {
-        [
+        let rate = CurrencyConversionService.shared.rate(for: Currency(rawValue: fiatCurrency) ?? .usd)
+        return [
             P2POffer(id: "1", seller: "CryptoTrader123", rating: 4.8, trades: 156, price: 2650.00, available: 2.5, limit: "100 - 5000"),
             P2POffer(id: "2", seller: "BitcoinBob", rating: 4.9, trades: 324, price: 2645.50, available: 1.8, limit: "50 - 3000"),
             P2POffer(id: "3", seller: "ETHQueen", rating: 5.0, trades: 89, price: 2655.00, available: 3.2, limit: "200 - 10000")
-        ]
+        ].map { offer in
+            P2POffer(
+                id: offer.id,
+                seller: offer.seller,
+                rating: offer.rating,
+                trades: offer.trades,
+                price: offer.price * rate,
+                available: offer.available,
+                limit: convertedLimit(offer.limit, rate: rate)
+            )
+        }
+    }
+
+    private func convertedLimit(_ limit: String, rate: Double) -> String {
+        let parts = limit
+            .split(separator: "-")
+            .compactMap { Double($0.trimmingCharacters(in: .whitespaces)) }
+
+        guard parts.count == 2 else { return limit }
+        return "\(Int(parts[0] * rate)) - \(Int(parts[1] * rate))"
     }
 }
 

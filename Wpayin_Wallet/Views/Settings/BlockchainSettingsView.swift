@@ -1,3 +1,5 @@
+// Autor Lukas Helebrandt, 2026
+
 //
 //  BlockchainSettingsView.swift
 //  Wpayin_Wallet
@@ -20,11 +22,11 @@ struct BlockchainSettingsView: View {
                     VStack(spacing: 24) {
                         // Header
                         VStack(alignment: .leading, spacing: 8) {
-                            Text("Manage Networks")
+                            Text("Manage Networks".localized)
                                 .font(.system(size: 24, weight: .bold))
                                 .foregroundColor(WpayinColors.text)
 
-                            Text("Enable or disable blockchain networks")
+                            Text("Enable or disable blockchain networks".localized)
                                 .font(.system(size: 14))
                                 .foregroundColor(WpayinColors.textSecondary)
                         }
@@ -49,7 +51,7 @@ struct BlockchainSettingsView: View {
                         .padding(.horizontal, 20)
 
                         // Info text
-                        Text("Enabling a network will fetch balances and transactions for that blockchain.")
+                        Text("Enabling a network will fetch balances and transactions for that blockchain.".localized)
                             .font(.system(size: 13))
                             .foregroundColor(WpayinColors.textSecondary)
                             .multilineTextAlignment(.center)
@@ -61,7 +63,7 @@ struct BlockchainSettingsView: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
-                    Button("Done") {
+                    Button("Done".localized) {
                         dismiss()
                     }
                     .foregroundColor(WpayinColors.primary)
@@ -78,22 +80,7 @@ struct BlockchainRow: View {
 
     var body: some View {
         HStack(spacing: 16) {
-            // Blockchain Icon
-            if let iconName = blockchain.platform.assetIconName {
-                Image(iconName)
-                    .resizable()
-                    .aspectRatio(contentMode: .fit)
-                    .frame(width: 44, height: 44)
-            } else {
-                Circle()
-                    .fill(blockchainColor)
-                    .frame(width: 44, height: 44)
-                    .overlay(
-                        Text(blockchain.platform.displayIcon)
-                            .font(.system(size: 18, weight: .bold))
-                            .foregroundColor(.white)
-                    )
-            }
+            PlatformIconView(platform: blockchain.platform, size: 44)
 
             VStack(alignment: .leading, spacing: 4) {
                 Text(blockchain.platform.name)
@@ -101,7 +88,7 @@ struct BlockchainRow: View {
                     .foregroundColor(WpayinColors.text)
 
                 if let chainId = blockchain.chainId {
-                    Text("Chain ID: \(chainId)")
+                    Text("Chain ID: %@".localized("\(chainId)"))
                         .font(.system(size: 13))
                         .foregroundColor(WpayinColors.textSecondary)
                 }
@@ -120,26 +107,6 @@ struct BlockchainRow: View {
         .background(WpayinColors.surface)
     }
 
-    private var blockchainColor: Color {
-        switch blockchain.platform {
-        case .ethereum:
-            return Color.blue
-        case .bitcoin:
-            return Color.orange
-        case .polygon:
-            return Color.purple
-        case .bsc:
-            return Color.yellow
-        case .arbitrum:
-            return Color.cyan
-        case .optimism:
-            return Color.red
-        case .avalanche:
-            return Color.pink
-        default:
-            return WpayinColors.primary
-        }
-    }
 }
 
 #Preview {

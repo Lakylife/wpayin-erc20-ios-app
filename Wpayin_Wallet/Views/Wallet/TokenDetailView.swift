@@ -1,3 +1,5 @@
+// Autor Lukas Helebrandt, 2026
+
 //
 //  TokenDetailView.swift
 //  Wpayin_Wallet
@@ -172,13 +174,13 @@ struct TokenDetailView: View {
                     // Contract Info (for non-native tokens)
                     if !token.isNative, let contractAddress = token.contractAddress {
                         VStack(alignment: .leading, spacing: 12) {
-                            Text("Contract Information")
+                            Text("Contract Information".localized)
                                 .font(.system(size: 16, weight: .bold))
                                 .foregroundColor(WpayinColors.text)
 
                             VStack(spacing: 8) {
                                 HStack {
-                                    Text("Contract Address")
+                                    Text("Contract Address".localized)
                                         .font(.system(size: 14, weight: .medium))
                                         .foregroundColor(WpayinColors.textSecondary)
 
@@ -222,7 +224,7 @@ struct TokenDetailView: View {
                 // Recent Transactions Section
                 VStack(alignment: .leading, spacing: 16) {
                     HStack {
-                        Text("Recent Transactions")
+                        Text("Recent Transactions".localized)
                             .font(.system(size: 20, weight: .bold))
                             .foregroundColor(WpayinColors.text)
                         
@@ -234,7 +236,7 @@ struct TokenDetailView: View {
                                 .environmentObject(settingsManager)
                         ) {
                             HStack(spacing: 4) {
-                                Text("View All")
+                                Text("View All".localized)
                                     .font(.system(size: 15, weight: .semibold))
                                 Image(systemName: "chevron.right")
                                     .font(.system(size: 13, weight: .semibold))
@@ -249,7 +251,7 @@ struct TokenDetailView: View {
                                 .font(.system(size: 40))
                                 .foregroundColor(WpayinColors.textTertiary)
                             
-                            Text("No transactions yet")
+                            Text("No transactions yet".localized)
                                 .font(.system(size: 15))
                                 .foregroundColor(WpayinColors.textSecondary)
                         }
@@ -278,7 +280,7 @@ struct TokenDetailView: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
-                    Button("Done") {
+                    Button("Done".localized) {
                         dismiss()
                     }
                     .foregroundColor(WpayinColors.primary)
@@ -482,7 +484,7 @@ struct TokenActionButton: View {
                     .font(.system(size: 20))
                     .foregroundColor(WpayinColors.primary)
 
-                Text(title)
+                Text(title.localized)
                     .font(.system(size: 12, weight: .medium))
                     .foregroundColor(WpayinColors.text)
             }

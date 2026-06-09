@@ -1,3 +1,5 @@
+// Autor Lukas Helebrandt, 2026
+
 //
 //  AddTokenView.swift
 //  Wpayin_Wallet
@@ -30,11 +32,11 @@ struct AddTokenView: View {
                 ScrollView {
                     VStack(spacing: 32) {
                         VStack(spacing: 16) {
-                            Text("Add Token")
+                            Text("Add Token".localized)
                                 .font(.wpayinHeadline)
                                 .foregroundColor(WpayinColors.text)
 
-                            Text("Add a custom token to your wallet")
+                            Text("Add a custom token to your wallet".localized)
                                 .font(.wpayinBody)
                                 .foregroundColor(WpayinColors.textSecondary)
                                 .multilineTextAlignment(.center)
@@ -57,7 +59,7 @@ struct AddTokenView: View {
                             // Auto-fetch button
                             if isValidContractAddress && !autoFetched {
                                 WpayinButton(
-                                    title: isFetching ? "Fetching..." : "Auto-Fetch Token Info",
+                                    title: isFetching ? "Fetching...".localized : "Auto-Fetch Token Info".localized,
                                     style: .secondary
                                 ) {
                                     fetchTokenInfo()
@@ -95,7 +97,7 @@ struct AddTokenView: View {
                                 Button(action: resetForm) {
                                     HStack {
                                         Image(systemName: "arrow.counterclockwise")
-                                        Text("Reset & Enter Manually")
+                                        Text("Reset & Enter Manually".localized)
                                     }
                                     .font(.system(size: 14, weight: .medium))
                                     .foregroundColor(WpayinColors.textSecondary)
@@ -115,18 +117,18 @@ struct AddTokenView: View {
                     .padding(.top, 20)
                 }
             }
-            .navigationTitle("Add Token")
+            .navigationTitle("Add Token".localized)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
-                    Button("Cancel") {
+                    Button("Cancel".localized) {
                         dismiss()
                     }
                     .foregroundColor(WpayinColors.text)
                 }
 
                 ToolbarItem(placement: .navigationBarTrailing) {
-                    Button("Add") {
+                    Button("Add".localized) {
                         addToken()
                     }
                     .foregroundColor(isValidToken ? WpayinColors.primary : WpayinColors.textSecondary)
@@ -134,8 +136,8 @@ struct AddTokenView: View {
                 }
             }
         }
-        .alert("Error", isPresented: $showError) {
-            Button("OK") { }
+        .alert("Error".localized, isPresented: $showError) {
+            Button("OK".localized) { }
         } message: {
             Text(errorMessage)
         }
@@ -157,7 +159,11 @@ struct AddTokenView: View {
     
     private var availableEVMBlockchains: [BlockchainPlatform] {
         walletManager.availableBlockchains
-            .filter { $0.network == .mainnet && $0.isEnabled && $0.platform.blockchainType?.isEVM == true }
+            .filter {
+                $0.network == .mainnet &&
+                walletManager.selectedBlockchains.contains($0.platform) &&
+                $0.platform.blockchainType?.isEVM == true
+            }
             .map { $0.platform }
     }
 
@@ -172,7 +178,7 @@ struct AddTokenView: View {
                 guard let config = walletManager.availableBlockchains.first(where: { 
                     $0.platform == selectedBlockchain && $0.network == .mainnet 
                 }) else {
-                    throw NSError(domain: "AddToken", code: -1, userInfo: [NSLocalizedDescriptionKey: "Network not available"])
+                    throw NSError(domain: "AddToken", code: -1, userInfo: [NSLocalizedDescriptionKey: "Network not available".localized])
                 }
                 
                 let tokenInfo = try await APIService.shared.getTokenInfo(contractAddress: contractAddress, config: config)
@@ -183,14 +189,14 @@ struct AddTokenView: View {
                     tokenSymbol = tokenInfo.symbol
                     decimals = String(tokenInfo.decimals)
                     autoFetched = true
-                    print("✅ Auto-fetched token: \(tokenInfo.name) (\(tokenInfo.symbol)) on \(selectedBlockchain.name)")
+                    Logger.log("✅ Auto-fetched token: \(tokenInfo.name) (\(tokenInfo.symbol)) on \(selectedBlockchain.name)")
                 }
             } catch {
                 await MainActor.run {
                     isFetching = false
-                    errorMessage = "Failed to fetch token information. Please enter manually.\n\nError: \(error.localizedDescription)"
+                    errorMessage = "Failed to fetch token information. Please enter manually.\n\nError: %@".localized(error.localizedDescription)
                     showError = true
-                    print("❌ Failed to fetch token info: \(error)")
+                    Logger.log("❌ Failed to fetch token info: \(error)")
                 }
             }
         }
@@ -205,7 +211,7 @@ struct AddTokenView: View {
 
     private func addToken() {
         guard let decimalsInt = Int(decimals) else {
-            errorMessage = "Invalid decimals value"
+            errorMessage = "Invalid decimals value".localized
             showError = true
             return
         }
@@ -218,7 +224,7 @@ struct AddTokenView: View {
                 guard let config = walletManager.availableBlockchains.first(where: { 
                     $0.platform == selectedBlockchain && $0.network == .mainnet 
                 }) else {
-                    throw NSError(domain: "AddToken", code: -1, userInfo: [NSLocalizedDescriptionKey: "Network not available"])
+                    throw NSError(domain: "AddToken", code: -1, userInfo: [NSLocalizedDescriptionKey: "Network not available".localized])
                 }
                 
                 // Get token balance first
@@ -237,19 +243,19 @@ struct AddTokenView: View {
                     if let token = tokenWithBalance {
                         // Add token to wallet manager
                         walletManager.addCustomToken(token)
-                        print("✅ Token added: \(token.name) (\(token.symbol)) on \(selectedBlockchain.name) - Balance: \(token.balance)")
+                        Logger.log("✅ Token added: \(token.name) (\(token.symbol)) on \(selectedBlockchain.name) - Balance: \(token.balance)")
                         dismiss()
                     } else {
-                        errorMessage = "Failed to add token. Please try again."
+                        errorMessage = "Failed to add token. Please try again.".localized
                         showError = true
                     }
                 }
             } catch {
                 await MainActor.run {
                     isLoading = false
-                    errorMessage = "Failed to add token: \(error.localizedDescription)"
+                    errorMessage = "Failed to add token: %@".localized(error.localizedDescription)
                     showError = true
-                    print("❌ Failed to add token: \(error)")
+                    Logger.log("❌ Failed to add token: \(error)")
                 }
             }
         }
@@ -274,7 +280,7 @@ struct TokenInputField: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack {
-                Text(title)
+                Text(title.localized)
                     .font(.wpayinSubheadline)
                     .foregroundColor(WpayinColors.text)
 
@@ -286,7 +292,7 @@ struct TokenInputField: View {
                 Spacer()
             }
 
-            TextField(placeholder, text: $text)
+            TextField(placeholder.localized, text: $text)
                 .font(.wpayinBody)
                 .foregroundColor(WpayinColors.text)
                 .textInputAutocapitalization(.never)
@@ -306,7 +312,7 @@ struct TokenPreview: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
-            Text("Token Preview")
+            Text("Token Preview".localized)
                 .font(.wpayinSubheadline)
                 .foregroundColor(WpayinColors.text)
 
@@ -350,7 +356,7 @@ struct BlockchainSelectorField: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack {
-                Text("Network")
+                Text("Network".localized)
                     .font(.wpayinSubheadline)
                     .foregroundColor(WpayinColors.text)
                 
@@ -379,14 +385,13 @@ struct BlockchainSelectorField: View {
                 }
             } label: {
                 HStack {
-                    Circle()
-                        .fill(selectedBlockchain.color)
-                        .frame(width: 24, height: 24)
-                        .overlay(
-                            Image(systemName: selectedBlockchain.iconName)
-                                .font(.system(size: 12, weight: .medium))
-                                .foregroundColor(.white)
-                        )
+                    if let blockchainType = selectedBlockchain.blockchainType {
+                        NetworkIconView(blockchain: blockchainType, size: 24)
+                    } else {
+                        Circle()
+                            .fill(selectedBlockchain.color)
+                            .frame(width: 24, height: 24)
+                    }
                     
                     Text(selectedBlockchain.name)
                         .font(.wpayinBody)
