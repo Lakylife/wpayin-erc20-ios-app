@@ -1,60 +1,21 @@
-# Wpayin Wallet - Multi-Chain Crypto Wallet (v1.1.0)
+# Wpayin Wallet - Multi-Chain Crypto Wallet (v1.1.5)
 
-A comprehensive, secure, and feature-rich cryptocurrency wallet for iOS built with SwiftUI and Trust Wallet Core. Wpayin Wallet supports Bitcoin, Ethereum, ERC-20 tokens, NFTs, DeFi protocols, and token swaps with an elegant black/white/blue design.
+A comprehensive, secure, and feature-rich cryptocurrency wallet for iOS built with SwiftUI and Trust Wallet Core. Wpayin Wallet supports Bitcoin, Ethereum, Solana, ERC-20 tokens, NFTs, DeFi protocols, and token swaps with an updated black, white, and blue design.
 
 <p align="center">
-  <img src="./screenshots/demo.png" width="300" alt="Wpayin Wallet Demo">
+  <img src="./screenshots/20260609_app_update/01_launch.png" width="220" alt="Wpayin Wallet welcome screen">
+  <img src="./screenshots/20260609_app_update/02_home.png" width="220" alt="Wpayin Wallet home screen">
+  <img src="./screenshots/20260609_app_update/03_swap.png" width="220" alt="Wpayin Wallet swap screen">
 </p>
 
-## 🆕 What's New in Version 1.1.0
+## 🆕 What's New in Version 1.1.5
 
-### 🪙 Bitcoin Support
-- **Native SegWit (BIP84)**: `bc1...` addresses with lowest transaction fees
-- **Full Bitcoin Integration**: Balance viewing, sending, and receiving
-- **WalletCore Derivation**: Industry-standard BIP39/BIP44/BIP84 implementation
-- **Real-time Balance**: Direct blockchain queries via Blockstream API
-
-### 🔄 Real Token Swapping (DEX Integration)
-- **DEX Router Support**: Uniswap V2, PancakeSwap, QuickSwap, SushiSwap
-- **Multi-Chain Swaps**: Works on all EVM chains (Ethereum, BSC, Polygon, etc.)
-- **Slippage Protection**: Configurable slippage tolerance (0.1% - 5%)
-- **Gas Optimization**: Automatic gas estimation and fee calculation
-- **Quote System**: Real-time swap quotes with price impact analysis
-
-### 💸 Real Transaction Sending
-- **Native Token Support**: Send ETH, BNB, MATIC, AVAX, etc.
-- **ERC-20 Transfers**: Full support for token transfers
-- **EIP-1559 Support**: Modern gas fee system for Ethereum
-- **Legacy Gas**: Support for BSC and older chains
-- **Transaction Signing**: Secure EIP-155 signing with WalletCore
-
-### 🌐 Advanced Network Management
-- **Multiple RPC Sources**: Automatic failover between RPC providers
-- **Network Switching**: Easy toggle between blockchains
-- **Custom RPC**: Support for custom RPC endpoints (future)
-- **Gas Price Intelligence**: 
-  - EIP-1559: Dynamic base fee + priority fee
-  - Legacy: Smart gas price estimation
-  - Safety warnings for too low/high fees
-
-### 👛 Multi-Account Wallet System
-- **HD Wallet Support**: Create multiple accounts from single seed phrase
-- **MetaMask Compatible**: m/44'/60'/0'/0/{index} derivation
-- **Independent Addresses**: Each account has unique addresses per blockchain
-- **Easy Switching**: Quick account selector in UI
-- **Account Management**: Create, rename, and organize accounts
-
-### 🎨 Token Icon Preservation
-- **Persistent Icons**: Token icons never lost during updates
-- **Fallback System**: Default icons when API fails
-- **CoinGecko Integration**: High-quality token logos
-- **Smart Merging**: Intelligent token data merging
-
-### 🔧 Technical Improvements
-- **Zero Compiler Warnings**: Clean, production-ready code
-- **Concurrency Safety**: Proper Swift 6 actor isolation
-- **Memory Efficiency**: Optimized token caching and filtering
-- **Better Error Handling**: Comprehensive error messages
+- **Token icon fixes**: WETH, Solana, USDT, and USDC now resolve correctly across Home, Select Asset, Select Token, and All Assets.
+- **Chain-aware wallet flows**: Send, Receive, and Swap now use the correct network, fees, and token set for each chain.
+- **Wallet restore stability**: Re-login and import flows restore the same wallets, addresses, and chain state consistently.
+- **QR scanning**: The top-right QR action now opens the camera for address scanning.
+- **UI refresh**: Bottom navigation and wallet controls were tightened up for a cleaner, more minimal layout.
+- **Security docs**: README and release notes now reflect the current release state.
 
 ## Features
 
@@ -102,6 +63,11 @@ A comprehensive, secure, and feature-rich cryptocurrency wallet for iOS built wi
 - **Multi-Language Support**: English, Czech, Spanish, French, Japanese, Korean, Chinese
 - **Dark Theme**: Elegant black-based design optimized for OLED
 - **Blockchain Filtering**: Show/hide tokens by blockchain
+
+## 🚀 Releases
+
+- **Latest**: Version 1.1.5 - Icon fixes, chain-aware send/receive/swap flows, wallet restore improvements, and UI cleanup
+- **Previous**: Version 1.1.4 - Icon Improvements & Help Center (November 9, 2025)
 
 ## Requirements
 
@@ -241,6 +207,8 @@ Wpayin_Wallet/
 - Verify recipient addresses before sending
 - Start with small test transactions
 - Keep the app updated
+- Restore wallets only from your own seed phrase or private key
+- Keep screenshots, backups, and API config files out of GitHub
 
 ❌ **DON'T**:
 - Share your seed phrase or private key with anyone
@@ -248,6 +216,7 @@ Wpayin_Wallet/
 - Store seed phrases in cloud services
 - Use the wallet on jailbroken devices
 - Commit `Config.swift` with API keys to version control
+- Mix assets or networks without checking the selected chain
 
 ### Development Security
 
@@ -338,6 +307,41 @@ struct AppConfig {
   - Growing ecosystem
 
 ## 📝 Changelog
+
+### Version 1.1.5 (June 2026)
+
+#### ✨ New Features
+- 🪙 **Token Icon Fixes**: Correct icons for WETH, Solana, USDT, and USDC across the app
+- 🔄 **Chain-Aware Flows**: Send, Receive, and Swap now resolve the correct chain automatically
+- 📷 **QR Scanner**: Camera-based QR scanning from the top-right action
+- 👛 **Wallet Restore**: Import and relogin now restore the same wallet set and chain state
+- 🎨 **UI Cleanup**: More minimal bottom navigation and asset controls
+
+#### 🔧 Improvements
+- Better asset filtering between Ethereum tokens and non-EVM assets
+- Improved address handling for Solana and Bitcoin wallets
+- Better fallback behavior for missing token metadata
+- Updated app icon and branding assets
+- Updated README and release documentation
+
+#### 🐛 Bug Fixes
+- Fixed incorrect icon rendering in Home, Select Asset, Select Token, and All Assets
+- Fixed asset list gaps in Deposit and Withdraw flows
+- Fixed wallet state not reloading cleanly after re-login
+- Fixed spacing issues in Your Assets rows for longer token names
+
+#### 🏗️ Technical
+- Clean build with current release settings
+- Better persistence of chain and wallet selection
+- More robust localization and resource loading
+
+### Version 1.1.4 (November 2025)
+
+#### ✨ Icon Improvements & Help Center
+- In-app Help Center
+- Better network and token icon rendering
+- Updated app version display
+- Improved network selector UI
 
 ### Version 1.1.0 (November 2024)
 
@@ -469,6 +473,7 @@ For detailed documentation, see:
 - [BLOCKCHAIN_MANAGEMENT_FIX.md](BLOCKCHAIN_MANAGEMENT_FIX.md) - How blockchain activation works
 - [BITCOIN_ADDRESS_AND_ICONS_FIX.md](BITCOIN_ADDRESS_AND_ICONS_FIX.md) - Bitcoin address derivation and icon system
 - [COMPILER_WARNINGS_FIXED.md](COMPILER_WARNINGS_FIXED.md) - All fixed compiler warnings
+- [RELEASE_NOTES_v1.1.5.md](RELEASE_NOTES_v1.1.5.md) - Latest release notes
 - [AGENTS.md](AGENTS.md) - Repository guidelines and coding standards
 
 ## Support
@@ -485,4 +490,3 @@ This software is provided "as is", without warranty of any kind. Use at your own
 ---
 
 **Made with ❤️ for the decentralized future**
-
