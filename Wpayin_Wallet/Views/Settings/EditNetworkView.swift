@@ -1,3 +1,5 @@
+// Autor Lukas Helebrandt, 2026
+
 //
 //  EditNetworkView.swift
 //  Wpayin_Wallet
@@ -314,7 +316,7 @@ struct FormField: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text(title)
+            Text(title.localized)
                 .font(.system(size: 14, weight: .medium))
                 .foregroundColor(WpayinColors.textSecondary)
 

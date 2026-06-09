@@ -1,3 +1,5 @@
+// Autor Lukas Helebrandt, 2026
+
 //
 //  TokenProtocolBadge.swift
 //  Wpayin_Wallet

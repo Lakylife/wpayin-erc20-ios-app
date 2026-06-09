@@ -1,3 +1,5 @@
+// Autor Lukas Helebrandt, 2026
+
 //
 //  Transaction.swift
 //  Wpayin_Wallet
@@ -31,11 +33,11 @@ struct Transaction: Identifiable, Codable {
 
         var displayName: String {
             switch self {
-            case .send: return "Send"
-            case .receive: return "Receive"
-            case .swap: return "Swap"
-            case .deposit: return "Deposit"
-            case .withdraw: return "Withdraw"
+            case .send: return "Send".localized
+            case .receive: return "Receive".localized
+            case .swap: return "Swap".localized
+            case .deposit: return "Deposit".localized
+            case .withdraw: return "Withdraw".localized
             }
         }
     }
@@ -47,9 +49,9 @@ struct Transaction: Identifiable, Codable {
 
         var displayName: String {
             switch self {
-            case .pending: return "Pending"
-            case .confirmed: return "Confirmed"
-            case .failed: return "Failed"
+            case .pending: return "Pending".localized
+            case .confirmed: return "Confirmed".localized
+            case .failed: return "Failed".localized
             }
         }
     }

@@ -1,3 +1,5 @@
+// Autor Lukas Helebrandt, 2026
+
 //
 //  Fonts.swift
 //  Wpayin_Wallet

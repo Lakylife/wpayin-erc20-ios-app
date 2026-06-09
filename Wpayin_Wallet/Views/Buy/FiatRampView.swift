@@ -1,3 +1,5 @@
+// Autor Lukas Helebrandt, 2026
+
 //
 //  FiatRampView.swift
 //  Wpayin_Wallet
@@ -26,17 +28,17 @@ struct FiatRampView: View {
                     }
                     .ignoresSafeArea(edges: .bottom)
                     .onAppear {
-                        print("🔗 FiatRampView - Loading URL: \(url.absoluteString)")
-                        print("💳 Provider: \(config.provider.displayName)")
-                        print("💰 Crypto: \(config.crypto)")
-                        print("📍 Address: \(config.walletAddress)")
+                        Logger.log("🔗 FiatRampView - Loading URL: \(url.absoluteString)")
+                        Logger.log("💳 Provider: \(config.provider.displayName)")
+                        Logger.log("💰 Crypto: \(config.crypto)")
+                        Logger.log("📍 Address: \(config.walletAddress)")
                     }
                 } else {
                     ErrorView(message: "\(config.provider.displayName) requires API key configuration. Please use Mt Pelerin or contact support.")
                         .onAppear {
-                            print("❌ FiatRampView - Failed to generate URL")
-                            print("💳 Provider: \(config.provider.displayName)")
-                            print("💰 Crypto: \(config.crypto)")
+                            Logger.log("❌ FiatRampView - Failed to generate URL")
+                            Logger.log("💳 Provider: \(config.provider.displayName)")
+                            Logger.log("💰 Crypto: \(config.crypto)")
                         }
                 }
                 

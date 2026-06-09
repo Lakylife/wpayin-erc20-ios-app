@@ -1,3 +1,5 @@
+// Autor Lukas Helebrandt, 2026
+
 //
 //  BlockchainIconHelper.swift
 //  Wpayin_Wallet
@@ -11,13 +13,13 @@ struct BlockchainIconHelper {
     static func iconName(for blockchain: BlockchainType) -> String {
         switch blockchain {
         case .bitcoin:
-            return "bitcoin" // Special case - no suffix
+            return "BTC"
         case .ethereum:
             return "ethereum_trx_32"
         case .bsc:
-            return "binance-smart-chain_trx_32"
+            return "BNB"
         case .polygon:
-            return "polygon-pos_trx_32"
+            return "polygon-pos_eip20_32"
         case .arbitrum:
             return "arbitrum-one_trx_32"
         case .optimism:
@@ -33,7 +35,7 @@ struct BlockchainIconHelper {
         case .fantom:
             return "fantom_trx_32"
         case .solana:
-            return "solana_trx_32"
+            return ""
         case .litecoin, .dash, .zcash, .bitcoinCash, .monero, .eCash:
             return "" // Will use fallback - not in assets
         }

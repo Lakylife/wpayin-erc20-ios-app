@@ -1,3 +1,5 @@
+// Autor Lukas Helebrandt, 2026
+
 //
 //  PriceOracleService.swift
 //  Wpayin_Wallet
@@ -24,7 +26,7 @@ class PriceOracleService {
         // Check cache
         if let cached = priceCache[cacheKey],
            Date().timeIntervalSince(cached.timestamp) < cacheExpiry {
-            print("💰 Price cache hit for \(crypto): $\(cached.price)")
+            Logger.log("💰 Price cache hit for \(crypto): $\(cached.price)")
             return cached.price
         }
         
@@ -41,7 +43,7 @@ class PriceOracleService {
         
         // Cache it
         priceCache[cacheKey] = (price, Date())
-        print("💰 Fetched price for \(crypto): $\(price)")
+        Logger.log("💰 Fetched price for \(crypto): $\(price)")
         
         return price
     }
@@ -55,7 +57,7 @@ class PriceOracleService {
         let usdValue = amount * fromPrice
         let toAmount = usdValue / toPrice
         
-        print("🔄 Convert: \(amount) \(from) = \(toAmount) \(to) (via $\(usdValue) USD)")
+        Logger.log("🔄 Convert: \(amount) \(from) = \(toAmount) \(to) (via $\(usdValue) USD)")
         
         return toAmount
     }
@@ -78,7 +80,7 @@ class PriceOracleService {
             }
         }
         
-        print("💰 Fetched batch prices: \(prices)")
+        Logger.log("💰 Fetched batch prices: \(prices)")
         return prices
     }
     
@@ -133,7 +135,7 @@ class PriceOracleService {
     
     func clearCache() {
         priceCache.removeAll()
-        print("🗑️ Price cache cleared")
+        Logger.log("🗑️ Price cache cleared")
     }
 }
 

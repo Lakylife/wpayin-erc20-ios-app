@@ -1,3 +1,5 @@
+// Autor Lukas Helebrandt, 2026
+
 //
 //  WithdrawView.swift
 //  Wpayin_Wallet
@@ -6,11 +8,16 @@
 //
 
 import SwiftUI
+import AVFoundation
 
 enum WithdrawGasSpeed: String, CaseIterable {
     case slow = "Slow"
     case standard = "Standard"
     case fast = "Fast"
+
+    var displayName: String {
+        rawValue.localized
+    }
 
     var multiplier: Double {
         switch self {
@@ -51,8 +58,10 @@ enum WithdrawGasSpeed: String, CaseIterable {
 
 struct WithdrawView: View {
     @EnvironmentObject var walletManager: WalletManager
+    @EnvironmentObject var settingsManager: SettingsManager
     @Environment(\.dismiss) private var dismiss
-    @State private var selectedTokenIndex = 0
+    @State private var selectedSymbol: String?
+    @State private var selectedNetwork: BlockchainType?
     @State private var recipientAddress = ""
     @State private var amount = ""
     @State private var showConfirmation = false
@@ -62,10 +71,26 @@ struct WithdrawView: View {
     @State private var selectedGasSpeed: WithdrawGasSpeed = .standard
     @State private var showGasSettings = false
 
+    init(initialToken: Token? = nil, initialRecipientAddress: String = "") {
+        _selectedSymbol = State(initialValue: initialToken?.symbol.uppercased())
+        _selectedNetwork = State(initialValue: initialToken?.blockchain)
+        _recipientAddress = State(initialValue: initialRecipientAddress)
+    }
+
     private var selectedToken: Token? {
-        guard !walletManager.visibleTokens.isEmpty else { return nil }
-        let safeIndex = max(0, min(selectedTokenIndex, walletManager.visibleTokens.count - 1))
-        return walletManager.visibleTokens[safeIndex]
+        guard let selectedSymbol, let selectedNetwork else { return nil }
+        return spendableTokens.first {
+            $0.symbol.uppercased() == selectedSymbol.uppercased() && $0.blockchain == selectedNetwork
+        }
+    }
+
+    private var spendableTokens: [Token] {
+        walletManager.visibleSupportedTokens.sorted {
+            if $0.symbol == $1.symbol {
+                return $0.blockchain.name < $1.blockchain.name
+            }
+            return $0.symbol < $1.symbol
+        }
     }
 
     private var amountValue: Double {
@@ -96,24 +121,24 @@ struct WithdrawView: View {
     }
     
     private var headerTitle: String {
-        guard let token = selectedToken else { return "Send Funds" }
-        return token.blockchain == .bitcoin ? "Send Bitcoin" : "Send Funds"
+        guard let token = selectedToken else { return "Send Funds".localized }
+        return token.blockchain == .bitcoin ? "Send Bitcoin".localized : "Send Funds".localized
     }
     
     private var headerSubtitle: String {
-        guard let token = selectedToken else { return "Send cryptocurrency to another wallet" }
+        guard let token = selectedToken else { return "Send cryptocurrency to another wallet".localized }
         if token.blockchain == .bitcoin {
-            return "Send BTC to any Bitcoin address"
+            return "Send BTC to any Bitcoin address".localized
         }
-        return "Send cryptocurrency to another wallet"
+        return "Send cryptocurrency to another wallet".localized
     }
     
     private var feeDisplayText: String {
-        guard let token = selectedToken else { return "Fee" }
+        guard let token = selectedToken else { return "Fee".localized }
         if token.blockchain == .bitcoin {
-            return "Network Fee: \(Int(estimatedGasFee)) sat/vB"
+            return "Network Fee: %@ sat/vB".localized("\(Int(estimatedGasFee))")
         }
-        return String(format: "Est. Gas: $%.4f", estimatedGasFee)
+        return "Est. Gas: %@".localized(estimatedGasFee.formatted(as: settingsManager.selectedCurrency))
     }
 
     private var estimatedGasFee: Double {
@@ -170,9 +195,11 @@ struct WithdrawView: View {
 
                         // Token Selection
                         TokenSelectionView(
-                            tokens: walletManager.visibleTokens,
-                            selectedIndex: $selectedTokenIndex
+                            tokens: spendableTokens,
+                            selectedSymbol: $selectedSymbol,
+                            selectedNetwork: $selectedNetwork
                         )
+                        .environmentObject(settingsManager)
 
                         // Recipient Address
                         RecipientAddressView(address: $recipientAddress)
@@ -202,18 +229,18 @@ struct WithdrawView: View {
                     .padding(.top, 20)
                 }
             }
-            .navigationTitle("Withdraw")
+            .navigationTitle("Withdraw".localized)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
-                    Button("Cancel") {
+                    Button("Cancel".localized) {
                         dismiss()
                     }
                     .foregroundColor(WpayinColors.text)
                 }
 
                 ToolbarItem(placement: .navigationBarTrailing) {
-                    Button("Send") {
+                    Button("Send".localized) {
                         showConfirmation = true
                     }
                     .foregroundColor(isValidTransaction ? WpayinColors.primary : WpayinColors.textSecondary)
@@ -240,10 +267,43 @@ struct WithdrawView: View {
                 selectedToken: selectedToken
             )
         }
-        .alert("Transaction Error", isPresented: $showError) {
-            Button("OK") { }
+        .alert("Transaction Error".localized, isPresented: $showError) {
+            Button("OK".localized) { }
         } message: {
             Text(errorMessage)
+        }
+        .onAppear {
+            ensureValidSelection()
+        }
+        .onChange(of: walletManager.visibleSupportedTokens.map { "\($0.blockchain.rawValue):\($0.contractAddress ?? "native")" }) { _ in
+            ensureValidSelection()
+        }
+        .onChange(of: selectedSymbol) { _ in
+            ensureValidNetworkForSelectedAsset()
+        }
+    }
+
+    private func ensureValidSelection() {
+        guard !spendableTokens.isEmpty else {
+            selectedSymbol = nil
+            selectedNetwork = nil
+            return
+        }
+
+        let symbols = Array(Set(spendableTokens.map { $0.symbol.uppercased() })).sorted()
+        if selectedSymbol == nil || !symbols.contains(selectedSymbol ?? "") {
+            selectedSymbol = symbols.first
+        }
+        ensureValidNetworkForSelectedAsset()
+    }
+
+    private func ensureValidNetworkForSelectedAsset() {
+        guard let selectedSymbol else { return }
+        let networks = spendableTokens
+            .filter { $0.symbol.uppercased() == selectedSymbol.uppercased() }
+            .map { $0.blockchain }
+        if selectedNetwork == nil || !networks.contains(selectedNetwork!) {
+            selectedNetwork = networks.first
         }
     }
 
@@ -289,7 +349,7 @@ struct WithdrawView: View {
                     )
                 }
 
-                print("✅ Transaction sent! Hash: \(result.hash)")
+                Logger.log("✅ Transaction sent! Hash: \(result.hash)")
 
                 await MainActor.run {
                     isProcessing = false
@@ -312,112 +372,139 @@ struct WithdrawView: View {
 
 struct TokenSelectionView: View {
     let tokens: [Token]
-    @Binding var selectedIndex: Int
+    @Binding var selectedSymbol: String?
+    @Binding var selectedNetwork: BlockchainType?
+    @EnvironmentObject var settingsManager: SettingsManager
+
+    private var currentToken: Token? {
+        guard let selectedSymbol, let selectedNetwork else { return nil }
+        return tokens.first {
+            $0.symbol.uppercased() == selectedSymbol.uppercased() && $0.blockchain == selectedNetwork
+        }
+    }
+
+    private var assetSymbols: [String] {
+        Array(Set(tokens.map { $0.symbol.uppercased() })).sorted()
+    }
+
+    private var networksForSelectedAsset: [Token] {
+        guard let selectedSymbol else { return [] }
+        return tokens
+            .filter { $0.symbol.uppercased() == selectedSymbol.uppercased() }
+            .sorted { $0.blockchain.name < $1.blockchain.name }
+    }
+
+    private func groupedToken(for symbol: String) -> Token? {
+        let symbolTokens = tokens.filter { $0.symbol.uppercased() == symbol.uppercased() }
+        guard let first = symbolTokens.first else { return nil }
+        let totalBalance = symbolTokens.reduce(0) { $0 + $1.balance }
+        let bestPrice = symbolTokens.map { $0.price }.filter { $0 > 0 }.max() ?? 0
+
+        return Token(
+            contractAddress: first.contractAddress,
+            name: first.name,
+            symbol: first.symbol,
+            decimals: first.decimals,
+            balance: totalBalance,
+            price: bestPrice,
+            iconUrl: first.iconUrl,
+            blockchain: first.blockchain,
+            isNative: first.isNative,
+            receivingAddress: first.receivingAddress
+        )
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("Select Asset")
+            Text("Select Asset".localized)
                 .font(.wpayinSubheadline)
                 .foregroundColor(WpayinColors.text)
 
             if let currentToken = currentToken {
                 Menu {
-                    ForEach(Array(tokens.enumerated()), id: \.offset) { index, token in
+                    ForEach(assetSymbols, id: \.self) { symbol in
                         Button(action: {
-                            selectedIndex = index
+                            selectedSymbol = symbol
                         }) {
+                            let token = groupedToken(for: symbol)
                             HStack(spacing: 12) {
-                                // Token Icon
-                                if let iconUrl = token.iconUrl, let url = URL(string: iconUrl) {
-                                    AsyncImage(url: url) { image in
-                                        image
-                                            .resizable()
-                                            .aspectRatio(contentMode: .fill)
-                                    } placeholder: {
-                                        Circle()
-                                            .fill(WpayinColors.primary)
-                                            .overlay(
-                                                Text(token.symbol.prefix(1))
-                                                    .font(.system(size: 10, weight: .bold))
-                                                    .foregroundColor(.white)
-                                            )
-                                    }
-                                    .frame(width: 24, height: 24)
-                                    .clipShape(Circle())
-                                } else {
-                                    Circle()
-                                        .fill(WpayinColors.primary)
-                                        .frame(width: 24, height: 24)
-                                        .overlay(
-                                            Text(token.symbol.prefix(1))
-                                                .font(.system(size: 10, weight: .bold))
-                                                .foregroundColor(.white)
-                                        )
+                                if let token {
+                                    TokenIconView(token: token, size: 24, showNetworkBadge: false)
                                 }
                                 
                                 VStack(alignment: .leading, spacing: 2) {
-                                    HStack(spacing: 4) {
-                                        Text(token.symbol)
-                                            .font(.system(size: 14, weight: .semibold))
-                                        if let proto = token.tokenProtocol {
-                                            TokenProtocolBadge(tokenProtocol: proto, size: .small)
-                                        }
-                                    }
-                                    Text(token.blockchain.name)
+                                    Text(token?.name ?? symbol)
+                                        .font(.system(size: 14, weight: .semibold))
+                                        .lineLimit(1)
+                                    Text("\(TokenIconHelper.formattedBalance(token?.balance ?? 0)) \(symbol)")
                                         .font(.system(size: 12))
                                         .foregroundColor(.secondary)
                                 }
                                 Spacer()
-                                Text(String(format: "%.4f", token.balance))
+                                Text(token?.totalValue.formatted(as: settingsManager.selectedCurrency) ?? "")
                                     .font(.system(size: 14))
                             }
                         }
                     }
                 } label: {
                     HStack {
-                        // Token Icon
-                        if let iconUrl = currentToken.iconUrl, let url = URL(string: iconUrl) {
-                            AsyncImage(url: url) { image in
-                                image
-                                    .resizable()
-                                    .aspectRatio(contentMode: .fill)
-                            } placeholder: {
-                                Circle()
-                                    .fill(WpayinColors.primary)
-                                    .overlay(
-                                        Text(currentToken.symbol.prefix(1))
-                                            .font(.wpayinCaption)
-                                            .foregroundColor(.white)
-                                    )
-                            }
-                            .frame(width: 32, height: 32)
-                            .clipShape(Circle())
-                        } else {
-                            Circle()
-                                .fill(WpayinColors.primary)
-                                .frame(width: 32, height: 32)
-                                .overlay(
-                                    Text(currentToken.symbol.prefix(1))
-                                        .font(.wpayinCaption)
-                                        .foregroundColor(.white)
-                                )
-                        }
+                        TokenIconView(token: currentToken, size: 32, showNetworkBadge: false)
 
                         VStack(alignment: .leading, spacing: 2) {
-                            HStack(spacing: 6) {
-                                Text(currentToken.name)
-                                    .font(.wpayinBody)
-                                    .foregroundColor(WpayinColors.text)
+                            Text(currentToken.symbol)
+                                .font(.wpayinBody)
+                                .foregroundColor(WpayinColors.text)
+                                .lineLimit(1)
 
-                                Text("•")
-                                    .foregroundColor(WpayinColors.textTertiary)
+                            Text(currentToken.name)
+                                .font(.wpayinCaption)
+                                .foregroundColor(WpayinColors.textTertiary)
+                                .lineLimit(1)
 
-                                Text(currentToken.blockchain.name)
-                                    .font(.system(size: 12, weight: .medium))
-                                    .foregroundColor(WpayinColors.textTertiary)
+                            Text("Balance: %@".localized(TokenIconHelper.formattedBalanceWithSymbol(currentToken.balance, symbol: currentToken.symbol)))
+                                .font(.wpayinCaption)
+                                .foregroundColor(WpayinColors.textSecondary)
+                        }
+
+                        Spacer()
+
+                        Image(systemName: "chevron.down")
+                            .font(.system(size: 12))
+                            .foregroundColor(WpayinColors.textSecondary)
+                    }
+                    .padding(16)
+                    .background(WpayinColors.surface)
+                    .cornerRadius(12)
+                }
+
+                Text("Select Network".localized)
+                    .font(.wpayinSubheadline)
+                    .foregroundColor(WpayinColors.text)
+                    .padding(.top, 4)
+
+                Menu {
+                    ForEach(networksForSelectedAsset) { token in
+                        Button(action: {
+                            selectedNetwork = token.blockchain
+                        }) {
+                            HStack {
+                                NetworkIconView(blockchain: token.blockchain, size: 20)
+                                Text(token.blockchain.name)
+                                Spacer()
+                                Text(TokenIconHelper.formattedBalance(token.balance))
                             }
+                        }
+                    }
+                } label: {
+                    HStack {
+                        NetworkIconView(blockchain: currentToken.blockchain, size: 32)
 
-                            Text("Balance: " + String(format: "%.4f", currentToken.balance) + " \(currentToken.symbol)")
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(currentToken.blockchain.name)
+                                .font(.wpayinBody)
+                                .foregroundColor(WpayinColors.text)
+
+                            Text(TokenIconHelper.formattedBalanceWithSymbol(currentToken.balance, symbol: currentToken.symbol))
                                 .font(.wpayinCaption)
                                 .foregroundColor(WpayinColors.textSecondary)
                         }
@@ -433,7 +520,7 @@ struct TokenSelectionView: View {
                     .cornerRadius(12)
                 }
             } else {
-                Text("No spendable assets available")
+                Text("No spendable assets available".localized)
                     .font(.wpayinCaption)
                     .foregroundColor(WpayinColors.textSecondary)
                     .frame(maxWidth: .infinity)
@@ -443,18 +530,13 @@ struct TokenSelectionView: View {
             }
         }
     }
-
-    private var currentToken: Token? {
-        guard !tokens.isEmpty else { return nil }
-        let safeIndex = max(0, min(selectedIndex, tokens.count - 1))
-        return tokens[safeIndex]
-    }
 }
 
 struct TokenSelectionRow: View {
     let token: Token
     let isSelected: Bool
     let action: () -> Void
+    @EnvironmentObject var settingsManager: SettingsManager
 
     var body: some View {
         Button(action: action) {
@@ -485,7 +567,7 @@ struct TokenSelectionRow: View {
                         .font(.wpayinBody)
                         .foregroundColor(WpayinColors.text)
 
-                    Text("$" + String(format: "%.2f", token.totalValue))
+                    Text(token.totalValue.formatted(as: settingsManager.selectedCurrency))
                         .font(.wpayinCaption)
                         .foregroundColor(WpayinColors.textSecondary)
                 }
@@ -516,14 +598,14 @@ struct RecipientAddressView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("Recipient Address")
+            Text("Recipient Address".localized)
                 .font(.wpayinSubheadline)
                 .foregroundColor(WpayinColors.text)
 
             // Address input method selector
-            Picker("Input Method", selection: $addressInputMethod) {
-                Text("Manual Entry").tag(0)
-                Text("Saved Addresses").tag(1)
+            Picker("Input Method".localized, selection: $addressInputMethod) {
+                Text("Manual Entry".localized).tag(0)
+                Text("Saved Addresses".localized).tag(1)
             }
             .pickerStyle(SegmentedPickerStyle())
             .padding(.bottom, 8)
@@ -567,11 +649,11 @@ struct RecipientAddressView: View {
                 // Saved addresses selection
                 if walletManager.savedAddresses.isEmpty {
                     VStack(spacing: 16) {
-                        Text("No saved addresses yet")
+                        Text("No saved addresses yet".localized)
                             .font(.wpayinBody)
                             .foregroundColor(WpayinColors.textSecondary)
 
-                        Button("Add Address") {
+                        Button("Add Address".localized) {
                             addressInputMethod = 0
                         }
                         .foregroundColor(WpayinColors.primary)
@@ -596,7 +678,7 @@ struct RecipientAddressView: View {
             }
 
             if !address.isEmpty && !isValidAddress(address) {
-                Text("Please enter a valid Ethereum address")
+                Text("Please enter a valid Ethereum address".localized)
                     .font(.wpayinCaption)
                     .foregroundColor(WpayinColors.error)
             }
@@ -633,7 +715,7 @@ struct AmountInputView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("Amount")
+            Text("Amount".localized)
                 .font(.wpayinSubheadline)
                 .foregroundColor(WpayinColors.text)
 
@@ -657,13 +739,13 @@ struct AmountInputView: View {
 
                 if let token = selectedToken {
                     HStack {
-                        Text("Balance: " + String(format: "%.4f", token.balance) + " \(token.symbol)")
+                        Text("Balance: %@".localized(String(format: "%.4f %@", token.balance, token.symbol)))
                             .font(.wpayinCaption)
                             .foregroundColor(WpayinColors.textSecondary)
 
                         Spacer()
 
-                        Button("Max") {
+                        Button("Max".localized) {
                             amount = String(token.balance)
                         }
                         .font(.wpayinCaption)
@@ -671,7 +753,7 @@ struct AmountInputView: View {
                     }
 
                     if amountValue > token.balance {
-                        Text("Insufficient balance")
+                        Text("Insufficient balance".localized)
                             .font(.wpayinCaption)
                             .foregroundColor(WpayinColors.error)
                     }
@@ -691,7 +773,7 @@ struct TransactionSummaryView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
-            Text("Transaction Summary")
+            Text("Transaction Summary".localized)
                 .font(.wpayinSubheadline)
                 .foregroundColor(WpayinColors.text)
 
@@ -709,14 +791,14 @@ struct TransactionSummaryView: View {
                 // Gas Fee with Selection Button
                 Button(action: onGasSettingsTapped) {
                     HStack {
-                        Text("Network Fee")
+                        Text("Network Fee".localized)
                             .font(.wpayinBody)
                             .foregroundColor(WpayinColors.textSecondary)
 
                         HStack(spacing: 4) {
                             Image(systemName: gasSpeed.icon)
                                 .font(.system(size: 10))
-                            Text(gasSpeed.rawValue)
+                            Text(gasSpeed.displayName)
                                 .font(.system(size: 12))
                         }
                         .foregroundColor(WpayinColors.primary)
@@ -739,7 +821,7 @@ struct TransactionSummaryView: View {
 
                 SummaryRow(
                     title: "Total",
-                    value: String(format: "%.4f", amount) + " \(token.symbol) + Fee",
+                    value: "%@ + %@".localized(String(format: "%.4f %@", amount, token.symbol), "Fee".localized),
                     isTotal: true
                 )
             }
@@ -763,7 +845,7 @@ struct SummaryRow: View {
 
     var body: some View {
         HStack {
-            Text(title)
+            Text(title.localized)
                 .font(isTotal ? .wpayinSubheadline : .wpayinBody)
                 .foregroundColor(WpayinColors.textSecondary)
 
@@ -778,34 +860,243 @@ struct SummaryRow: View {
 
 struct QRScannerView: View {
     @Binding var scannedAddress: String
+    var onScan: ((String) -> Void)? = nil
     @Environment(\.dismiss) private var dismiss
+    @State private var cameraPermissionDenied = false
 
     var body: some View {
         NavigationView {
             ZStack {
                 WpayinColors.background.ignoresSafeArea()
 
-                VStack {
-                    Text("QR Scanner would be implemented here")
-                        .foregroundColor(WpayinColors.text)
-                        .padding()
+                if cameraPermissionDenied {
+                    VStack(spacing: 16) {
+                        Image(systemName: "camera.fill")
+                            .font(.system(size: 40))
+                            .foregroundColor(WpayinColors.textSecondary)
 
-                    Text("For now, this is a placeholder")
-                        .foregroundColor(WpayinColors.textSecondary)
-                        .font(.wpayinCaption)
+                        Text("Camera access is required to scan QR codes".localized)
+                            .font(.wpayinBody)
+                            .foregroundColor(WpayinColors.text)
+                            .multilineTextAlignment(.center)
+
+                        Text("Enable camera access in iOS Settings and try again.".localized)
+                            .font(.wpayinCaption)
+                            .foregroundColor(WpayinColors.textSecondary)
+                            .multilineTextAlignment(.center)
+                    }
+                    .padding(24)
+                } else {
+                    QRCodeScannerRepresentable(
+                        onScan: { value in
+                            let address = QRCodePayloadParser.extractAddress(from: value)
+                            scannedAddress = address
+                            onScan?(address)
+                            dismiss()
+                        },
+                        onPermissionDenied: {
+                            cameraPermissionDenied = true
+                        }
+                    )
+                    .ignoresSafeArea()
+
+                    VStack {
+                        Spacer()
+
+                        RoundedRectangle(cornerRadius: 16)
+                            .stroke(WpayinColors.primary, lineWidth: 3)
+                            .frame(width: 240, height: 240)
+
+                        Spacer()
+
+                        Text("Point the camera at a wallet QR code".localized)
+                            .font(.wpayinBody)
+                            .foregroundColor(WpayinColors.text)
+                            .padding(.horizontal, 18)
+                            .padding(.vertical, 12)
+                            .background(
+                                Capsule()
+                                    .fill(Color.black.opacity(0.65))
+                            )
+                            .padding(.bottom, 36)
+                    }
                 }
             }
-            .navigationTitle("Scan QR Code")
+            .navigationTitle("Scan QR Code".localized)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
-                    Button("Cancel") {
+                    Button("Cancel".localized) {
                         dismiss()
                     }
                     .foregroundColor(WpayinColors.text)
                 }
             }
         }
+    }
+}
+
+struct QRCodeScannerRepresentable: UIViewControllerRepresentable {
+    let onScan: (String) -> Void
+    let onPermissionDenied: () -> Void
+
+    func makeUIViewController(context: Context) -> QRCodeScannerViewController {
+        let controller = QRCodeScannerViewController()
+        controller.onScan = onScan
+        controller.onPermissionDenied = onPermissionDenied
+        return controller
+    }
+
+    func updateUIViewController(_ uiViewController: QRCodeScannerViewController, context: Context) {
+        uiViewController.onScan = onScan
+        uiViewController.onPermissionDenied = onPermissionDenied
+    }
+}
+
+final class QRCodeScannerViewController: UIViewController, AVCaptureMetadataOutputObjectsDelegate {
+    var onScan: ((String) -> Void)?
+    var onPermissionDenied: (() -> Void)?
+
+    private let captureSession = AVCaptureSession()
+    private var previewLayer: AVCaptureVideoPreviewLayer?
+    private var hasScannedCode = false
+
+    override func viewDidLoad() {
+        super.viewDidLoad()
+        view.backgroundColor = .black
+        configureCameraAccess()
+    }
+
+    override func viewDidLayoutSubviews() {
+        super.viewDidLayoutSubviews()
+        previewLayer?.frame = view.bounds
+    }
+
+    override func viewWillAppear(_ animated: Bool) {
+        super.viewWillAppear(animated)
+        hasScannedCode = false
+        if !captureSession.isRunning {
+            DispatchQueue.global(qos: .userInitiated).async {
+                self.captureSession.startRunning()
+            }
+        }
+    }
+
+    override func viewWillDisappear(_ animated: Bool) {
+        super.viewWillDisappear(animated)
+        if captureSession.isRunning {
+            DispatchQueue.global(qos: .userInitiated).async {
+                self.captureSession.stopRunning()
+            }
+        }
+    }
+
+    private func configureCameraAccess() {
+        switch AVCaptureDevice.authorizationStatus(for: .video) {
+        case .authorized:
+            configureCaptureSession()
+        case .notDetermined:
+            AVCaptureDevice.requestAccess(for: .video) { [weak self] granted in
+                DispatchQueue.main.async {
+                    granted ? self?.configureCaptureSession() : self?.onPermissionDenied?()
+                }
+            }
+        default:
+            onPermissionDenied?()
+        }
+    }
+
+    private func configureCaptureSession() {
+        guard let videoCaptureDevice = AVCaptureDevice.default(for: .video),
+              let videoInput = try? AVCaptureDeviceInput(device: videoCaptureDevice),
+              captureSession.canAddInput(videoInput) else {
+            onPermissionDenied?()
+            return
+        }
+
+        captureSession.addInput(videoInput)
+
+        let metadataOutput = AVCaptureMetadataOutput()
+        guard captureSession.canAddOutput(metadataOutput) else {
+            onPermissionDenied?()
+            return
+        }
+
+        captureSession.addOutput(metadataOutput)
+        metadataOutput.setMetadataObjectsDelegate(self, queue: DispatchQueue.main)
+        metadataOutput.metadataObjectTypes = [.qr]
+
+        let previewLayer = AVCaptureVideoPreviewLayer(session: captureSession)
+        previewLayer.videoGravity = .resizeAspectFill
+        previewLayer.frame = view.bounds
+        view.layer.addSublayer(previewLayer)
+        self.previewLayer = previewLayer
+
+        DispatchQueue.global(qos: .userInitiated).async {
+            self.captureSession.startRunning()
+        }
+    }
+
+    func metadataOutput(
+        _ output: AVCaptureMetadataOutput,
+        didOutput metadataObjects: [AVMetadataObject],
+        from connection: AVCaptureConnection
+    ) {
+        guard !hasScannedCode,
+              let metadataObject = metadataObjects.first as? AVMetadataMachineReadableCodeObject,
+              let stringValue = metadataObject.stringValue else {
+            return
+        }
+
+        hasScannedCode = true
+        captureSession.stopRunning()
+        onScan?(stringValue)
+    }
+}
+
+enum QRCodePayloadParser {
+    static func extractAddress(from value: String) -> String {
+        let trimmedValue = value.trimmingCharacters(in: .whitespacesAndNewlines)
+
+        if let queryAddress = queryValue(named: "address", in: trimmedValue) {
+            return queryAddress
+        }
+
+        if let evmAddress = firstMatch(in: trimmedValue, pattern: #"0x[a-fA-F0-9]{40}"#) {
+            return evmAddress
+        }
+
+        var candidate = trimmedValue
+        if let colonIndex = candidate.firstIndex(of: ":") {
+            candidate = String(candidate[candidate.index(after: colonIndex)...])
+        }
+        if let questionIndex = candidate.firstIndex(of: "?") {
+            candidate = String(candidate[..<questionIndex])
+        }
+        if let atIndex = candidate.lastIndex(of: "@") {
+            candidate = String(candidate[..<atIndex])
+        }
+
+        return candidate.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private static func queryValue(named name: String, in value: String) -> String? {
+        guard let components = URLComponents(string: value),
+              let queryItems = components.queryItems else {
+            return nil
+        }
+
+        return queryItems.first { $0.name.lowercased() == name.lowercased() }?.value
+    }
+
+    private static func firstMatch(in value: String, pattern: String) -> String? {
+        guard let regex = try? NSRegularExpression(pattern: pattern) else { return nil }
+        let range = NSRange(value.startIndex..<value.endIndex, in: value)
+        guard let match = regex.firstMatch(in: value, range: range),
+              let matchRange = Range(match.range, in: value) else {
+            return nil
+        }
+        return String(value[matchRange])
     }
 }
 
@@ -825,11 +1116,11 @@ struct TransactionConfirmationView: View {
 
                 VStack(spacing: 32) {
                     VStack(spacing: 16) {
-                        Text("Confirm Transaction")
+                        Text("Confirm Transaction".localized)
                             .font(.wpayinHeadline)
                             .foregroundColor(WpayinColors.text)
 
-                        Text("Please review and confirm your transaction")
+                        Text("Please review and confirm your transaction".localized)
                             .font(.wpayinBody)
                             .foregroundColor(WpayinColors.textSecondary)
                             .multilineTextAlignment(.center)
@@ -866,7 +1157,7 @@ struct TransactionConfirmationView: View {
                 .padding(.horizontal, 24)
                 .padding(.vertical, 40)
             }
-            .navigationTitle("Confirm")
+            .navigationTitle("Confirm".localized)
             .navigationBarTitleDisplayMode(.inline)
         }
     }
@@ -922,22 +1213,22 @@ struct AddAddressSheet: View {
         NavigationView {
             VStack(spacing: 24) {
                 VStack(spacing: 16) {
-                    Text("Save Address")
+                    Text("Save Address".localized)
                         .font(.wpayinHeadline)
                         .foregroundColor(WpayinColors.text)
 
-                    Text("Give this address a name for easy access")
+                    Text("Give this address a name for easy access".localized)
                         .font(.wpayinBody)
                         .foregroundColor(WpayinColors.textSecondary)
                         .multilineTextAlignment(.center)
                 }
 
                 VStack(alignment: .leading, spacing: 12) {
-                    Text("Address Name")
+                    Text("Address Name".localized)
                         .font(.wpayinSubheadline)
                         .foregroundColor(WpayinColors.text)
 
-                    TextField("e.g., My Friend's Wallet", text: $addressName)
+                    TextField("e.g., My Friend's Wallet".localized, text: $addressName)
                         .font(.wpayinBody)
                         .foregroundColor(WpayinColors.text)
                         .padding(16)
@@ -946,7 +1237,7 @@ struct AddAddressSheet: View {
                 }
 
                 VStack(alignment: .leading, spacing: 8) {
-                    Text("Address")
+                    Text("Address".localized)
                         .font(.wpayinSubheadline)
                         .foregroundColor(WpayinColors.text)
 
@@ -963,18 +1254,18 @@ struct AddAddressSheet: View {
             .padding(.horizontal, 24)
             .padding(.top, 20)
             .background(WpayinColors.background.ignoresSafeArea())
-            .navigationTitle("Save Address")
+            .navigationTitle("Save Address".localized)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
-                    Button("Cancel") {
+                    Button("Cancel".localized) {
                         dismiss()
                     }
                     .foregroundColor(WpayinColors.text)
                 }
 
                 ToolbarItem(placement: .navigationBarTrailing) {
-                    Button("Save") {
+                    Button("Save".localized) {
                         onSave()
                     }
                     .foregroundColor(addressName.isEmpty ? WpayinColors.textSecondary : WpayinColors.primary)
@@ -1002,11 +1293,11 @@ struct WithdrawGasSettingsSheet: View {
                     VStack(spacing: 20) {
                         // Header
                         VStack(spacing: 8) {
-                            Text("Network Fee")
+                            Text("Network Fee".localized)
                                 .font(.system(size: 24, weight: .bold))
                                 .foregroundColor(WpayinColors.text)
 
-                            Text("Choose your transaction speed")
+                            Text("Choose your transaction speed".localized)
                                 .font(.wpayinBody)
                                 .foregroundColor(WpayinColors.textSecondary)
                         }
@@ -1032,7 +1323,7 @@ struct WithdrawGasSettingsSheet: View {
 
                                         // Speed Info
                                         VStack(alignment: .leading, spacing: 4) {
-                                            Text(speed.rawValue)
+                                            Text(speed.displayName)
                                                 .font(.system(size: 16, weight: .semibold))
                                                 .foregroundColor(WpayinColors.text)
 
@@ -1077,7 +1368,7 @@ struct WithdrawGasSettingsSheet: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
-                    Button("Done") {
+                    Button("Done".localized) {
                         dismiss()
                     }
                     .foregroundColor(WpayinColors.primary)
@@ -1091,4 +1382,5 @@ struct WithdrawGasSettingsSheet: View {
     let walletManager = WalletManager()
     return WithdrawView()
         .environmentObject(walletManager)
+        .environmentObject(SettingsManager())
 }

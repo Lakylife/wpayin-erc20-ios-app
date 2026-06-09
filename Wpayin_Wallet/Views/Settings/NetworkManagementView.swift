@@ -1,3 +1,5 @@
+// Autor Lukas Helebrandt, 2026
+
 //
 //  NetworkManagementView.swift
 //  Wpayin_Wallet
@@ -9,6 +11,7 @@ import SwiftUI
 
 struct NetworkManagementView: View {
     @EnvironmentObject var networkManager: NetworkConfigManager
+    @EnvironmentObject var walletManager: WalletManager
     @Environment(\.dismiss) private var dismiss
     @State private var showAddNetwork = false
     @State private var selectedNetwork: NetworkConfig?
@@ -22,11 +25,11 @@ struct NetworkManagementView: View {
                     VStack(spacing: 24) {
                         // Header
                         VStack(alignment: .leading, spacing: 8) {
-                            Text("Manage Networks")
+                            Text("Manage Networks".localized)
                                 .font(.system(size: 24, weight: .bold))
                                 .foregroundColor(WpayinColors.text)
 
-                            Text("Configure RPC endpoints and add custom networks")
+                            Text("Configure RPC endpoints and add custom networks".localized)
                                 .font(.system(size: 14))
                                 .foregroundColor(WpayinColors.textSecondary)
                         }
@@ -43,7 +46,7 @@ struct NetworkManagementView: View {
                         // Custom Networks Section
                         if networkManager.networks.contains(where: { $0.isCustom }) {
                             VStack(alignment: .leading, spacing: 12) {
-                                Text("Custom Networks")
+                                Text("Custom Networks".localized)
                                     .font(.system(size: 16, weight: .bold))
                                     .foregroundColor(WpayinColors.text)
                                     .padding(.horizontal, 20)
@@ -54,6 +57,7 @@ struct NetworkManagementView: View {
                                             selectedNetwork = network
                                         } onDelete: {
                                             networkManager.deleteNetwork(network)
+                                            syncWalletSelectionFromEnabledNetworks()
                                         }
                                     }
                                 }
@@ -68,7 +72,7 @@ struct NetworkManagementView: View {
                             HStack {
                                 Image(systemName: "plus.circle.fill")
                                     .font(.system(size: 20))
-                                Text("Add Custom Network")
+                                Text("Add Custom Network".localized)
                                     .font(.system(size: 16, weight: .semibold))
                             }
                             .foregroundColor(WpayinColors.primary)
@@ -91,7 +95,7 @@ struct NetworkManagementView: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
-                    Button("Done") {
+                    Button("Done".localized) {
                         dismiss()
                     }
                     .foregroundColor(WpayinColors.primary)
@@ -105,6 +109,18 @@ struct NetworkManagementView: View {
                 EditNetworkView(network: network)
                     .environmentObject(networkManager)
             }
+            .onAppear {
+                syncWalletSelectionFromEnabledNetworks()
+            }
+        }
+    }
+
+    private func syncWalletSelectionFromEnabledNetworks() {
+        let enabledPlatforms = Set(networkManager.getEnabledNetworks().compactMap {
+            BlockchainPlatform(rawValue: $0.blockchain.rawValue)
+        })
+        if walletManager.selectedBlockchains != enabledPlatforms {
+            walletManager.enableBlockchains(enabledPlatforms)
         }
     }
 }
@@ -119,14 +135,18 @@ struct NetworkRow: View {
         Button(action: onTap) {
             HStack(spacing: 16) {
                 // Network Icon
-                Circle()
-                    .fill(network.color)
-                    .frame(width: 44, height: 44)
-                    .overlay(
-                        Text(network.iconSymbol)
-                            .font(.system(size: 18, weight: .bold))
-                            .foregroundColor(.white)
-                    )
+                if let platform = BlockchainPlatform(rawValue: network.blockchain.rawValue) {
+                    PlatformIconView(platform: platform, size: 44)
+                } else {
+                    Circle()
+                        .fill(network.color)
+                        .frame(width: 44, height: 44)
+                        .overlay(
+                            Text(network.iconSymbol)
+                                .font(.system(size: 18, weight: .bold))
+                                .foregroundColor(.white)
+                        )
+                }
 
                 VStack(alignment: .leading, spacing: 4) {
                     HStack(spacing: 8) {
@@ -135,7 +155,7 @@ struct NetworkRow: View {
                             .foregroundColor(WpayinColors.text)
 
                         if network.isTestnet {
-                            Text("TESTNET")
+                            Text("TESTNET".localized)
                                 .font(.system(size: 10, weight: .bold))
                                 .foregroundColor(.orange)
                                 .padding(.horizontal, 6)
@@ -147,7 +167,7 @@ struct NetworkRow: View {
                         }
 
                         if network.isCustom {
-                            Text("CUSTOM")
+                            Text("CUSTOM".localized)
                                 .font(.system(size: 10, weight: .bold))
                                 .foregroundColor(WpayinColors.primary)
                                 .padding(.horizontal, 6)
@@ -159,7 +179,7 @@ struct NetworkRow: View {
                         }
                     }
 
-                    Text("Chain ID: \(network.chainId)")
+                    Text("Chain ID: %@".localized("\(network.chainId)"))
                         .font(.system(size: 13))
                         .foregroundColor(WpayinColors.textSecondary)
 
@@ -202,6 +222,7 @@ struct NetworkCategoriesView: View {
     let networks: [NetworkConfig]
     @Binding var selectedNetwork: NetworkConfig?
     @EnvironmentObject var networkManager: NetworkConfigManager
+    @EnvironmentObject var walletManager: WalletManager
     
     private var categorizedNetworks: [(category: BlockchainPlatform.Category, networks: [NetworkConfig])] {
         let grouped = Dictionary(grouping: networks) { network -> BlockchainPlatform.Category in
@@ -249,18 +270,23 @@ struct NetworkRowWithToggle: View {
     let network: NetworkConfig
     let onTap: () -> Void
     @EnvironmentObject var networkManager: NetworkConfigManager
+    @EnvironmentObject var walletManager: WalletManager
     
     var body: some View {
         HStack(spacing: 16) {
             // Network Icon
-            Circle()
-                .fill(network.color)
-                .frame(width: 44, height: 44)
-                .overlay(
-                    Image(systemName: network.iconSymbol)
-                        .font(.system(size: 20, weight: .bold))
-                        .foregroundColor(.white)
-                )
+            if let platform = BlockchainPlatform(rawValue: network.blockchain.rawValue) {
+                PlatformIconView(platform: platform, size: 44)
+            } else {
+                Circle()
+                    .fill(network.color)
+                    .frame(width: 44, height: 44)
+                    .overlay(
+                        Text(network.iconSymbol)
+                            .font(.system(size: 18, weight: .bold))
+                            .foregroundColor(.white)
+                    )
+            }
             
             VStack(alignment: .leading, spacing: 4) {
                 HStack(spacing: 8) {
@@ -269,7 +295,7 @@ struct NetworkRowWithToggle: View {
                         .foregroundColor(WpayinColors.text)
                     
                     if network.isTestnet {
-                        Text("TESTNET")
+                        Text("TESTNET".localized)
                             .font(.system(size: 10, weight: .bold))
                             .foregroundColor(.orange)
                             .padding(.horizontal, 6)
@@ -281,7 +307,7 @@ struct NetworkRowWithToggle: View {
                     }
                 }
                 
-                Text("Chain ID: \(network.chainId)")
+                Text("Chain ID: %@".localized("\(network.chainId)"))
                     .font(.system(size: 13))
                     .foregroundColor(WpayinColors.textSecondary)
             }
@@ -293,6 +319,7 @@ struct NetworkRowWithToggle: View {
                 get: { networkManager.isNetworkEnabled(network) },
                 set: { enabled in
                     networkManager.setNetworkEnabled(network, enabled: enabled)
+                    syncWalletSelectionFromEnabledNetworks()
                 }
             ))
             .labelsHidden()
@@ -302,6 +329,15 @@ struct NetworkRowWithToggle: View {
         .contentShape(Rectangle())
         .onTapGesture {
             onTap()
+        }
+    }
+
+    private func syncWalletSelectionFromEnabledNetworks() {
+        let enabledPlatforms = Set(networkManager.getEnabledNetworks().compactMap {
+            BlockchainPlatform(rawValue: $0.blockchain.rawValue)
+        })
+        if walletManager.selectedBlockchains != enabledPlatforms {
+            walletManager.enableBlockchains(enabledPlatforms)
         }
     }
 }

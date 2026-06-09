@@ -1,3 +1,5 @@
+// Autor Lukas Helebrandt, 2026
+
 //
 //  SettingsManager.swift
 //  Wpayin_Wallet
@@ -9,6 +11,7 @@ import Foundation
 import SwiftUI
 import Combine
 import LocalAuthentication
+import UserNotifications
 
 enum Currency: String, CaseIterable, Identifiable {
     case usd = "USD"
@@ -42,6 +45,18 @@ enum Currency: String, CaseIterable, Identifiable {
         case .cny: return "Chinese Yuan"
         case .krw: return "South Korean Won"
         case .czk: return "Czech Koruna"
+        }
+    }
+
+    var localeIdentifier: String {
+        switch self {
+        case .usd: return "en_US"
+        case .eur: return "de_DE"
+        case .gbp: return "en_GB"
+        case .jpy: return "ja_JP"
+        case .cny: return "zh_CN"
+        case .krw: return "ko_KR"
+        case .czk: return "cs_CZ"
         }
     }
 }
@@ -148,6 +163,8 @@ final class SettingsManager: ObservableObject {
         loadSettings()
         setupBiometricAvailability()
         applyLanguagePreference()
+        CurrencyConversionService.shared.seedFallbackRatesIfNeeded()
+        refreshFiatRates()
     }
 
     // MARK: - Settings Management
@@ -179,18 +196,19 @@ final class SettingsManager: ObservableObject {
         if let savedLanguages = userDefaults.array(forKey: "AppleLanguages") as? [String],
            !savedLanguages.isEmpty {
             // Language preference already set
-            print("✅ App language set to: \(savedLanguages.first ?? "unknown")")
+            Logger.log("✅ App language set to: \(savedLanguages.first ?? "unknown")")
         } else {
             // Set default language
             userDefaults.set([selectedLanguage.rawValue], forKey: "AppleLanguages")
             userDefaults.synchronize()
-            print("✅ Default language set to: \(selectedLanguage.rawValue)")
+            Logger.log("✅ Default language set to: \(selectedLanguage.rawValue)")
         }
     }
 
     func updateCurrency(_ currency: Currency) {
         selectedCurrency = currency
         userDefaults.set(currency.rawValue, forKey: Keys.currency)
+        refreshFiatRates()
 
         // Force immediate UI refresh
         refreshID = UUID()
@@ -215,7 +233,7 @@ final class SettingsManager: ObservableObject {
         // Post notification for any views that need manual refresh
         NotificationCenter.default.post(name: NSNotification.Name("LanguageChanged"), object: nil)
 
-        print("✅ Language changed to: \(language.name)")
+        Logger.log("✅ Language changed to: \(language.name)")
     }
 
     func updateBiometricAuth(_ enabled: Bool) {
@@ -231,6 +249,33 @@ final class SettingsManager: ObservableObject {
     func updateNotifications(_ enabled: Bool) {
         notificationsEnabled = enabled
         userDefaults.set(enabled, forKey: Keys.notifications)
+    }
+
+    func setNotificationsEnabled(_ enabled: Bool) {
+        guard enabled else {
+            updateNotifications(false)
+            return
+        }
+
+        UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .badge, .sound]) { [weak self] granted, error in
+            if let error {
+                Logger.log("Notification permission error: \(error.localizedDescription)")
+            }
+
+            DispatchQueue.main.async {
+                self?.updateNotifications(granted)
+            }
+        }
+    }
+
+    private func refreshFiatRates() {
+        Task { [weak self] in
+            await CurrencyConversionService.shared.refreshRates()
+            await MainActor.run {
+                self?.refreshID = UUID()
+                self?.objectWillChange.send()
+            }
+        }
     }
 
     // MARK: - Biometric Authentication
@@ -259,18 +304,21 @@ final class SettingsManager: ObservableObject {
             let result = try await context.evaluatePolicy(.deviceOwnerAuthenticationWithBiometrics, localizedReason: reason)
             return result
         } catch {
-            print("Biometric authentication failed: \(error.localizedDescription)")
+            Logger.log("Biometric authentication failed: \(error.localizedDescription)")
             return false
         }
     }
 
     // MARK: - Contact & Support
-    func openContactUs() {
+    @discardableResult
+    func openContactUs() -> Bool {
         if let url = URL(string: "mailto:support@wpayin.com?subject=Wpayin%20Wallet%20Support") {
             if UIApplication.shared.canOpenURL(url) {
                 UIApplication.shared.open(url)
+                return true
             }
         }
+        return false
     }
 
     func openHelpCenter() {

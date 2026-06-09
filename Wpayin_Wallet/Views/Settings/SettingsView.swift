@@ -1,3 +1,5 @@
+// Autor Lukas Helebrandt, 2026
+
 //
 //  SettingsView.swift
 //  Wpayin_Wallet
@@ -21,6 +23,8 @@ struct SettingsView: View {
     @State private var showAutoLockSelection = false
     @State private var showNetworkManagement = false
     @State private var showHelpCenter = false
+    @State private var showExportWalletCompliance = false
+    @State private var showContactSupport = false
 
     var body: some View {
         ZStack {
@@ -77,7 +81,7 @@ struct SettingsView: View {
                                 icon: "square.and.arrow.up",
                                 title: "Export Wallet",
                                 subtitle: "Backup your wallet data",
-                                action: { exportWallet() }
+                                action: { showExportWalletCompliance = true }
                             )
                         }
 
@@ -88,13 +92,13 @@ struct SettingsView: View {
                             SettingsRow(
                                 icon: "lock.fill",
                                 title: "Auto-Lock",
-                                subtitle: settingsManager.autoLockDuration.displayName,
+                                subtitle: settingsManager.autoLockDuration.displayName.localized,
                                 action: { showAutoLockSelection = true }
                             )
                         }
 
                         // Preferences Section
-                        SettingsSection(title: "Preferences") {
+                        SettingsSection(title: L10n.Settings.preferences.localized) {
                             SettingsRow(
                                 icon: "dollarsign.circle.fill",
                                 title: L10n.Settings.currency.localized,
@@ -113,29 +117,33 @@ struct SettingsView: View {
                         }
 
                         // Network Management Section
-                        SettingsSection(title: "Networks") {
+                        SettingsSection(title: L10n.Networks.title.localized) {
                             SettingsRow(
                                 icon: "network",
-                                title: "Manage Networks",
-                                subtitle: "\(walletManager.selectedBlockchains.count) networks enabled",
+                                title: L10n.Settings.manageNetworks.localized,
+                                subtitle: L10n.Networks.networkCount.localized(walletManager.selectedBlockchains.count),
                                 action: { showNetworkManagement = true }
                             )
                         }
 
                         // Support Section
-                        SettingsSection(title: "Support") {
+                        SettingsSection(title: L10n.Settings.support.localized) {
                             SettingsRow(
                                 icon: "questionmark.circle.fill",
-                                title: "Help Center",
+                                title: L10n.Settings.helpCenter.localized,
                                 subtitle: "Get help and support",
                                 action: { showHelpCenter = true }
                             )
 
                             SettingsRow(
                                 icon: "envelope.fill",
-                                title: "Contact Us",
+                                title: L10n.Settings.contactUs.localized,
                                 subtitle: "Send feedback",
-                                action: { settingsManager.openContactUs() }
+                                action: {
+                                    if !settingsManager.openContactUs() {
+                                        showContactSupport = true
+                                    }
+                                }
                             )
 
                             SettingsRow(
@@ -147,10 +155,10 @@ struct SettingsView: View {
                         }
 
                         // Danger Zone
-                        SettingsSection(title: "Danger Zone") {
+                        SettingsSection(title: L10n.Settings.dangerZone.localized) {
                             SettingsRow(
                                 icon: "trash.fill",
-                                title: "Delete Wallet",
+                                title: L10n.Settings.deleteWallet.localized,
                                 subtitle: "Permanently delete this wallet",
                                 titleColor: WpayinColors.error,
                                 action: { showDeleteWalletAlert = true }
@@ -163,7 +171,7 @@ struct SettingsView: View {
                                 .font(.wpayinCaption)
                                 .foregroundColor(WpayinColors.textSecondary)
 
-                            Text("Version 1.1.4")
+                            Text("Version 1.1.5".localized)
                                 .font(.wpayinSmall)
                                 .foregroundColor(WpayinColors.textSecondary)
                         }
@@ -199,8 +207,9 @@ struct SettingsView: View {
                 .environmentObject(settingsManager)
         }
         .sheet(isPresented: $showNetworkManagement) {
-            BlockchainSettingsView()
+            NetworkManagementView()
                 .environmentObject(walletManager)
+                .environmentObject(networkManager)
         }
         .sheet(isPresented: $showAbout) {
             AboutView()
@@ -208,19 +217,25 @@ struct SettingsView: View {
         .sheet(isPresented: $showHelpCenter) {
             HelpCenterView()
         }
-        .alert("Delete Wallet", isPresented: $showDeleteWalletAlert) {
-            Button("Cancel", role: .cancel) { }
-            Button("Delete", role: .destructive) {
+        .sheet(isPresented: $showContactSupport) {
+            ContactSupportView()
+        }
+        .sheet(isPresented: $showExportWalletCompliance) {
+            ExportWalletComplianceView {
+                showExportWalletCompliance = false
+                showRecoveryPhrase = true
+            }
+        }
+        .alert(L10n.Settings.deleteWallet.localized, isPresented: $showDeleteWalletAlert) {
+            Button("Cancel".localized, role: .cancel) { }
+            Button("Delete".localized, role: .destructive) {
                 walletManager.deleteWallet()
             }
         } message: {
-            Text("This action cannot be undone. Make sure you have backed up your recovery phrase.")
+            Text("This action cannot be undone. Make sure you have backed up your recovery phrase.".localized)
         }
     }
 
-    private func exportWallet() {
-        showRecoveryPhrase = true
-    }
 }
 
 struct SettingsSection<Content: View>: View {
@@ -234,7 +249,7 @@ struct SettingsSection<Content: View>: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
-            Text(title)
+            Text(title.localized)
                 .font(.wpayinHeadline)
                 .foregroundColor(WpayinColors.text)
 
@@ -288,11 +303,11 @@ struct SettingsRow: View {
                     .frame(width: 24, height: 24)
 
                 VStack(alignment: .leading, spacing: 4) {
-                    Text(title)
+                    Text(title.localized)
                         .font(.wpayinBody)
                         .foregroundColor(titleColor)
 
-                    Text(subtitle)
+                    Text(subtitle.localized)
                         .font(.wpayinCaption)
                         .foregroundColor(WpayinColors.textSecondary)
                 }
@@ -385,18 +400,24 @@ struct NotificationSettingsRow: View {
                 .frame(width: 24, height: 24)
 
             VStack(alignment: .leading, spacing: 4) {
-                Text("Notifications")
+                Text(L10n.Settings.notifications.localized)
                     .font(.wpayinBody)
                     .foregroundColor(WpayinColors.text)
 
-                Text("Transaction alerts and updates")
+                Text("Transaction alerts and updates".localized)
                     .font(.wpayinCaption)
                     .foregroundColor(WpayinColors.textSecondary)
             }
 
             Spacer()
 
-            Toggle("", isOn: $settingsManager.notificationsEnabled)
+            Toggle(
+                "",
+                isOn: Binding(
+                    get: { settingsManager.notificationsEnabled },
+                    set: { settingsManager.setNotificationsEnabled($0) }
+                )
+            )
                 .labelsHidden()
         }
         .padding(16)
@@ -415,16 +436,18 @@ struct AboutView: View {
                 ScrollView {
                     VStack(spacing: 32) {
                         VStack(spacing: 20) {
-                            Image(systemName: "wallet.pass.fill")
-                                .font(.system(size: 64))
-                                .foregroundColor(WpayinColors.primary)
+                            Image("WpayinLogo")
+                                .resizable()
+                                .scaledToFit()
+                                .frame(width: 84, height: 84)
+                                .clipShape(RoundedRectangle(cornerRadius: 18))
 
                             VStack(spacing: 8) {
                                 Text("Wpayin Wallet")
                                     .font(.wpayinTitle)
                                     .foregroundColor(WpayinColors.text)
 
-                                Text("Version 1.1.4")
+                                Text("Version 1.1.5".localized)
                                     .font(.wpayinSubheadline)
                                     .foregroundColor(WpayinColors.textSecondary)
                             }
@@ -433,17 +456,12 @@ struct AboutView: View {
                         VStack(alignment: .leading, spacing: 20) {
                             AboutSection(
                                 title: "About",
-                                content: "Wpayin Wallet is a secure, decentralized wallet for managing your cryptocurrency assets. Built with privacy and security as our top priorities."
+                                content: "Wpayin Wallet is a secure, decentralized wallet for managing your cryptocurrency assets. Built with privacy and security as our top priorities. Your private keys never leave your device."
                             )
 
                             AboutSection(
-                                title: "Features",
-                                content: "• Secure wallet creation and import\\n• ERC-20 token support\\n• DeFi integrations\\n• Swap functionality\\n• Transaction history\\n• Biometric authentication"
-                            )
-
-                            AboutSection(
-                                title: "Privacy",
-                                content: "Your private keys never leave your device. We don't track your transactions or store your personal data."
+                                title: "Version",
+                                content: "1.1.5 (Build 2026.06.08)"
                             )
                         }
                     }
@@ -451,11 +469,11 @@ struct AboutView: View {
                     .padding(.top, 40)
                 }
             }
-            .navigationTitle("About")
+            .navigationTitle(L10n.Settings.about.localized)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
-                    Button("Close") {
+                    Button("Close".localized) {
                         dismiss()
                     }
                     .foregroundColor(WpayinColors.text)
@@ -471,14 +489,220 @@ struct AboutSection: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text(title)
+            Text(title.localized)
                 .font(.wpayinSubheadline)
                 .foregroundColor(WpayinColors.text)
 
-            Text(content)
+            Text(content.localized)
                 .font(.wpayinBody)
                 .foregroundColor(WpayinColors.textSecondary)
         }
+    }
+}
+
+struct ContactSupportView: View {
+    @Environment(\.dismiss) private var dismiss
+    @State private var copied = false
+
+    private let supportEmail = "support@wpayin.com"
+
+    var body: some View {
+        NavigationView {
+            ZStack {
+                WpayinColors.background.ignoresSafeArea()
+
+                VStack(spacing: 24) {
+                    Image(systemName: "envelope.fill")
+                        .font(.system(size: 52))
+                        .foregroundColor(WpayinColors.primary)
+
+                    VStack(spacing: 8) {
+                        Text("Contact Us".localized)
+                            .font(.wpayinHeadline)
+                            .foregroundColor(WpayinColors.text)
+
+                        Text("No email app is configured on this device. You can copy the support address below.".localized)
+                            .font(.wpayinBody)
+                            .foregroundColor(WpayinColors.textSecondary)
+                            .multilineTextAlignment(.center)
+                    }
+
+                    Text(supportEmail)
+                        .font(.system(size: 16, weight: .semibold, design: .monospaced))
+                        .foregroundColor(WpayinColors.text)
+                        .padding(16)
+                        .frame(maxWidth: .infinity)
+                        .background(WpayinColors.surface)
+                        .cornerRadius(12)
+
+                    WpayinButton(title: copied ? "Copied!" : "Copy Address", style: .primary) {
+                        UIPasteboard.general.string = supportEmail
+                        copied = true
+                    }
+
+                    Spacer()
+                }
+                .padding(24)
+            }
+            .navigationTitle("Contact Us".localized)
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarLeading) {
+                    Button("Close".localized) {
+                        dismiss()
+                    }
+                    .foregroundColor(WpayinColors.text)
+                }
+            }
+        }
+    }
+}
+
+struct ExportWalletComplianceView: View {
+    @Environment(\.dismiss) private var dismiss
+    @State private var acceptedResponsibility = false
+    @State private var acceptedNoRecovery = false
+    let onContinue: () -> Void
+
+    private var isEUOrEEARegion: Bool {
+        let euAndEEA: Set<String> = [
+            "AT", "BE", "BG", "HR", "CY", "CZ", "DK", "EE", "FI", "FR", "DE", "GR",
+            "HU", "IE", "IT", "LV", "LT", "LU", "MT", "NL", "PL", "PT", "RO", "SK",
+            "SI", "ES", "SE", "IS", "LI", "NO"
+        ]
+        return Locale.current.regionCode.map { euAndEEA.contains($0) } ?? false
+    }
+
+    private var canContinue: Bool {
+        acceptedResponsibility && acceptedNoRecovery
+    }
+
+    var body: some View {
+        NavigationView {
+            ZStack {
+                WpayinColors.background.ignoresSafeArea()
+
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 20) {
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text("Export Wallet".localized)
+                                .font(.wpayinTitle)
+                                .foregroundColor(WpayinColors.text)
+
+                            Text("Export wallet legal notice".localized)
+                                .font(.wpayinBody)
+                                .foregroundColor(WpayinColors.textSecondary)
+                        }
+
+                        ExportNoticeBlock(
+                            icon: "exclamationmark.triangle.fill",
+                            title: "Self-custody responsibility",
+                            message: "Exporting your recovery phrase or private key gives full control over your crypto assets. Anyone with access can move your funds permanently."
+                        )
+
+                        ExportNoticeBlock(
+                            icon: "lock.slash.fill",
+                            title: "No recovery by Wpayin",
+                            message: "Wpayin is a non-custodial wallet. We cannot reset, recover, freeze, reverse, or restore funds if your exported secret is lost, stolen, or shared."
+                        )
+
+                        if isEUOrEEARegion {
+                            ExportNoticeBlock(
+                                icon: "building.columns.fill",
+                                title: "MiCA and EU notice",
+                                message: "For users in the EU or EEA, crypto-assets may be volatile and transfers are generally irreversible. Under self-custody, you remain solely responsible for safeguarding wallet secrets and verifying transaction details."
+                            )
+                        }
+
+                        VStack(spacing: 12) {
+                            ExportAcknowledgementRow(
+                                isOn: $acceptedResponsibility,
+                                text: "I understand that exported wallet secrets can transfer full control of my assets."
+                            )
+
+                            ExportAcknowledgementRow(
+                                isOn: $acceptedNoRecovery,
+                                text: "I understand that Wpayin cannot recover funds or wallet access if I lose or share this information."
+                            )
+                        }
+
+                        WpayinButton(title: "Continue to Export", style: canContinue ? .primary : .secondary) {
+                            guard canContinue else { return }
+                            onContinue()
+                        }
+                        .opacity(canContinue ? 1.0 : 0.45)
+                        .disabled(!canContinue)
+                    }
+                    .padding(24)
+                }
+            }
+            .navigationTitle("Export Wallet".localized)
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarLeading) {
+                    Button("Cancel".localized) {
+                        dismiss()
+                    }
+                    .foregroundColor(WpayinColors.text)
+                }
+            }
+        }
+    }
+}
+
+struct ExportNoticeBlock: View {
+    let icon: String
+    let title: String
+    let message: String
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 14) {
+            Image(systemName: icon)
+                .font(.system(size: 20, weight: .semibold))
+                .foregroundColor(WpayinColors.primary)
+                .frame(width: 26)
+
+            VStack(alignment: .leading, spacing: 6) {
+                Text(title.localized)
+                    .font(.wpayinSubheadline)
+                    .foregroundColor(WpayinColors.text)
+
+                Text(message.localized)
+                    .font(.wpayinBody)
+                    .foregroundColor(WpayinColors.textSecondary)
+            }
+        }
+        .padding(16)
+        .background(WpayinColors.surface)
+        .cornerRadius(12)
+    }
+}
+
+struct ExportAcknowledgementRow: View {
+    @Binding var isOn: Bool
+    let text: String
+
+    var body: some View {
+        Button {
+            isOn.toggle()
+        } label: {
+            HStack(alignment: .top, spacing: 12) {
+                Image(systemName: isOn ? "checkmark.square.fill" : "square")
+                    .font(.system(size: 22))
+                    .foregroundColor(isOn ? WpayinColors.primary : WpayinColors.textSecondary)
+
+                Text(text.localized)
+                    .font(.wpayinBody)
+                    .foregroundColor(WpayinColors.text)
+                    .multilineTextAlignment(.leading)
+
+                Spacer()
+            }
+            .padding(16)
+            .background(WpayinColors.surface)
+            .cornerRadius(12)
+        }
+        .buttonStyle(PlainButtonStyle())
     }
 }
 

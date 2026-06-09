@@ -1,3 +1,5 @@
+// Autor Lukas Helebrandt, 2026
+
 //
 //  TokenIconHelper.swift
 //  Wpayin_Wallet
@@ -17,30 +19,30 @@ struct TokenIconHelper {
         // Map of well-known tokens to their asset names
         let iconMap: [String: String] = [
             // Bitcoin
-            "btc_bitcoin": "bitcoin",
-            "bitcoin_bitcoin": "bitcoin",
+            "btc_bitcoin": "BTC",
+            "bitcoin_bitcoin": "BTC",
             
             // Ethereum mainnet
-            "eth_ethereum": "ethereum_trx_32",
-            "weth_ethereum": "ethereum_eip20_32",
+            "eth_ethereum": "ETH",
+            "weth_ethereum": "ETH",
             
             // Polygon
-            "matic_polygon": "polygon-pos_trx_32",
-            "weth_polygon": "ethereum_eip20_32",
+            "matic_polygon": "polygon-pos_eip20_32",
+            "weth_polygon": "ETH",
             "eth_polygon": "ethereum_eip20_32",
             
             // BSC
-            "bnb_binance-smart-chain": "binance-smart-chain_trx_32",
+            "bnb_binance-smart-chain": "BNB",
             "wbnb_binance-smart-chain": "binance-smart-chain_eip20_32",
             "eth_binance-smart-chain": "ethereum_eip20_32",
             
             // Arbitrum
             "eth_arbitrum": "arbitrum-one_trx_32",
-            "weth_arbitrum": "ethereum_eip20_32",
+            "weth_arbitrum": "ETH",
             
             // Optimism
             "eth_optimism": "optimistic-ethereum_trx_32",
-            "weth_optimism": "ethereum_eip20_32",
+            "weth_optimism": "ETH",
             
             // Avalanche
             "avax_avalanche": "avalanche_trx_32",
@@ -49,10 +51,9 @@ struct TokenIconHelper {
             
             // Base
             "eth_base": "base_trx_32",
-            "weth_base": "ethereum_eip20_32",
+            "weth_base": "ETH",
             
-            // Solana
-            "sol_solana": "solana_trx_32",
+            // Solana has no bundled raster asset yet; use placeholder fallback.
         ]
         
         return iconMap[key]
@@ -63,18 +64,14 @@ struct TokenIconHelper {
         let key = symbol.uppercased()
         
         let fallbackMap: [String: String] = [
-            "BTC": "bitcoin",
-            "ETH": "ethereum_trx_32",
-            "WETH": "ethereum_eip20_32",
-            "BNB": "binance-smart-chain_trx_32",
+            "BTC": "BTC",
+            "ETH": "ETH",
+            "WETH": "ETH",
+            "BNB": "BNB",
             "WBNB": "binance-smart-chain_eip20_32",
-            "MATIC": "polygon-pos_trx_32",
+            "MATIC": "polygon-pos_eip20_32",
             "AVAX": "avalanche_trx_32",
             "WAVAX": "avalanche_eip20_32",
-            "SOL": "solana_trx_32",
-            "USDT": "ethereum_eip20_32",  // Generic ERC20 icon for USDT
-            "USDC": "ethereum_eip20_32",  // Generic ERC20 icon for USDC
-            "DAI": "ethereum_eip20_32",   // Generic ERC20 icon for DAI
         ]
         
         return fallbackMap[key]
@@ -125,6 +122,8 @@ struct TokenIconHelper {
             return Color(red: 0.95, green: 0.77, blue: 0.19) // Binance yellow
         case "WETH":
             return Color(red: 0.39, green: 0.47, blue: 1.0) // WETH blue
+        case "SOL":
+            return Color(red: 0.66, green: 0.36, blue: 1.0) // Solana purple
         default:
             return Color.gray
         }
@@ -144,11 +143,21 @@ struct TokenIconHelper {
             return "DAI"
         case "WETH":
             return "Ξ"  // Ethereum symbol (wrapped)
+        case "SOL":
+            return "S"
         default:
             if clean.count >= 1 {
                 return String(clean.prefix(1))
             }
             return "?"
         }
+    }
+
+    static func formattedBalance(_ balance: Double, decimals: Int = 2) -> String {
+        String(format: "%.\(decimals)f", balance)
+    }
+
+    static func formattedBalanceWithSymbol(_ balance: Double, symbol: String, decimals: Int = 2) -> String {
+        "\(formattedBalance(balance, decimals: decimals)) \(symbol)"
     }
 }

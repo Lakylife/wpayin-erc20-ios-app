@@ -1,3 +1,5 @@
+// Autor Lukas Helebrandt, 2026
+
 //
 //  SwapService.swift
 //  Wpayin_Wallet
@@ -283,7 +285,7 @@ class SwapService {
         // Check current allowance
         // If insufficient, send approve transaction
         // This is simplified - in production, check allowance first
-        print("ℹ️ Token approval may be required for \(token.symbol)")
+        Logger.log("ℹ️ Token approval may be required for \(token.symbol)")
     }
 
     private func paddedData(_ data: Data, size: Int) -> Data {

@@ -1,3 +1,5 @@
+// Autor Lukas Helebrandt, 2026
+
 //
 //  BrowserView.swift
 //  Wpayin_Wallet

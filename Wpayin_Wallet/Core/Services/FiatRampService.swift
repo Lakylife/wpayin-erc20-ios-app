@@ -1,3 +1,5 @@
+// Autor Lukas Helebrandt, 2026
+
 //
 //  FiatRampService.swift
 //  Wpayin_Wallet
@@ -225,7 +227,7 @@ class FiatRampService {
             return generateMtPelerinURL(config: config)
         // Providers without public widget
         case .sardine, .unlimit, .mercury, .coinbasePay, .binance:
-            print("⚠️ \(config.provider.displayName) widget disabled/unsupported")
+            Logger.log("⚠️ \(config.provider.displayName) widget disabled/unsupported")
             return nil
         }
     }

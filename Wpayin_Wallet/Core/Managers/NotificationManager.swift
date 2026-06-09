@@ -1,3 +1,5 @@
+// Autor Lukas Helebrandt, 2026
+
 //
 //  NotificationManager.swift
 //  Wpayin_Wallet
@@ -69,9 +71,9 @@ final class NotificationManager: ObservableObject {
     func requestPermission() {
         UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound, .badge]) { granted, error in
             if granted {
-                print("✅ Notification permission granted")
+                Logger.log("✅ Notification permission granted")
             } else if let error = error {
-                print("❌ Notification permission error: \(error.localizedDescription)")
+                Logger.log("❌ Notification permission error: \(error.localizedDescription)")
             }
         }
     }
@@ -100,7 +102,7 @@ final class NotificationManager: ObservableObject {
 
         UNUserNotificationCenter.current().add(request) { error in
             if let error = error {
-                print("❌ Failed to send push notification: \(error.localizedDescription)")
+                Logger.log("❌ Failed to send push notification: \(error.localizedDescription)")
             }
         }
     }

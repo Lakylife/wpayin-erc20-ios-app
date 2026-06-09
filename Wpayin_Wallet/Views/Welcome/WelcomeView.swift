@@ -1,3 +1,5 @@
+// Autor Lukas Helebrandt, 2026
+
 //
 //  WelcomeView.swift
 //  Wpayin_Wallet
@@ -28,7 +30,7 @@ struct WelcomeView: View {
                             .font(.wpayinTitle)
                             .foregroundColor(WpayinColors.text)
 
-                        Text("Secure, Simple, Decentralized")
+                        Text(L10n.Welcome.subtitle.localized)
                             .font(.wpayinSubheadline)
                             .foregroundColor(WpayinColors.textSecondary)
                     }
@@ -39,14 +41,14 @@ struct WelcomeView: View {
                 // Action Buttons
                 VStack(spacing: 16) {
                     WpayinButton(
-                        title: "Create New Wallet",
+                        title: L10n.Action.create.localized,
                         style: .primary
                     ) {
                         showCreateWallet = true
                     }
 
                     WpayinButton(
-                        title: "Import Existing Wallet",
+                        title: L10n.Action.importWallet.localized,
                         style: .secondary
                     ) {
                         showImportWallet = true

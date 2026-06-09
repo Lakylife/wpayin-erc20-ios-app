@@ -1,3 +1,5 @@
+// Autor Lukas Helebrandt, 2026
+
 //
 //  AssetDetailView.swift
 //  Wpayin_Wallet
@@ -62,7 +64,7 @@ struct AssetDetailView: View {
                             .scaleEffect(1.5)
                             .tint(WpayinColors.primary)
 
-                        Text("Loading market data...")
+                        Text(L10n.Wallet.loadingData.localized)
                             .font(.wpayinBody)
                             .foregroundColor(WpayinColors.textSecondary)
                     }
@@ -72,7 +74,7 @@ struct AssetDetailView: View {
                             .font(.system(size: 48))
                             .foregroundColor(WpayinColors.error)
 
-                        Text("Failed to load data")
+                        Text(L10n.Wallet.failedToLoad.localized)
                             .font(.wpayinHeadline)
                             .foregroundColor(WpayinColors.text)
 
@@ -81,7 +83,7 @@ struct AssetDetailView: View {
                             .foregroundColor(WpayinColors.textSecondary)
                             .multilineTextAlignment(.center)
 
-                        Button("Retry") {
+                        Button(L10n.Wallet.retry.localized) {
                             loadAssetData()
                         }
                         .foregroundColor(WpayinColors.primary)
@@ -122,13 +124,13 @@ struct AssetDetailView: View {
                             if allTokensForSymbol.count > 1 {
                                 VStack(alignment: .leading, spacing: 16) {
                                     HStack {
-                                        Text("Network Distribution")
+                                        Text(L10n.Tokens.distribution.localized)
                                             .font(.system(size: 18, weight: .bold))
                                             .foregroundColor(WpayinColors.text)
 
                                         Spacer()
 
-                                        Text("\(allTokensForSymbol.count) networks")
+                                        Text(L10n.Networks.networkCount.localized(allTokensForSymbol.count))
                                             .font(.system(size: 14, weight: .medium))
                                             .foregroundColor(WpayinColors.textSecondary)
                                     }
@@ -170,7 +172,7 @@ struct AssetDetailView: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
-                    Button("Close") {
+                    Button(L10n.Action.close.localized) {
                         dismiss()
                     }
                     .foregroundColor(WpayinColors.text)
@@ -187,16 +189,19 @@ struct AssetDetailView: View {
             }
         }
         .sheet(isPresented: $showDepositSheet) {
-            DepositView()
+            DepositView(initialToken: token)
                 .environmentObject(walletManager)
+                .environmentObject(settingsManager)
         }
         .sheet(isPresented: $showWithdrawSheet) {
-            WithdrawView()
+            WithdrawView(initialToken: token)
                 .environmentObject(walletManager)
+                .environmentObject(settingsManager)
         }
         .sheet(isPresented: $showSwapSheet) {
-            SwapView()
+            SwapView(initialFromToken: token)
                 .environmentObject(walletManager)
+                .environmentObject(settingsManager)
         }
         .onAppear {
             // Only load data if we don't have it yet or it's been more than 5 minutes
@@ -211,7 +216,7 @@ struct AssetDetailView: View {
         errorMessage = nil
 
         let coinId = APIService.getCoinId(for: token.symbol)
-        print("🚀 Loading asset data for: \(token.symbol) -> \(coinId)")
+        Logger.log("🚀 Loading asset data for: \(token.symbol) -> \(coinId)")
 
         Task {
             do {
@@ -221,20 +226,20 @@ struct AssetDetailView: View {
                 let (fetchedCoinData, fetchedChartData) = try await (coinDataTask, chartDataTask)
 
                 await MainActor.run {
-                    print("✅ Successfully loaded data for \(token.symbol)")
+                    Logger.log("✅ Successfully loaded data for \(token.symbol)")
                     self.coinData = fetchedCoinData
                     self.chartData = fetchedChartData
                     self.isLoading = false
                     self.lastLoadTime = Date()
                 }
             } catch {
-                print("❌ Failed to load asset data: \(error)")
+                Logger.log("❌ Failed to load asset data: \(error)")
 
                 // Try to load just basic data without chart as fallback
                 do {
                     let basicData = try await APIService.shared.getCoinData(coinId: coinId)
                     await MainActor.run {
-                        print("✅ Loaded basic data for \(token.symbol)")
+                        Logger.log("✅ Loaded basic data for \(token.symbol)")
                         self.coinData = basicData
                         self.isLoading = false
                         self.lastLoadTime = Date()
@@ -243,7 +248,7 @@ struct AssetDetailView: View {
                     // Final fallback - show error but don't block the UI
                     await MainActor.run {
                         self.isLoading = false
-                        print("⚠️ Using fallback display for \(token.symbol)")
+                        Logger.log("⚠️ Using fallback display for \(token.symbol)")
                         // Don't set error message - just show token info without chart
                     }
                 }
@@ -262,7 +267,7 @@ struct AssetDetailView: View {
                     self.chartData = fetchedChartData
                 }
             } catch {
-                print("Failed to load chart data: \(error)")
+                Logger.log("Failed to load chart data: \(error)")
             }
         }
     }
@@ -273,6 +278,7 @@ struct AssetDetailView: View {
 struct RealAssetHeaderView: View {
     let token: Token
     let coinData: CoinData
+    @EnvironmentObject var settingsManager: SettingsManager
 
     var body: some View {
         VStack(spacing: 20) {
@@ -303,7 +309,7 @@ struct RealAssetHeaderView: View {
 
             // Real Current Price
             VStack(spacing: 8) {
-                Text("$" + String(format: "%.2f", coinData.marketData.currentPrice["usd"] ?? 0))
+                Text((coinData.marketData.currentPrice["usd"] ?? 0).formatted(as: settingsManager.selectedCurrency))
                     .font(.system(size: 36, weight: .bold, design: .rounded))
                     .foregroundColor(WpayinColors.text)
 
@@ -317,7 +323,7 @@ struct RealAssetHeaderView: View {
                         .font(.system(size: 12))
                         .foregroundColor(isPositive ? WpayinColors.success : WpayinColors.error)
 
-                    Text("\(isPositive ? "+" : "")$\(String(format: "%.2f", abs(priceChange))) (\(isPositive ? "+" : "")\(String(format: "%.2f", priceChangePercent))%)")
+                    Text("\(isPositive ? "+" : "-")\(abs(priceChange).formatted(as: settingsManager.selectedCurrency)) (\(isPositive ? "+" : "")\(String(format: "%.2f", priceChangePercent))%)")
                         .font(.wpayinBody)
                         .foregroundColor(isPositive ? WpayinColors.success : WpayinColors.error)
 
@@ -340,11 +346,12 @@ struct RealAssetChartView: View {
     @Binding var selectedTimeframe: Int
     let timeframes: [String]
     let onTimeframeChanged: (Int) -> Void
+    @EnvironmentObject var settingsManager: SettingsManager
 
     var body: some View {
         VStack(spacing: 20) {
             HStack {
-                Text("Price Chart")
+                Text(L10n.Market.priceChart.localized)
                     .font(.wpayinHeadline)
                     .foregroundColor(WpayinColors.text)
 
@@ -379,18 +386,18 @@ struct RealAssetChartView: View {
                 // Real Chart stats
                 HStack {
                     ChartStatItem(
-                        title: "High 24h",
-                        value: "$\(String(format: "%.2f", coinData.marketData.high24h["usd"] ?? 0))",
+                        title: L10n.Market.high24h.localized,
+                        value: (coinData.marketData.high24h["usd"] ?? 0).formatted(as: settingsManager.selectedCurrency),
                         color: WpayinColors.success
                     )
                     ChartStatItem(
-                        title: "Low 24h",
-                        value: "$\(String(format: "%.2f", coinData.marketData.low24h["usd"] ?? 0))",
+                        title: L10n.Market.low24h.localized,
+                        value: (coinData.marketData.low24h["usd"] ?? 0).formatted(as: settingsManager.selectedCurrency),
                         color: WpayinColors.error
                     )
                     ChartStatItem(
-                        title: "Volume 24h",
-                        value: formatLargeNumber(coinData.marketData.totalVolume["usd"] ?? 0),
+                        title: L10n.Market.volume24h.localized,
+                        value: (coinData.marketData.totalVolume["usd"] ?? 0).formattedShort(as: settingsManager.selectedCurrency),
                         color: WpayinColors.primary
                     )
                 }
@@ -401,18 +408,6 @@ struct RealAssetChartView: View {
         .cornerRadius(20)
     }
 
-    private func formatLargeNumber(_ number: Double) -> String {
-        let billion = 1_000_000_000.0
-        let million = 1_000_000.0
-
-        if number >= billion {
-            return "$\(String(format: "%.1f", number / billion))B"
-        } else if number >= million {
-            return "$\(String(format: "%.1f", number / million))M"
-        } else {
-            return "$\(String(format: "%.0f", number))"
-        }
-    }
 }
 
 struct PriceChartView: View {
@@ -500,7 +495,7 @@ struct ChartStatItem: View {
 
     var body: some View {
         VStack(spacing: 4) {
-            Text(title)
+            Text(title.localized)
                 .font(.wpayinCaption)
                 .foregroundColor(WpayinColors.textSecondary)
 
@@ -517,20 +512,22 @@ struct AssetBalanceView: View {
     let onDeposit: () -> Void
     let onWithdraw: () -> Void
     let onSwap: () -> Void
+    @EnvironmentObject var settingsManager: SettingsManager
 
     var body: some View {
         VStack(spacing: 20) {
             // Balance section
             VStack(spacing: 12) {
-                Text("Your Balance")
+                Text(L10n.Tokens.balance.localized)
                     .font(.wpayinBody)
                     .foregroundColor(WpayinColors.textSecondary)
 
-                Text(String(format: "%.6f", token.balance) + " \(token.symbol)")
+                let balanceString = token.balance == 0 ? "0.00" : String(format: "%.6f", token.balance)
+                Text("\(balanceString) \(token.symbol)")
                     .font(.system(size: 28, weight: .bold, design: .rounded))
                     .foregroundColor(WpayinColors.text)
 
-                Text("≈ $" + String(format: "%.2f", token.totalValue))
+                Text("≈ \(token.totalValue.formatted(as: settingsManager.selectedCurrency))")
                     .font(.wpayinBody)
                     .foregroundColor(WpayinColors.textSecondary)
             }
@@ -539,24 +536,24 @@ struct AssetBalanceView: View {
             HStack(spacing: 12) {
                 AssetActionButton(
                     icon: "arrow.down.circle.fill",
-                    title: "Deposit",
-                    subtitle: "Add \(token.symbol)",
+                    title: L10n.Action.receive.localized,
+                    subtitle: L10n.Action.depositSubtitle.localized(token.symbol),
                     color: WpayinColors.success,
                     action: onDeposit
                 )
 
                 AssetActionButton(
                     icon: "arrow.up.circle.fill",
-                    title: "Send",
-                    subtitle: "Transfer out",
+                    title: L10n.Action.send.localized,
+                    subtitle: L10n.Action.sendSubtitle.localized,
                     color: WpayinColors.primary,
                     action: onWithdraw
                 )
 
                 AssetActionButton(
                     icon: "arrow.triangle.2.circlepath",
-                    title: "Swap",
-                    subtitle: "Exchange",
+                    title: L10n.Action.swap.localized,
+                    subtitle: L10n.Action.swapSubtitle.localized,
                     color: WpayinColors.primary,
                     action: onSwap
                 )
@@ -583,13 +580,14 @@ struct AssetActionButton: View {
                     .foregroundColor(color)
 
                 VStack(spacing: 2) {
-                    Text(title)
+                    Text(title.localized)
                         .font(.wpayinBody)
                         .foregroundColor(WpayinColors.text)
 
-                    Text(subtitle)
+                    Text(subtitle.localized)
                         .font(.wpayinCaption)
                         .foregroundColor(WpayinColors.textSecondary)
+                        .lineLimit(1)
                 }
             }
             .frame(maxWidth: .infinity)
@@ -604,43 +602,44 @@ struct AssetActionButton: View {
 struct RealAssetStatsView: View {
     let token: Token
     let coinData: CoinData
+    @EnvironmentObject var settingsManager: SettingsManager
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
-            Text("Token Details")
+            Text(L10n.Tokens.details.localized)
                 .font(.wpayinHeadline)
                 .foregroundColor(WpayinColors.text)
 
             VStack(spacing: 12) {
                 StatRow(
-                    title: "Market Cap",
-                    value: formatLargeNumber(coinData.marketData.marketCap["usd"] ?? 0)
+                    title: L10n.Market.marketCap.localized,
+                    value: (coinData.marketData.marketCap["usd"] ?? 0).formattedShort(as: settingsManager.selectedCurrency)
                 )
                 StatRow(
-                    title: "24h Volume",
-                    value: formatLargeNumber(coinData.marketData.totalVolume["usd"] ?? 0)
+                    title: L10n.Market.volume24h.localized,
+                    value: (coinData.marketData.totalVolume["usd"] ?? 0).formattedShort(as: settingsManager.selectedCurrency)
                 )
                 if let supply = coinData.marketData.circulatingSupply {
                     StatRow(
-                        title: "Circulating Supply",
+                        title: L10n.Market.circulatingSupply.localized,
                         value: formatSupply(supply) + " \(token.symbol)"
                     )
                 }
                 if let totalSupply = coinData.marketData.totalSupply {
                     StatRow(
-                        title: "Total Supply",
+                        title: L10n.Market.totalSupply.localized,
                         value: formatSupply(totalSupply) + " \(token.symbol)"
                     )
                 }
                 if let contractAddress = token.contractAddress {
                     StatRow(
-                        title: "Contract Address",
+                        title: "Contract Address".localized,
                         value: formatAddress(contractAddress)
                     )
                 } else {
                     StatRow(
-                        title: "Network",
-                        value: token.blockchain.name + " Native Token"
+                        title: "Network".localized,
+                        value: "%@ Native Token".localized(token.blockchain.name)
                     )
                 }
             }
@@ -648,19 +647,6 @@ struct RealAssetStatsView: View {
         .padding(24)
         .background(WpayinColors.surface)
         .cornerRadius(20)
-    }
-
-    private func formatLargeNumber(_ number: Double) -> String {
-        let billion = 1_000_000_000.0
-        let million = 1_000_000.0
-
-        if number >= billion {
-            return "$\(String(format: "%.1f", number / billion))B"
-        } else if number >= million {
-            return "$\(String(format: "%.1f", number / million))M"
-        } else {
-            return "$\(String(format: "%.0f", number))"
-        }
     }
 
     private func formatSupply(_ supply: Double) -> String {
@@ -684,18 +670,19 @@ struct RealAssetStatsView: View {
 
 struct AssetStatsView: View {
     let token: Token
+    @EnvironmentObject var settingsManager: SettingsManager
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
-            Text("Token Details")
+            Text(L10n.Tokens.details.localized)
                 .font(.wpayinHeadline)
                 .foregroundColor(WpayinColors.text)
 
             VStack(spacing: 12) {
-                StatRow(title: "Market Cap", value: "$456.7B")
-                StatRow(title: "24h Volume", value: "$12.3B")
-                StatRow(title: "Circulating Supply", value: "120.3M \(token.symbol)")
-                StatRow(title: "Contract Address", value: formatAddress(token.contractAddress ?? "N/A"))
+                StatRow(title: L10n.Market.marketCap.localized, value: 456_700_000_000.formattedShort(as: settingsManager.selectedCurrency))
+                StatRow(title: L10n.Market.volume24h.localized, value: 12_300_000_000.formattedShort(as: settingsManager.selectedCurrency))
+                StatRow(title: L10n.Market.circulatingSupply.localized, value: "120.3M \(token.symbol)")
+                StatRow(title: "Contract Address".localized, value: formatAddress(token.contractAddress ?? "N/A"))
             }
         }
         .padding(24)
@@ -715,7 +702,7 @@ struct StatRow: View {
 
     var body: some View {
         HStack {
-            Text(title)
+            Text(title.localized)
                 .font(.wpayinBody)
                 .foregroundColor(WpayinColors.textSecondary)
 
@@ -742,13 +729,13 @@ struct AssetTransactionHistoryView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
             HStack {
-                Text("Recent Transactions")
+                Text(L10n.Activity.recent.localized)
                     .font(.wpayinHeadline)
                     .foregroundColor(WpayinColors.text)
 
                 Spacer()
 
-                Button("View All") {
+                Button(L10n.Wallet.viewAll.localized) {
                     // Navigate to full transaction history
                 }
                 .foregroundColor(WpayinColors.primary)
@@ -762,11 +749,11 @@ struct AssetTransactionHistoryView: View {
                         .foregroundColor(WpayinColors.textSecondary)
                         .opacity(0.5)
 
-                    Text("No transactions yet")
+                    Text(L10n.Activity.noTransactions.localized)
                         .font(.wpayinBody)
                         .foregroundColor(WpayinColors.textSecondary)
 
-                    Text("Your \(token.symbol) transactions will appear here")
+                    Text(L10n.Activity.tokenEmptyDesc.localized(token.symbol))
                         .font(.wpayinCaption)
                         .foregroundColor(WpayinColors.textSecondary)
                         .multilineTextAlignment(.center)

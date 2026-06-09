@@ -1,3 +1,5 @@
+// Autor Lukas Helebrandt, 2026
+
 //
 //  WebView.swift
 //  Wpayin_Wallet
@@ -39,7 +41,7 @@ struct WebView: UIViewRepresentable {
         webView.scrollView.backgroundColor = UIColor.systemBackground
         
         // Add debug
-        print("🌐 WebView created for URL: \(url.absoluteString)")
+        Logger.log("🌐 WebView created for URL: \(url.absoluteString)")
         
         return webView
     }
@@ -48,10 +50,10 @@ struct WebView: UIViewRepresentable {
         // Only load if URL changed or webView is empty
         if webView.url != url {
             let request = URLRequest(url: url)
-            print("🔄 WebView loading: \(url.absoluteString)")
+            Logger.log("🔄 WebView loading: \(url.absoluteString)")
             webView.load(request)
         } else {
-            print("⏭️ WebView - same URL, skipping reload")
+            Logger.log("⏭️ WebView - same URL, skipping reload")
         }
     }
     
@@ -63,23 +65,23 @@ struct WebView: UIViewRepresentable {
         }
         
         func webView(_ webView: WKWebView, didStartProvisionalNavigation navigation: WKNavigation!) {
-            print("🚀 WebView navigation started")
+            Logger.log("🚀 WebView navigation started")
             parent.isLoading = true
         }
         
         func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
-            print("✅ WebView navigation finished: \(webView.url?.absoluteString ?? "unknown")")
+            Logger.log("✅ WebView navigation finished: \(webView.url?.absoluteString ?? "unknown")")
             parent.isLoading = false
             parent.onNavigationFinished?(webView.url)
         }
         
         func webView(_ webView: WKWebView, didFail navigation: WKNavigation!, withError error: Error) {
-            print("❌ WebView navigation failed: \(error.localizedDescription)")
+            Logger.log("❌ WebView navigation failed: \(error.localizedDescription)")
             parent.isLoading = false
         }
         
         func webView(_ webView: WKWebView, didFailProvisionalNavigation navigation: WKNavigation!, withError error: Error) {
-            print("❌ WebView provisional navigation failed: \(error.localizedDescription)")
+            Logger.log("❌ WebView provisional navigation failed: \(error.localizedDescription)")
             parent.isLoading = false
         }
     }

@@ -1,3 +1,5 @@
+// Autor Lukas Helebrandt, 2026
+
 //
 //  ExpandableTokenCard.swift
 //  Wpayin_Wallet
@@ -12,6 +14,7 @@ struct ExpandableTokenCard: View {
     let onTokenTap: (Token) -> Void
     let onNetworkTokenTap: (Token) -> Void
     @EnvironmentObject var walletManager: WalletManager
+    @EnvironmentObject var settingsManager: SettingsManager
     @State private var isExpanded = false
 
     var body: some View {
@@ -27,33 +30,7 @@ struct ExpandableTokenCard: View {
                 }
             }) {
                 HStack(spacing: 14) {
-                    // Token Logo with CoinGecko image
-                    if let iconUrl = token.iconUrl, let url = URL(string: iconUrl) {
-                        AsyncImage(url: url) { image in
-                            image
-                                .resizable()
-                                .aspectRatio(contentMode: .fill)
-                        } placeholder: {
-                            Circle()
-                                .fill(tokenColor(for: token))
-                                .overlay(
-                                    Text(tokenSymbol(for: token))
-                                        .font(.system(size: 22, weight: .bold))
-                                        .foregroundColor(.white)
-                                )
-                        }
-                        .frame(width: 48, height: 48)
-                        .clipShape(Circle())
-                    } else {
-                        Circle()
-                            .fill(tokenColor(for: token))
-                            .frame(width: 48, height: 48)
-                            .overlay(
-                                Text(tokenSymbol(for: token))
-                                    .font(.system(size: 22, weight: .bold))
-                                    .foregroundColor(.white)
-                            )
-                    }
+                    TokenIconView(token: token, size: 48, showNetworkBadge: false)
 
                     VStack(alignment: .leading, spacing: 4) {
                         HStack(spacing: 8) {
@@ -67,17 +44,14 @@ struct ExpandableTokenCard: View {
                         }
 
                         HStack(spacing: 8) {
-                            Text(String(format: "$%.2f", token.price))
+                            Text(token.price.formatted(as: settingsManager.selectedCurrency))
                                 .font(.system(size: 13))
                                 .foregroundColor(WpayinColors.textSecondary)
 
                             if networksForToken.count > 1 {
-                                // Show network dots like Ledger
-                                HStack(spacing: -2) {
+                                HStack(spacing: -4) {
                                     ForEach(Array(networksForToken.prefix(3)), id: \.self) { network in
-                                        Circle()
-                                            .fill(networkColor(network))
-                                            .frame(width: 16, height: 16)
+                                        NetworkIconView(blockchain: network, size: 16)
                                             .overlay(
                                                 Circle()
                                                     .stroke(WpayinColors.surface, lineWidth: 1)
@@ -93,6 +67,13 @@ struct ExpandableTokenCard: View {
                                                     .foregroundColor(.white)
                                             )
                                     }
+
+                                    Image(systemName: "chevron.down")
+                                        .font(.system(size: 9, weight: .bold))
+                                        .foregroundColor(WpayinColors.textSecondary)
+                                        .frame(width: 16, height: 16)
+                                        .rotationEffect(.degrees(isExpanded ? 180 : 0))
+                                        .animation(.easeInOut(duration: 0.3), value: isExpanded)
                                 }
                             }
                         }
@@ -101,23 +82,19 @@ struct ExpandableTokenCard: View {
                     Spacer()
 
                     VStack(alignment: .trailing, spacing: 4) {
-                        Text(String(format: "%.4f %@", totalBalanceAcrossNetworks, token.symbol))
-                            .font(.system(size: 16, weight: .bold))
+                        Text(TokenIconHelper.formattedBalanceWithSymbol(totalBalanceAcrossNetworks, symbol: token.symbol))
+                            .font(.system(size: 14, weight: .bold))
                             .foregroundColor(WpayinColors.text)
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.6)
 
-                        Text(String(format: "$%.2f", totalValueAcrossNetworks))
-                            .font(.system(size: 13))
+                        Text(totalValueAcrossNetworks.formatted(as: settingsManager.selectedCurrency))
+                            .font(.system(size: 12))
                             .foregroundColor(WpayinColors.textTertiary)
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.75)
                     }
-
-                    // Chevron for expandable tokens
-                    if networksForToken.count > 1 {
-                        Image(systemName: "chevron.down")
-                            .font(.system(size: 12, weight: .medium))
-                            .foregroundColor(WpayinColors.textSecondary)
-                            .rotationEffect(.degrees(isExpanded ? 180 : 0))
-                            .animation(.easeInOut(duration: 0.3), value: isExpanded)
-                    }
+                    .frame(width: 86, alignment: .trailing)
                 }
                 .padding(16)
                 .background(
@@ -156,20 +133,20 @@ struct ExpandableTokenCard: View {
     }
 
     private var networksForToken: [BlockchainType] {
-        let allTokensForSymbol = walletManager.tokens.filter { $0.symbol == token.symbol }
+        let allTokensForSymbol = walletManager.visibleTokens.filter { $0.symbol == token.symbol }
         return Array(Set(allTokensForSymbol.map { $0.blockchain })).sorted { $0.name < $1.name }
     }
 
     private var allNetworkTokens: [Token] {
-        walletManager.tokens.filter { $0.symbol == token.symbol }
+        walletManager.visibleTokens.filter { $0.symbol == token.symbol }
     }
 
     private var totalBalanceAcrossNetworks: Double {
-        allNetworkTokens.reduce(0) { $0 + $1.balance }
+        token.balance
     }
 
     private var totalValueAcrossNetworks: Double {
-        allNetworkTokens.reduce(0) { $0 + $1.totalValue }
+        token.totalValue
     }
 
     private func networkPriority(_ blockchain: BlockchainType) -> Int {
@@ -246,6 +223,7 @@ struct NetworkSubRow: View {
     let token: Token
     let isMainNetwork: Bool
     let onTap: () -> Void
+    @EnvironmentObject var settingsManager: SettingsManager
 
     var body: some View {
         Button(action: onTap) {
@@ -258,14 +236,7 @@ struct NetworkSubRow: View {
                             .frame(width: 2, height: 20)
                     }
 
-                    Circle()
-                        .fill(networkColor)
-                        .frame(width: isMainNetwork ? 32 : 28, height: isMainNetwork ? 32 : 28)
-                        .overlay(
-                            Text(networkSymbol)
-                                .font(.system(size: isMainNetwork ? 14 : 12, weight: .bold))
-                                .foregroundColor(.white)
-                        )
+                    NetworkIconView(blockchain: token.blockchain, size: isMainNetwork ? 32 : 28)
                 }
 
                 VStack(alignment: .leading, spacing: 2) {
@@ -291,11 +262,11 @@ struct NetworkSubRow: View {
                 Spacer()
 
                 VStack(alignment: .trailing, spacing: 2) {
-                    Text(String(format: "%.6f", token.balance))
+                    Text(TokenIconHelper.formattedBalance(token.balance))
                         .font(.system(size: 14, weight: .medium))
                         .foregroundColor(WpayinColors.text)
 
-                    Text(String(format: "$%.2f", token.totalValue))
+                    Text(token.totalValue.formatted(as: settingsManager.selectedCurrency))
                         .font(.system(size: 12))
                         .foregroundColor(WpayinColors.textSecondary)
                 }
@@ -310,47 +281,6 @@ struct NetworkSubRow: View {
         .buttonStyle(PlainButtonStyle())
     }
 
-    private var networkColor: Color {
-        switch token.blockchain {
-        case .ethereum:
-            return Color.blue
-        case .arbitrum:
-            return Color.cyan
-        case .polygon:
-            return Color.purple
-        case .bsc:
-            return Color.yellow
-        case .optimism:
-            return Color.red
-        case .avalanche:
-            return Color(red: 0.91, green: 0.24, blue: 0.20)
-        case .base:
-            return Color(red: 0.0, green: 0.46, blue: 0.87)
-        default:
-            return WpayinColors.primary
-        }
-    }
-
-    private var networkSymbol: String {
-        switch token.blockchain {
-        case .ethereum:
-            return "E"
-        case .arbitrum:
-            return "A"
-        case .polygon:
-            return "P"
-        case .bsc:
-            return "B"
-        case .optimism:
-            return "O"
-        case .avalanche:
-            return "V"
-        case .base:
-            return "B"
-        default:
-            return "?"
-        }
-    }
 }
 
 #Preview {

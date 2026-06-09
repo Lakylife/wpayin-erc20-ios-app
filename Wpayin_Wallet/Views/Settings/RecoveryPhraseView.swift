@@ -1,3 +1,5 @@
+// Autor Lukas Helebrandt, 2026
+
 //
 //  RecoveryPhraseView.swift
 //  Wpayin_Wallet
@@ -35,13 +37,18 @@ struct RecoveryPhraseView: View {
                                     .foregroundColor(WpayinColors.error)
 
                                 VStack(spacing: 12) {
-                                    Text("Keep Your Recovery Phrase Safe")
+                                    Text("Keep Your Recovery Phrase Safe".localized)
                                         .font(.wpayinHeadline)
                                         .foregroundColor(WpayinColors.text)
                                         .multilineTextAlignment(.center)
 
-                                    Text("Never share your recovery phrase with anyone. Anyone with access to your recovery phrase can steal your funds.")
+                                    Text("Never share your recovery phrase with anyone. Anyone with access to your recovery phrase can steal your funds.".localized)
                                         .font(.wpayinBody)
+                                        .foregroundColor(WpayinColors.textSecondary)
+                                        .multilineTextAlignment(.center)
+
+                                    Text("Self-custody notice: crypto-assets can be volatile, transfers are usually irreversible, and Wpayin cannot recover your wallet if you lose or share this phrase. In the EU/EEA, crypto-asset services may be subject to MiCA-related disclosures depending on your location and provider.".localized)
+                                        .font(.wpayinCaption)
                                         .foregroundColor(WpayinColors.textSecondary)
                                         .multilineTextAlignment(.center)
                                 }
@@ -60,11 +67,11 @@ struct RecoveryPhraseView: View {
                             if recoveryPhrase != nil {
                                 VStack(spacing: 24) {
                                     VStack(spacing: 16) {
-                                        Text("Your Recovery Phrase")
+                                        Text("Your Recovery Phrase".localized)
                                             .font(.wpayinHeadline)
                                             .foregroundColor(WpayinColors.text)
 
-                                        Text("Write down these 12 words in the exact order shown. This phrase is the only way to recover your wallet.")
+                                        Text("Write down these 12 words in the exact order shown. This phrase is the only way to recover your wallet.".localized)
                                             .font(.wpayinBody)
                                             .foregroundColor(WpayinColors.textSecondary)
                                             .multilineTextAlignment(.center)
@@ -77,11 +84,11 @@ struct RecoveryPhraseView: View {
                                             .font(.system(size: 20))
 
                                         VStack(alignment: .leading, spacing: 4) {
-                                            Text("Keep it secure!")
+                                            Text("Keep it secure!".localized)
                                                 .font(.wpayinSubheadline)
                                                 .foregroundColor(WpayinColors.error)
 
-                                            Text("Never share your recovery phrase with anyone. Store it in a safe place.")
+                                            Text("Never share your recovery phrase with anyone. Store it in a safe place.".localized)
                                                 .font(.wpayinCaption)
                                                 .foregroundColor(WpayinColors.textSecondary)
                                         }
@@ -132,7 +139,7 @@ struct RecoveryPhraseView: View {
 
                                     // Copy Button
                                     WpayinButton(
-                                        title: copied ? "Copied!" : "Copy to Clipboard",
+                                        title: copied ? "Copied!".localized : "Copy to Clipboard".localized,
                                         style: .tertiary
                                     ) {
                                         copyToClipboard()
@@ -147,11 +154,11 @@ struct RecoveryPhraseView: View {
                                         .font(.system(size: 32))
                                         .foregroundColor(WpayinColors.error)
 
-                                    Text("Recovery Phrase Not Available")
+                                    Text("Recovery Phrase Not Available".localized)
                                         .font(.wpayinBody)
                                         .foregroundColor(WpayinColors.text)
 
-                                    Text("This wallet was imported using a private key. Recovery phrase is only available for wallets created with a seed phrase.")
+                                    Text("This wallet was imported using a private key. Recovery phrase is only available for wallets created with a seed phrase.".localized)
                                         .font(.wpayinCaption)
                                         .foregroundColor(WpayinColors.textSecondary)
                                         .multilineTextAlignment(.center)
@@ -164,11 +171,11 @@ struct RecoveryPhraseView: View {
                     .padding(.top, 40)
                 }
             }
-            .navigationTitle("Recovery Phrase")
+            .navigationTitle("Recovery Phrase".localized)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
-                    Button("Close") {
+                    Button("Close".localized) {
                         dismiss()
                     }
                     .foregroundColor(WpayinColors.text)
@@ -180,9 +187,9 @@ struct RecoveryPhraseView: View {
     private func loadRecoveryPhrase() {
         if let mnemonic = walletManager.keychain.getSeedPhrase() {
             recoveryPhrase = mnemonic
-            print("✅ Loaded recovery phrase from keychain")
+            Logger.log("✅ Loaded recovery phrase from keychain")
         } else {
-            print("⚠️ No recovery phrase found - wallet might be imported via private key")
+            Logger.log("⚠️ No recovery phrase found - wallet might be imported via private key")
             recoveryPhrase = nil
         }
     }

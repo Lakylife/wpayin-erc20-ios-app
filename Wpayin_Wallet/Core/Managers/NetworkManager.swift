@@ -1,3 +1,5 @@
+// Autor Lukas Helebrandt, 2026
+
 //
 //  NetworkManager.swift
 //  Wpayin_Wallet

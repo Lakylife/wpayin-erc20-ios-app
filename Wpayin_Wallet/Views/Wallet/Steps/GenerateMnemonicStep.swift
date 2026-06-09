@@ -1,3 +1,5 @@
+// Autor Lukas Helebrandt, 2026
+
 //
 //  GenerateMnemonicStep.swift
 //  Wpayin_Wallet
@@ -20,11 +22,11 @@ struct GenerateMnemonicStep: View {
         ScrollView {
             VStack(spacing: 32) {
                 VStack(spacing: 16) {
-                    Text("Your Recovery Phrase")
+                    Text("Your Recovery Phrase".localized)
                         .font(.wpayinHeadline)
                         .foregroundColor(WpayinColors.text)
 
-                    Text("Write down these 12 words in the exact order shown. This phrase is the only way to recover your wallet.")
+                    Text("Write down these 12 words in the exact order shown. This phrase is the only way to recover your wallet.".localized)
                         .font(.wpayinBody)
                         .foregroundColor(WpayinColors.textSecondary)
                         .multilineTextAlignment(.center)
@@ -37,11 +39,11 @@ struct GenerateMnemonicStep: View {
                         .font(.system(size: 20))
 
                     VStack(alignment: .leading, spacing: 4) {
-                        Text("Keep it secure!")
+                        Text("Keep it secure!".localized)
                             .font(.wpayinSubheadline)
                             .foregroundColor(WpayinColors.error)
 
-                        Text("Never share your recovery phrase with anyone. Store it in a safe place.")
+                        Text("Never share your recovery phrase with anyone. Store it in a safe place.".localized)
                             .font(.wpayinCaption)
                             .foregroundColor(WpayinColors.textSecondary)
                     }
