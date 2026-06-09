@@ -103,11 +103,17 @@ Wpayin_Wallet/Core/Config/Secrets.swift
 
 # Local assistant/work artifacts
 backups/
-screenshots/
 .agents/
 .codex/
 *.bak
 *.backup
+
+# Public app screenshots used in README
+screenshots/*
+!screenshots/20260609_app_update/
+!screenshots/20260609_app_update/01_launch.png
+!screenshots/20260609_app_update/02_home.png
+!screenshots/20260609_app_update/03_swap.png
 
 # macOS
 .DS_Store
