@@ -10,6 +10,7 @@
 import SwiftUI
 
 extension Font {
+    static let wpayinBrand = Font.custom("Inter-Bold", size: 34)
     static let wpayinTitle = Font.system(size: 28, weight: .bold, design: .rounded)
     static let wpayinHeadline = Font.system(size: 22, weight: .semibold, design: .rounded)
     static let wpayinSubheadline = Font.system(size: 18, weight: .medium, design: .rounded)

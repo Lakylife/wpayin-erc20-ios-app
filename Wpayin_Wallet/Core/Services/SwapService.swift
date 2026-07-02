@@ -10,6 +10,7 @@
 import Foundation
 import BigInt
 import WalletCore
+import SwiftProtobuf
 
 // Helper for pow with Decimal (same as in TransactionService)
 func swapPow(_ base: Decimal, _ exponent: Int) -> Decimal {
@@ -119,13 +120,23 @@ class SwapService {
         // Build swap path
         let path = buildSwapPath(from: fromAddress, to: toAddress, blockchain: blockchain)
 
-        // For simple quote, use price ratio
-        // In production, this should call DEX smart contract or aggregator API
-        let rate = fromToken.price > 0 && toToken.price > 0
-            ? Decimal(fromToken.price / toToken.price)
-            : Decimal(1.0)
-
-        let amountOut = amountIn * rate
+        // Ask the DEX router for a real on-chain quote (getAmountsOut);
+        // fall back to the oracle price ratio if the call fails.
+        var amountOut: Decimal
+        if let onChainOut = try? await fetchAmountsOut(
+            amountIn: amountIn,
+            fromDecimals: fromToken.decimals,
+            toDecimals: toToken.decimals,
+            path: path,
+            blockchain: blockchain
+        ) {
+            amountOut = onChainOut
+        } else {
+            guard fromToken.price > 0, toToken.price > 0 else {
+                throw SwapError.failedToGetQuote
+            }
+            amountOut = amountIn * Decimal(fromToken.price / toToken.price)
+        }
 
         // Calculate minimum amount out with slippage
         let slippageMultiplier = Decimal(1.0) - (Decimal(slippage) / Decimal(100.0))
@@ -160,8 +171,6 @@ class SwapService {
             throw SwapError.noRouterAddress
         }
 
-        // Get user address
-        _ = KeychainManager()  // Available for future use if needed
         guard let privateKeyData = try getPrivateKey(for: blockchain) else {
             throw TransactionError.noPrivateKey
         }
@@ -172,8 +181,11 @@ class SwapService {
         if !fromToken.isNative {
             try await checkAndApproveToken(
                 token: fromToken,
+                owner: fromAddress,
                 spender: routerAddress,
-                amount: quote.amountIn
+                amount: quote.amountIn,
+                blockchain: blockchain,
+                privateKey: privateKeyData
             )
         }
 
@@ -186,38 +198,56 @@ class SwapService {
             deadline: deadline
         )
 
-        // Send transaction
-        let chainId = blockchain.chainId ?? 1
-        let rpcUrl = blockchain.rpcUrl
-        let nonce = try await fetchNonce(address: fromAddress, rpcUrl: rpcUrl)
-        let gasPrice = try await fetchGasPrice(rpcUrl: rpcUrl)
-
         // If swapping from native token, include value in transaction
         let value = fromToken.isNative
             ? BigUInt((quote.amountIn * swapPow(Decimal(10), fromToken.decimals)).swapRounded().description) ?? BigUInt(0)
             : BigUInt(0) // 0 for ERC-20
 
-        let gasPriceInWei = BigUInt((gasPrice * swapPow(Decimal(10), 9)).swapRounded().description) ?? BigUInt(20_000_000_000)
-
-        // Sign transaction
-        let signedTx = try signSwapTransaction(
+        let txHash = try await sendRawTransaction(
             from: fromAddress,
             to: routerAddress,
             value: value,
-            gasPrice: gasPriceInWei,
-            gasLimit: BigUInt(quote.gasEstimate),
-            nonce: BigUInt(nonce),
             data: swapData,
-            chainId: chainId,
+            gasLimit: BigUInt(quote.gasEstimate),
+            blockchain: blockchain,
             privateKey: privateKeyData
         )
-        let txHash = try await broadcastTransaction(signedTx: signedTx, rpcUrl: rpcUrl)
 
         return SwapResult(
             transactionHash: txHash,
             amountIn: quote.amountIn,
             amountOut: quote.amountOut
         )
+    }
+
+    /// Sign (via WalletCore AnySigner) and broadcast a transaction.
+    private func sendRawTransaction(
+        from: String,
+        to: String,
+        value: BigUInt,
+        data: Data,
+        gasLimit: BigUInt,
+        blockchain: BlockchainType,
+        privateKey: Data
+    ) async throws -> String {
+        let chainId = blockchain.chainId ?? 1
+        let rpcUrl = blockchain.rpcUrl
+        let nonce = try await fetchNonce(address: from, rpcUrl: rpcUrl)
+        let gasPrice = try await fetchGasPrice(rpcUrl: rpcUrl)
+        let gasPriceInWei = BigUInt((gasPrice * swapPow(Decimal(10), 9)).swapRounded().description) ?? BigUInt(20_000_000_000)
+
+        let signedTx = try signSwapTransaction(
+            from: from,
+            to: to,
+            value: value,
+            gasPrice: gasPriceInWei,
+            gasLimit: gasLimit,
+            nonce: BigUInt(nonce),
+            data: data,
+            chainId: chainId,
+            privateKey: privateKey
+        )
+        return try await broadcastTransaction(signedTx: signedTx, rpcUrl: rpcUrl)
     }
 
     // MARK: - Private Helper Methods
@@ -243,49 +273,185 @@ class SwapService {
         recipient: String,
         deadline: Int
     ) throws -> Data {
-        // Function selector for swapExactTokensForTokens or swapExactETHForTokens
-        let functionSelector: String
-        if fromToken.isNative {
-            // swapExactETHForTokens(uint amountOutMin, address[] path, address to, uint deadline)
-            functionSelector = "7ff36ab5"
-        } else if toToken.isNative {
-            // swapExactTokensForETH(uint amountIn, uint amountOutMin, address[] path, address to, uint deadline)
-            functionSelector = "18cbafe5"
-        } else {
-            // swapExactTokensForTokens(uint amountIn, uint amountOutMin, address[] path, address to, uint deadline)
-            functionSelector = "38ed1739"
-        }
-
-        var data = Data(hexString: functionSelector)!
-
-        // Encode parameters
-        // This is simplified - in production use proper ABI encoding
         let amountInWei = BigUInt((quote.amountIn * swapPow(Decimal(10), fromToken.decimals)).swapRounded().description) ?? BigUInt(0)
         let amountOutMinWei = BigUInt((quote.amountOutMin * swapPow(Decimal(10), toToken.decimals)).swapRounded().description) ?? BigUInt(0)
-        _ = Int(Date().timeIntervalSince1970) + deadline  // Deadline timestamp (unused in simplified implementation)
+        let deadlineTimestamp = BigUInt(UInt64(Date().timeIntervalSince1970) + UInt64(deadline))
 
-        // Add parameters (simplified encoding)
-        if !fromToken.isNative {
-            data.append(paddedData(amountInWei.serialize(), size: 32))
+        guard quote.path.count >= 2, quote.path.allSatisfy({ $0.hasPrefix("0x") && $0.count == 42 }) else {
+            throw SwapError.invalidTokenPair
         }
-        data.append(paddedData(amountOutMinWei.serialize(), size: 32))
 
-        // Path array offset and data would go here
-        // For simplicity, we're using a basic implementation
-        // In production, use proper ABI encoding library
+        // Uniswap V2 router ABI:
+        // swapExactETHForTokens(uint amountOutMin, address[] path, address to, uint deadline)          — 0x7ff36ab5
+        // swapExactTokensForETH(uint amountIn, uint amountOutMin, address[] path, address to, uint deadline)    — 0x18cbafe5
+        // swapExactTokensForTokens(uint amountIn, uint amountOutMin, address[] path, address to, uint deadline) — 0x38ed1739
+        var head: [Data] = []
+        let selector: String
+
+        if fromToken.isNative {
+            selector = "7ff36ab5"
+            head = [
+                abiUInt(amountOutMinWei),
+                abiUInt(BigUInt(4 * 32)), // offset of path array (4 head slots)
+                abiAddress(recipient),
+                abiUInt(deadlineTimestamp)
+            ]
+        } else {
+            selector = toToken.isNative ? "18cbafe5" : "38ed1739"
+            head = [
+                abiUInt(amountInWei),
+                abiUInt(amountOutMinWei),
+                abiUInt(BigUInt(5 * 32)), // offset of path array (5 head slots)
+                abiAddress(recipient),
+                abiUInt(deadlineTimestamp)
+            ]
+        }
+
+        var data = Data(hexString: selector)!
+        head.forEach { data.append($0) }
+
+        // Dynamic tail: address[] path
+        data.append(abiUInt(BigUInt(quote.path.count)))
+        for address in quote.path {
+            data.append(abiAddress(address))
+        }
 
         return data
     }
 
+    /// Check ERC-20 allowance and send an approve transaction when insufficient.
     private func checkAndApproveToken(
         token: Token,
+        owner: String,
         spender: String,
-        amount: Decimal
+        amount: Decimal,
+        blockchain: BlockchainType,
+        privateKey: Data
     ) async throws {
-        // Check current allowance
-        // If insufficient, send approve transaction
-        // This is simplified - in production, check allowance first
-        Logger.log("ℹ️ Token approval may be required for \(token.symbol)")
+        guard let tokenAddress = token.contractAddress else {
+            throw SwapError.invalidTokenPair
+        }
+
+        let requiredAmount = BigUInt((amount * swapPow(Decimal(10), token.decimals)).swapRounded().description) ?? BigUInt(0)
+
+        // allowance(address owner, address spender) — 0xdd62ed3e
+        var allowanceCall = Data(hexString: "dd62ed3e")!
+        allowanceCall.append(abiAddress(owner))
+        allowanceCall.append(abiAddress(spender))
+
+        let currentAllowance: BigUInt
+        do {
+            let result = try await ethCall(to: tokenAddress, data: allowanceCall, rpcUrl: blockchain.rpcUrl)
+            currentAllowance = BigUInt(result)
+        } catch {
+            Logger.log("⚠️ Allowance check failed, assuming approval needed: \(error)")
+            currentAllowance = BigUInt(0)
+        }
+
+        guard currentAllowance < requiredAmount else {
+            Logger.log("✅ Allowance sufficient for \(token.symbol)")
+            return
+        }
+
+        Logger.log("🔏 Sending approve for \(token.symbol)...")
+
+        // approve(address spender, uint256 amount) — 0x095ea7b3
+        var approveData = Data(hexString: "095ea7b3")!
+        approveData.append(abiAddress(spender))
+        approveData.append(abiUInt(requiredAmount))
+
+        let approveTxHash = try await sendRawTransaction(
+            from: owner,
+            to: tokenAddress,
+            value: BigUInt(0),
+            data: approveData,
+            gasLimit: BigUInt(60_000),
+            blockchain: blockchain,
+            privateKey: privateKey
+        )
+        Logger.log("✅ Approve broadcast: \(approveTxHash)")
+    }
+
+    /// Query the router's getAmountsOut for a real quote.
+    private func fetchAmountsOut(
+        amountIn: Decimal,
+        fromDecimals: Int,
+        toDecimals: Int,
+        path: [String],
+        blockchain: BlockchainType
+    ) async throws -> Decimal {
+        guard let routerAddress = routerAddresses[blockchain] else {
+            throw SwapError.noRouterAddress
+        }
+        guard path.count >= 2, path.allSatisfy({ $0.hasPrefix("0x") && $0.count == 42 }) else {
+            throw SwapError.invalidTokenPair
+        }
+
+        let amountInWei = BigUInt((amountIn * swapPow(Decimal(10), fromDecimals)).swapRounded().description) ?? BigUInt(0)
+
+        // getAmountsOut(uint256 amountIn, address[] path) — 0xd06ca61f
+        var callData = Data(hexString: "d06ca61f")!
+        callData.append(abiUInt(amountInWei))
+        callData.append(abiUInt(BigUInt(2 * 32))) // offset of path array
+        callData.append(abiUInt(BigUInt(path.count)))
+        for address in path {
+            callData.append(abiAddress(address))
+        }
+
+        let result = try await ethCall(to: routerAddress, data: callData, rpcUrl: blockchain.rpcUrl)
+
+        // Decode uint256[]: [offset][length][amounts...] — take the last amount.
+        guard result.count >= 96 else { throw SwapError.failedToGetQuote }
+        let lengthWord = result.subdata(in: 32..<64)
+        let count = Int(BigUInt(lengthWord))
+        guard count >= 2, result.count >= 64 + count * 32 else { throw SwapError.failedToGetQuote }
+
+        let lastWord = result.subdata(in: (64 + (count - 1) * 32)..<(64 + count * 32))
+        let amountOutWei = BigUInt(lastWord)
+        guard amountOutWei > 0 else { throw SwapError.insufficientLiquidity }
+
+        return (Decimal(string: amountOutWei.description) ?? 0) / swapPow(Decimal(10), toDecimals)
+    }
+
+    /// Read-only contract call via eth_call.
+    private func ethCall(to: String, data: Data, rpcUrl: String) async throws -> Data {
+        let url = URL(string: rpcUrl)!
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+
+        let body: [String: Any] = [
+            "jsonrpc": "2.0",
+            "method": "eth_call",
+            "params": [["to": to, "data": "0x" + data.hexString], "latest"],
+            "id": 1
+        ]
+        request.httpBody = try JSONSerialization.data(withJSONObject: body)
+
+        let (responseData, _) = try await URLSession.shared.data(for: request)
+        let json = try JSONSerialization.jsonObject(with: responseData) as? [String: Any]
+
+        if let error = json?["error"] as? [String: Any],
+           let message = error["message"] as? String {
+            throw TransactionError.networkError(message)
+        }
+
+        guard let resultHex = json?["result"] as? String,
+              let result = Data(hexString: resultHex) else {
+            throw TransactionError.networkError("Invalid eth_call response")
+        }
+        return result
+    }
+
+    // MARK: - ABI Encoding Helpers
+
+    private func abiUInt(_ value: BigUInt) -> Data {
+        paddedData(value.serialize(), size: 32)
+    }
+
+    private func abiAddress(_ address: String) -> Data {
+        let raw = Data(hexString: String(address.dropFirst(2))) ?? Data()
+        return paddedData(raw, size: 32)
     }
 
     private func paddedData(_ data: Data, size: Int) -> Data {
@@ -308,7 +474,10 @@ class SwapService {
                 return nil
             }
 
-            let privateKey = wallet.getKey(coin: coinType, derivationPath: blockchain.derivationPath)
+            // Spend from the account the user currently has active (multi-wallet)
+            let accountIndex = UserDefaults.standard.integer(forKey: "ActiveAccountIndex")
+            let path = mnemonicService.derivationPath(for: coinType, accountIndex: accountIndex)
+            let privateKey = wallet.getKey(coin: coinType, derivationPath: path)
             return privateKey.data
         } else if let privateKeyHex = keychain.getPrivateKey() {
             return Data(hexString: privateKeyHex)
@@ -339,81 +508,31 @@ class SwapService {
         chainId: Int,
         privateKey: Data
     ) throws -> String {
-        // Use same signing logic as TransactionService
-        _ = TransactionService.shared  // Available for future use
-        // For simplicity, we'll create a simple RLP-encoded transaction
-        // In production, share the signing method between services
-
-        var rlpItems: [Any] = []
-        rlpItems.append(nonce.serialize())
-        rlpItems.append(gasPrice.serialize())
-        rlpItems.append(gasLimit.serialize())
-
-        let toData = Data(hexString: String(to.dropFirst(2)))!
-        rlpItems.append(toData)
-        rlpItems.append(value.serialize())
-        rlpItems.append(data)
-        rlpItems.append(BigUInt(chainId).serialize())
-        rlpItems.append(Data())
-        rlpItems.append(Data())
-
-        let txHash = Hash.keccak256(data: rlpEncode(rlpItems))
-
-        guard let privKey = PrivateKey(data: privateKey) else {
-            throw TransactionError.noPrivateKey
-        }
-
-        let signature = privKey.sign(digest: txHash, curve: .secp256k1)!
-        let r = signature.dropLast(1).prefix(32)
-        let s = signature.dropLast(1).suffix(32)
-        let v = BigUInt(chainId * 2 + 35 + Int(signature.last ?? 0))
-
-        var signedItems: [Any] = []
-        signedItems.append(nonce.serialize())
-        signedItems.append(gasPrice.serialize())
-        signedItems.append(gasLimit.serialize())
-        signedItems.append(toData)
-        signedItems.append(value.serialize())
-        signedItems.append(data)
-        signedItems.append(v.serialize())
-        signedItems.append(r)
-        signedItems.append(s)
-
-        return rlpEncode(signedItems).hexString
-    }
-
-    private func rlpEncode(_ items: [Any]) -> Data {
-        var result = Data()
-
-        for item in items {
-            if let data = item as? Data {
-                if data.isEmpty {
-                    result.append(0x80)
-                } else if data.count == 1 && data[0] < 0x80 {
-                    result.append(data)
-                } else if data.count < 56 {
-                    result.append(UInt8(0x80 + data.count))
-                    result.append(data)
-                } else {
-                    let lengthData = BigUInt(data.count).serialize()
-                    result.append(UInt8(0xb7 + lengthData.count))
-                    result.append(lengthData)
-                    result.append(data)
+        // Sign via WalletCore AnySigner — same canonical path as TransactionService.
+        let input = EthereumSigningInput.with {
+            $0.chainID = BigUInt(chainId).serialize()
+            $0.nonce = nonce.serialize()
+            $0.txMode = .legacy
+            $0.gasPrice = gasPrice.serialize()
+            $0.gasLimit = gasLimit.serialize()
+            $0.toAddress = to
+            $0.privateKey = privateKey
+            $0.transaction = EthereumTransaction.with {
+                $0.contractGeneric = EthereumTransaction.ContractGeneric.with {
+                    $0.amount = value.serialize()
+                    $0.data = data
                 }
             }
         }
 
-        if result.count < 56 {
-            var final = Data([UInt8(0xc0 + result.count)])
-            final.append(result)
-            return final
-        } else {
-            let lengthData = BigUInt(result.count).serialize()
-            var final = Data([UInt8(0xf7 + lengthData.count)])
-            final.append(lengthData)
-            final.append(result)
-            return final
+        let output: EthereumSigningOutput = AnySigner.sign(input: input, coin: .ethereum)
+
+        guard output.error == .ok, !output.encoded.isEmpty else {
+            Logger.log("❌ Swap signing failed: \(output.errorMessage)")
+            throw TransactionError.failedToSignTransaction
         }
+
+        return output.encoded.hexString
     }
 
     private func fetchNonce(address: String, rpcUrl: String) async throws -> Int {
@@ -425,7 +544,7 @@ class SwapService {
         let body: [String: Any] = [
             "jsonrpc": "2.0",
             "method": "eth_getTransactionCount",
-            "params": [address, "latest"],
+            "params": [address, "pending"], // include queued txs (approve + swap)
             "id": 1
         ]
 

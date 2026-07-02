@@ -29,13 +29,13 @@ struct ExpandableTokenCard: View {
                     onTokenTap(token)
                 }
             }) {
-                HStack(spacing: 14) {
-                    TokenIconView(token: token, size: 48, showNetworkBadge: false)
+                HStack(spacing: 13) {
+                    TokenIconView(token: token, size: 44, showNetworkBadge: false)
 
                     VStack(alignment: .leading, spacing: 4) {
                         HStack(spacing: 8) {
                             Text(token.symbol)
-                                .font(.system(size: 16, weight: .bold))
+                                .font(.system(size: 16, weight: .semibold))
                                 .foregroundColor(WpayinColors.text)
 
                             Text(token.name)
@@ -94,14 +94,15 @@ struct ExpandableTokenCard: View {
                             .lineLimit(1)
                             .minimumScaleFactor(0.75)
                     }
-                    .frame(width: 86, alignment: .trailing)
+                    .frame(width: 92, alignment: .trailing)
                 }
-                .padding(16)
+                .padding(.horizontal, 16)
+                .padding(.vertical, 14)
                 .background(
-                    RoundedRectangle(cornerRadius: isExpanded ? 20 : 20)
+                    RoundedRectangle(cornerRadius: 18, style: .continuous)
                         .fill(WpayinColors.surface)
                         .overlay(
-                            RoundedRectangle(cornerRadius: isExpanded ? 20 : 20)
+                            RoundedRectangle(cornerRadius: 18, style: .continuous)
                                 .stroke(WpayinColors.surfaceBorder, lineWidth: 1)
                         )
                 )
@@ -120,10 +121,10 @@ struct ExpandableTokenCard: View {
                     }
                 }
                 .background(
-                    RoundedRectangle(cornerRadius: 20)
+                    RoundedRectangle(cornerRadius: 18, style: .continuous)
                         .fill(WpayinColors.surface)
                         .overlay(
-                            RoundedRectangle(cornerRadius: 20)
+                            RoundedRectangle(cornerRadius: 18, style: .continuous)
                                 .stroke(WpayinColors.surfaceBorder, lineWidth: 1)
                         )
                 )

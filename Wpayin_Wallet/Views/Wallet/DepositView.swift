@@ -34,22 +34,35 @@ struct DepositView: View {
     var body: some View {
         NavigationView {
             ZStack {
-                WpayinColors.background.ignoresSafeArea()
+                WalletFlowBackground()
 
                 ScrollView {
-                    VStack(spacing: 32) {
-                        // Header
-                        VStack(spacing: 16) {
+                    LazyVStack(spacing: 20) {
+                        VStack(spacing: 12) {
+                            Image(systemName: "arrow.down")
+                                .font(.system(size: 20, weight: .bold))
+                                .foregroundColor(WpayinColors.primary)
+                                .frame(width: 50, height: 50)
+                                .background(
+                                    Circle()
+                                        .fill(WpayinColors.primary.opacity(0.14))
+                                        .overlay(
+                                            Circle()
+                                                .stroke(WpayinColors.primary.opacity(0.18), lineWidth: 1)
+                                        )
+                                )
+
                             Text("Deposit Funds".localized)
-                                .font(.wpayinHeadline)
+                                .font(.system(size: 24, weight: .bold, design: .rounded))
                                 .foregroundColor(WpayinColors.text)
 
                             Text("Send funds to your %@ address".localized(selectedToken?.symbol ?? "Token"))
-                                .font(.wpayinBody)
+                                .font(.system(size: 14))
                                 .foregroundColor(WpayinColors.textSecondary)
+                                .multilineTextAlignment(.center)
                         }
+                        .padding(.bottom, 2)
 
-                        // Token Selector with Network Info
                         AssetNetworkSelector(
                             selectedSymbol: $selectedSymbol,
                             selectedNetwork: $selectedNetwork,
@@ -59,23 +72,32 @@ struct DepositView: View {
                         .environmentObject(settingsManager)
 
                         if let tokenAddress = currentTokenAddress, !tokenAddress.isEmpty {
-                            QRCodeView(
-                                address: tokenAddress,
-                                qrCodeImage: $qrCodeImage
-                            )
+                            VStack(spacing: 20) {
+                                QRCodeView(
+                                    address: tokenAddress,
+                                    qrCodeImage: $qrCodeImage
+                                )
 
-                            AddressDisplayView(
-                                address: tokenAddress,
-                                copied: $addressCopied
+                                AddressDisplayView(
+                                    address: tokenAddress,
+                                    copied: $addressCopied
+                                )
+                            }
+                            .padding(20)
+                            .background(
+                                RoundedRectangle(cornerRadius: 24, style: .continuous)
+                                    .fill(WpayinColors.surface)
+                                    .overlay(
+                                        RoundedRectangle(cornerRadius: 24, style: .continuous)
+                                            .stroke(WpayinColors.surfaceBorder, lineWidth: 1)
+                                    )
                             )
                         } else {
                             MissingDepositAddressView()
                         }
 
-                        // Instructions
                         InstructionsView()
 
-                        // Warning
                         if let token = selectedToken {
                             WarningView(
                                 tokenSymbol: token.symbol,
@@ -83,18 +105,25 @@ struct DepositView: View {
                             )
                         }
                     }
-                    .padding(.horizontal, 24)
-                    .padding(.top, 20)
+                    .padding(.horizontal, 20)
+                    .padding(.top, 12)
+                    .padding(.bottom, 32)
                 }
             }
             .navigationTitle("Deposit".localized)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
-                    Button("Close".localized) {
+                    Button {
                         dismiss()
+                    } label: {
+                        Image(systemName: "xmark")
+                            .font(.system(size: 13, weight: .bold))
+                            .foregroundColor(WpayinColors.text)
+                            .frame(width: 32, height: 32)
+                            .background(Circle().fill(WpayinColors.surfaceLight))
                     }
-                    .foregroundColor(WpayinColors.text)
+                    .accessibilityLabel(L10n.Action.close.localized)
                 }
             }
         }
@@ -213,9 +242,15 @@ struct MissingDepositAddressView: View {
                 .multilineTextAlignment(.center)
         }
         .frame(maxWidth: .infinity)
-        .padding(18)
-        .background(WpayinColors.surface)
-        .cornerRadius(12)
+        .padding(20)
+        .background(
+            RoundedRectangle(cornerRadius: 22, style: .continuous)
+                .fill(WpayinColors.surface)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 22, style: .continuous)
+                        .stroke(WpayinColors.surfaceBorder, lineWidth: 1)
+                )
+        )
     }
 }
 
@@ -225,16 +260,14 @@ struct AssetNetworkSelector: View {
     let availableTokens: [Token]
     @EnvironmentObject var walletManager: WalletManager
     @EnvironmentObject var settingsManager: SettingsManager
+    @State private var showAssetPicker = false
+    @State private var showNetworkPicker = false
 
     private var selectedToken: Token? {
         guard let selectedSymbol, let selectedNetwork else { return nil }
         return availableTokens.first {
             $0.symbol.uppercased() == selectedSymbol.uppercased() && $0.blockchain == selectedNetwork
         }
-    }
-
-    private var assetSymbols: [String] {
-        Array(Set(availableTokens.map { $0.symbol.uppercased() })).sorted()
     }
 
     private var networksForSelectedAsset: [Token] {
@@ -244,79 +277,30 @@ struct AssetNetworkSelector: View {
             .sorted { $0.blockchain.name < $1.blockchain.name }
     }
 
-    private func groupedToken(for symbol: String) -> Token? {
-        let symbolTokens = availableTokens.filter { $0.symbol.uppercased() == symbol.uppercased() }
-        guard let first = symbolTokens.first else { return nil }
-        let totalBalance = symbolTokens.reduce(0) { $0 + $1.balance }
-        let bestPrice = symbolTokens.map { $0.price }.filter { $0 > 0 }.max() ?? 0
-        return Token(
-            contractAddress: first.contractAddress,
-            name: first.name,
-            symbol: first.symbol,
-            decimals: first.decimals,
-            balance: totalBalance,
-            price: bestPrice,
-            iconUrl: first.iconUrl,
-            blockchain: first.blockchain,
-            isNative: first.isNative,
-            receivingAddress: first.receivingAddress
-        )
-    }
-
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            // Header with balance
+        VStack(alignment: .leading, spacing: 14) {
             HStack {
                 Text("Select Asset".localized)
-                    .font(.system(size: 14, weight: .medium))
-                    .foregroundColor(WpayinColors.textSecondary)
-                
+                    .font(.system(size: 16, weight: .bold, design: .rounded))
+                    .foregroundColor(WpayinColors.text)
+
                 Spacer()
-                
+
                 if let token = selectedToken {
                     HStack(spacing: 8) {
                         Text("Balance: %@".localized(TokenIconHelper.formattedBalance(token.balance)))
-                            .font(.system(size: 12))
+                            .font(.system(size: 12, weight: .medium))
                             .foregroundColor(WpayinColors.textSecondary)
                     }
                 }
             }
 
-            // Token Selector Button (styled like Swap)
-            Menu {
-                ForEach(assetSymbols, id: \.self) { symbol in
-                    Button(action: {
-                        selectedSymbol = symbol
-                    }) {
-                        let token = groupedToken(for: symbol)
-                        HStack {
-                            if let token {
-                                TokenIconView(token: token, size: 20, showNetworkBadge: false)
-                            }
-                            
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text(token?.name ?? symbol)
-                                    .font(.system(size: 14, weight: .medium))
-                                    .lineLimit(1)
-                                Text("\(TokenIconHelper.formattedBalance(token?.balance ?? 0)) \(symbol)")
-                                    .font(.system(size: 12))
-                                    .foregroundColor(.secondary)
-                            }
-                            
-                            Spacer()
-                            
-                            if let token {
-                                Text(token.totalValue.formatted(as: settingsManager.selectedCurrency))
-                                    .font(.system(size: 12, weight: .medium))
-                                    .foregroundColor(.secondary)
-                            }
-                        }
-                    }
-                }
+            Button {
+                showAssetPicker = true
             } label: {
                 HStack(spacing: 12) {
                     if let token = selectedToken {
-                        TokenIconView(token: token, size: 36, showNetworkBadge: false)
+                        TokenIconView(token: token, size: 40, showNetworkBadge: false)
 
                         VStack(alignment: .leading, spacing: 2) {
                             HStack(spacing: 6) {
@@ -346,32 +330,25 @@ struct AssetNetworkSelector: View {
                         .font(.system(size: 12, weight: .medium))
                         .foregroundColor(WpayinColors.textTertiary)
                 }
-                .padding(.horizontal, 12)
-                .padding(.vertical, 8)
+                .padding(14)
                 .background(
-                    RoundedRectangle(cornerRadius: 12)
-                        .fill(WpayinColors.background)
+                    RoundedRectangle(cornerRadius: 16, style: .continuous)
+                        .fill(WpayinColors.surfaceLight)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                                .stroke(WpayinColors.surfaceBorder, lineWidth: 1)
+                        )
                 )
             }
+            .buttonStyle(WpayinPressableStyle())
 
             if !networksForSelectedAsset.isEmpty {
                 Text("Select Network".localized)
-                    .font(.system(size: 14, weight: .medium))
+                    .font(.system(size: 13, weight: .semibold))
                     .foregroundColor(WpayinColors.textSecondary)
 
-                Menu {
-                    ForEach(networksForSelectedAsset) { token in
-                        Button(action: {
-                            selectedNetwork = token.blockchain
-                        }) {
-                            HStack {
-                                NetworkIconView(blockchain: token.blockchain, size: 20)
-                                Text(token.blockchain.name)
-                                Spacer()
-                                Text(TokenIconHelper.formattedBalance(token.balance))
-                            }
-                        }
-                    }
+                Button {
+                    showNetworkPicker = true
                 } label: {
                     HStack(spacing: 12) {
                         if let token = selectedToken {
@@ -392,13 +369,43 @@ struct AssetNetworkSelector: View {
                             .font(.system(size: 12, weight: .medium))
                             .foregroundColor(WpayinColors.textTertiary)
                     }
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 8)
+                    .padding(14)
                     .background(
-                        RoundedRectangle(cornerRadius: 12)
-                            .fill(WpayinColors.background)
+                        RoundedRectangle(cornerRadius: 16, style: .continuous)
+                            .fill(WpayinColors.surfaceLight)
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                                    .stroke(WpayinColors.surfaceBorder, lineWidth: 1)
+                            )
                     )
                 }
+                .buttonStyle(WpayinPressableStyle())
+            }
+        }
+        .padding(18)
+        .background(
+            RoundedRectangle(cornerRadius: 22, style: .continuous)
+                .fill(WpayinColors.surface)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 22, style: .continuous)
+                        .stroke(WpayinColors.surfaceBorder, lineWidth: 1)
+                )
+        )
+        .sheet(isPresented: $showAssetPicker) {
+            AssetPickerSheet(
+                tokens: availableTokens,
+                selectedSymbol: selectedSymbol
+            ) { symbol in
+                selectedSymbol = symbol
+            }
+            .environmentObject(settingsManager)
+        }
+        .sheet(isPresented: $showNetworkPicker) {
+            NetworkPickerSheet(
+                tokens: networksForSelectedAsset,
+                selectedNetwork: selectedNetwork
+            ) { network in
+                selectedNetwork = network
             }
         }
     }
@@ -411,21 +418,22 @@ struct QRCodeView: View {
     @Binding var qrCodeImage: UIImage?
 
     var body: some View {
-        VStack(spacing: 16) {
+        VStack(spacing: 14) {
             Text("QR Code".localized)
-                .font(.wpayinSubheadline)
-                .foregroundColor(WpayinColors.text)
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundColor(WpayinColors.textSecondary)
 
             ZStack {
-                RoundedRectangle(cornerRadius: 20)
+                RoundedRectangle(cornerRadius: 24, style: .continuous)
                     .fill(Color.white)
-                    .frame(width: 220, height: 220)
+                    .frame(width: 204, height: 204)
+                    .shadow(color: WpayinColors.primary.opacity(0.14), radius: 18, x: 0, y: 8)
 
                 if let qrImage = qrCodeImage {
                     Image(uiImage: qrImage)
                         .interpolation(.none)
                         .resizable()
-                        .frame(width: 180, height: 180)
+                        .frame(width: 168, height: 168)
                 } else {
                     ProgressView()
                         .progressViewStyle(CircularProgressViewStyle(tint: WpayinColors.primary))
@@ -447,12 +455,16 @@ struct AddressDisplayView: View {
 
             VStack(spacing: 12) {
                 Text(address)
-                    .font(.system(size: 14, design: .monospaced))
+                    .font(.system(size: 13, weight: .medium, design: .monospaced))
                     .foregroundColor(WpayinColors.text)
                     .multilineTextAlignment(.center)
+                    .textSelection(.enabled)
                     .padding(16)
-                    .background(WpayinColors.surface)
-                    .cornerRadius(12)
+                    .frame(maxWidth: .infinity)
+                    .background(
+                        RoundedRectangle(cornerRadius: 14, style: .continuous)
+                            .fill(WpayinColors.surfaceLight)
+                    )
 
                 WpayinButton(
                     title: copied ? "Copied!".localized : "Copy Address".localized,
@@ -499,6 +511,15 @@ struct InstructionsView: View {
                 )
             }
         }
+        .padding(20)
+        .background(
+            RoundedRectangle(cornerRadius: 22, style: .continuous)
+                .fill(WpayinColors.surface)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 22, style: .continuous)
+                        .stroke(WpayinColors.surfaceBorder, lineWidth: 1)
+                )
+        )
     }
 }
 
@@ -509,9 +530,9 @@ struct InstructionStep: View {
     var body: some View {
         HStack(alignment: .top, spacing: 12) {
             Text(number)
-                .font(.wpayinBody)
+                .font(.system(size: 13, weight: .bold))
                 .foregroundColor(WpayinColors.primary)
-                .frame(width: 24, height: 24)
+                .frame(width: 26, height: 26)
                 .background(WpayinColors.primary.opacity(0.2))
                 .clipShape(Circle())
 
@@ -530,13 +551,13 @@ struct WarningView: View {
     var body: some View {
         HStack(spacing: 12) {
             Image(systemName: "exclamationmark.triangle.fill")
-                .foregroundColor(WpayinColors.error)
+                .foregroundColor(WpayinColors.warning)
                 .font(.system(size: 20))
 
             VStack(alignment: .leading, spacing: 4) {
                 Text("Important".localized)
                     .font(.wpayinSubheadline)
-                    .foregroundColor(WpayinColors.error)
+                    .foregroundColor(WpayinColors.warning)
 
                 Text("Only send %@ on %@ network to this address. Sending wrong tokens or using wrong network may result in permanent loss.".localized(tokenSymbol, networkName))
                     .font(.wpayinCaption)
@@ -546,9 +567,15 @@ struct WarningView: View {
 
             Spacer()
         }
-        .padding(16)
-        .background(WpayinColors.surface)
-        .cornerRadius(12)
+        .padding(18)
+        .background(
+            RoundedRectangle(cornerRadius: 20, style: .continuous)
+                .fill(WpayinColors.warning.opacity(0.08))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 20, style: .continuous)
+                        .stroke(WpayinColors.warning.opacity(0.20), lineWidth: 1)
+                )
+        )
     }
 }
 

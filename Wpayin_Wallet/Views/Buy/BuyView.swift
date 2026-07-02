@@ -16,8 +16,18 @@ struct BuyView: View {
     @State private var selectedCrypto: String = ""
     @State private var showWidget = false
     
-    let cryptos = ["BTC", "ETH", "USDT", "USDC", "BNB", "MATIC", "AVAX", "SOL"]
-    
+    private let supportedCryptos = ["BTC", "ETH", "USDT", "USDC", "BNB", "MATIC", "AVAX", "SOL"]
+
+    /// Only currencies that are actually available & active in the user's wallet
+    var cryptos: [String] {
+        let activeSymbols = Set(
+            walletManager.visibleSupportedTokens
+                .filter { walletManager.hasActiveAccount(for: $0.blockchain) }
+                .map { $0.symbol.uppercased() }
+        )
+        return supportedCryptos.filter { activeSymbols.contains($0) }
+    }
+
     var walletAddress: String {
         walletManager.walletAddress // No hardcoded fallback
     }
@@ -58,11 +68,11 @@ struct BuyView: View {
                                 .font(.system(size: 60))
                                 .foregroundColor(WpayinColors.primary)
                             
-                            Text("Buy Crypto")
+                            Text("Buy Crypto".localized)
                                 .font(.wpayinTitle)
                                 .foregroundColor(WpayinColors.text)
-                            
-                            Text("Purchase cryptocurrency with your card or bank account")
+
+                            Text("Purchase cryptocurrency with your card or bank account".localized)
                                 .font(.wpayinBody)
                                 .foregroundColor(WpayinColors.textSecondary)
                                 .multilineTextAlignment(.center)
@@ -70,6 +80,22 @@ struct BuyView: View {
                         }
                         .padding(.top, 20)
                         
+                        if cryptos.isEmpty {
+                            VStack(spacing: 12) {
+                                Image(systemName: "wallet.pass")
+                                    .font(.system(size: 40))
+                                    .foregroundColor(WpayinColors.textSecondary)
+                                Text("No active assets available for purchase".localized)
+                                    .font(.wpayinBody)
+                                    .foregroundColor(WpayinColors.textSecondary)
+                                    .multilineTextAlignment(.center)
+                                Text("Enable networks in Settings → Manage Networks".localized)
+                                    .font(.wpayinCaption)
+                                    .foregroundColor(WpayinColors.textTertiary)
+                            }
+                            .padding(24)
+                        }
+
                         // Crypto buttons
                         VStack(spacing: 12) {
                             ForEach(cryptos, id: \.self) { crypto in
@@ -80,15 +106,28 @@ struct BuyView: View {
                                     showWidget = true
                                 } label: {
                                     HStack {
-                                        // Token icon
+                                        // Token icon (same marks as the rest of the app)
                                         Group {
-                                            if let asset = iconAssetName(for: crypto) {
-                                                Image(asset)
-                                                    .resizable()
-                                                    .scaledToFit()
-                                                    .frame(width: 32, height: 32)
-                                            } else {
-                                                placeholderIcon(for: crypto)
+                                            switch crypto {
+                                            case "SOL":
+                                                SolanaIconMark(size: 32)
+                                            case "USDT":
+                                                StablecoinIconMark(size: 32, symbol: "₮", color: Color(red: 0.20, green: 0.63, blue: 0.54))
+                                            case "USDC":
+                                                StablecoinIconMark(size: 32, symbol: "$", color: Color(red: 0.16, green: 0.52, blue: 0.95))
+                                            case "MATIC":
+                                                PolygonIconMark(size: 32)
+                                            case "AVAX":
+                                                NetworkIconView(blockchain: .avalanche, size: 32)
+                                            default:
+                                                if let asset = iconAssetName(for: crypto) {
+                                                    Image(asset)
+                                                        .resizable()
+                                                        .scaledToFit()
+                                                        .frame(width: 32, height: 32)
+                                                } else {
+                                                    placeholderIcon(for: crypto)
+                                                }
                                             }
                                         }
                                         .frame(width: 40)
@@ -104,7 +143,7 @@ struct BuyView: View {
                                         
                                         Spacer()
                                         
-                                        Text("Buy")
+                                        Text("Buy".localized)
                                             .font(.system(size: 14, weight: .semibold))
                                             .foregroundColor(.white)
                                             .padding(.horizontal, 20)
@@ -118,7 +157,7 @@ struct BuyView: View {
                                     .overlay(
                                         Group {
                                             if addressFor(crypto).isEmpty {
-                                                Text("No address")
+                                                Text("No address".localized)
                                                     .font(.wpayinCaption)
                                                     .foregroundColor(.red)
                                                     .padding(6)
@@ -133,7 +172,7 @@ struct BuyView: View {
                     }
                 }
             }
-            .navigationTitle("Buy")
+            .navigationTitle("Buy".localized)
             .navigationBarTitleDisplayMode(.inline)
         }
         .sheet(isPresented: $showWidget) {
@@ -152,8 +191,6 @@ struct BuyView: View {
             "BTC": "BTC",
             "ETH": "ETH",
             "BNB": "BNB",
-            "MATIC": "polygon-pos_eip20_32",
-            "AVAX": "avalanche_trx_32",
         ]
         return assetMap[crypto]
     }

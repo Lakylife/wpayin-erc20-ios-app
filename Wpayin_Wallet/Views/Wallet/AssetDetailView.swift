@@ -56,7 +56,7 @@ struct AssetDetailView: View {
     var body: some View {
         NavigationView {
             ZStack {
-                WpayinColors.background.ignoresSafeArea()
+                WalletFlowBackground()
 
                 if isLoading {
                     VStack(spacing: 20) {
@@ -92,13 +92,11 @@ struct AssetDetailView: View {
                     .padding(.horizontal, 40)
                 } else {
                     ScrollView {
-                        VStack(spacing: 32) {
-                            // Header with real token info
+                        LazyVStack(spacing: 20) {
                             if let coinData = coinData {
                                 RealAssetHeaderView(token: token, coinData: coinData)
                             }
 
-                            // Real Price Chart
                             if let chartData = chartData, let coinData = coinData {
                                 RealAssetChartView(
                                     token: token,
@@ -112,7 +110,6 @@ struct AssetDetailView: View {
                                 )
                             }
 
-                            // Balance & Actions
                             AssetBalanceView(
                                 token: token,
                                 onDeposit: { showDepositSheet = true },
@@ -120,7 +117,6 @@ struct AssetDetailView: View {
                                 onSwap: { showSwapSheet = true }
                             )
 
-                            // Network Breakdown
                             if allTokensForSymbol.count > 1 {
                                 VStack(alignment: .leading, spacing: 16) {
                                     HStack {
@@ -143,28 +139,28 @@ struct AssetDetailView: View {
                                 }
                                 .padding(20)
                                 .background(
-                                    RoundedRectangle(cornerRadius: 20)
+                                    RoundedRectangle(cornerRadius: 22, style: .continuous)
                                         .fill(WpayinColors.surface)
                                         .overlay(
-                                            RoundedRectangle(cornerRadius: 20)
+                                            RoundedRectangle(cornerRadius: 22, style: .continuous)
                                                 .stroke(WpayinColors.surfaceBorder, lineWidth: 1)
                                         )
                                 )
                             }
 
-                            // Real Asset Stats
                             if let coinData = coinData {
                                 RealAssetStatsView(token: token, coinData: coinData)
                             }
 
-                            // Transaction History for this token
                             AssetTransactionHistoryView(token: token)
                         }
                         .padding(.horizontal, 20)
-                        .padding(.top, 20)
+                        .padding(.top, 12)
+                        .padding(.bottom, 32)
                     }
                     .refreshable {
                         loadAssetData()
+                        await walletManager.refreshWalletData()
                     }
                 }
             }
@@ -172,10 +168,16 @@ struct AssetDetailView: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
-                    Button(L10n.Action.close.localized) {
+                    Button {
                         dismiss()
+                    } label: {
+                        Image(systemName: "xmark")
+                            .font(.system(size: 13, weight: .bold))
+                            .foregroundColor(WpayinColors.text)
+                            .frame(width: 32, height: 32)
+                            .background(Circle().fill(WpayinColors.surfaceLight))
                     }
-                    .foregroundColor(WpayinColors.text)
+                    .accessibilityLabel(L10n.Action.close.localized)
                 }
 
                 ToolbarItem(placement: .navigationBarTrailing) {
@@ -184,6 +186,8 @@ struct AssetDetailView: View {
                     }) {
                         Image(systemName: walletManager.isFavorite(token.symbol) ? "star.fill" : "star")
                             .foregroundColor(walletManager.isFavorite(token.symbol) ? .yellow : WpayinColors.primary)
+                            .frame(width: 32, height: 32)
+                            .background(Circle().fill(WpayinColors.surfaceLight))
                     }
                 }
             }
@@ -208,6 +212,15 @@ struct AssetDetailView: View {
             if coinData == nil || Date().timeIntervalSince(lastLoadTime) > 300 {
                 loadAssetData()
             }
+        }
+        .task {
+            guard walletManager.hasWallet,
+                  walletManager.transactions.isEmpty,
+                  !walletManager.isLoading else {
+                return
+            }
+
+            await walletManager.refreshWalletData()
         }
     }
 
@@ -273,6 +286,29 @@ struct AssetDetailView: View {
     }
 }
 
+struct WalletFlowBackground: View {
+    var body: some View {
+        ZStack {
+            LinearGradient(
+                colors: [
+                    WpayinColors.backgroundGradientStart,
+                    WpayinColors.background
+                ],
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            )
+
+            Circle()
+                .fill(WpayinColors.primary.opacity(0.13))
+                .frame(width: 280, height: 280)
+                .blur(radius: 90)
+                .offset(x: 160, y: -280)
+        }
+        .ignoresSafeArea()
+        .allowsHitTesting(false)
+    }
+}
+
 // MARK: - Real Data Components
 
 struct RealAssetHeaderView: View {
@@ -281,61 +317,83 @@ struct RealAssetHeaderView: View {
     @EnvironmentObject var settingsManager: SettingsManager
 
     var body: some View {
-        VStack(spacing: 20) {
-            // Token Icon and Name with real CoinGecko image
+        VStack(alignment: .leading, spacing: 20) {
             HStack(spacing: 16) {
                 AsyncImage(url: URL(string: coinData.image.large)) { image in
                     image
                         .resizable()
                         .aspectRatio(contentMode: .fill)
                 } placeholder: {
-                    TokenIconView(token: token, size: 64, showNetworkBadge: false)
+                    TokenIconView(token: token, size: 54, showNetworkBadge: false)
                 }
-                .frame(width: 64, height: 64)
+                .frame(width: 54, height: 54)
                 .clipShape(Circle())
 
                 VStack(alignment: .leading, spacing: 4) {
                     Text(coinData.name)
-                        .font(.wpayinHeadline)
+                        .font(.system(size: 20, weight: .bold, design: .rounded))
                         .foregroundColor(WpayinColors.text)
 
                     Text(coinData.symbol.uppercased())
-                        .font(.wpayinBody)
+                        .font(.system(size: 13, weight: .semibold))
                         .foregroundColor(WpayinColors.textSecondary)
                 }
 
                 Spacer()
+
+                NetworkIconView(blockchain: token.blockchain, size: 30)
             }
 
-            // Real Current Price
-            VStack(spacing: 8) {
+            VStack(alignment: .leading, spacing: 10) {
                 Text((coinData.marketData.currentPrice["usd"] ?? 0).formatted(as: settingsManager.selectedCurrency))
-                    .font(.system(size: 36, weight: .bold, design: .rounded))
+                    .font(.system(size: 38, weight: .bold, design: .rounded))
                     .foregroundColor(WpayinColors.text)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.65)
 
-                // Real price change
                 let priceChange = coinData.marketData.priceChange24h
                 let priceChangePercent = coinData.marketData.priceChangePercentage24h
-                let isPositive = priceChange > 0
+                let isPositive = priceChange >= 0
 
                 HStack(spacing: 6) {
-                    Image(systemName: isPositive ? "arrow.up" : "arrow.down")
-                        .font(.system(size: 12))
-                        .foregroundColor(isPositive ? WpayinColors.success : WpayinColors.error)
+                    Image(systemName: isPositive ? "arrow.up.right" : "arrow.down.right")
+                        .font(.system(size: 11, weight: .bold))
 
                     Text("\(isPositive ? "+" : "-")\(abs(priceChange).formatted(as: settingsManager.selectedCurrency)) (\(isPositive ? "+" : "")\(String(format: "%.2f", priceChangePercent))%)")
-                        .font(.wpayinBody)
-                        .foregroundColor(isPositive ? WpayinColors.success : WpayinColors.error)
+                        .font(.system(size: 13, weight: .semibold))
 
                     Text("24h")
-                        .font(.wpayinCaption)
-                        .foregroundColor(WpayinColors.textSecondary)
+                        .font(.system(size: 12, weight: .medium))
+                        .opacity(0.75)
                 }
+                .foregroundColor(isPositive ? WpayinColors.success : WpayinColors.error)
+                .padding(.horizontal, 10)
+                .padding(.vertical, 6)
+                .background(
+                    Capsule()
+                        .fill((isPositive ? WpayinColors.success : WpayinColors.error).opacity(0.12))
+                )
             }
         }
-        .padding(24)
-        .background(WpayinColors.surface)
-        .cornerRadius(20)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(22)
+        .background(
+            RoundedRectangle(cornerRadius: 26, style: .continuous)
+                .fill(
+                    LinearGradient(
+                        colors: [
+                            Color.white.opacity(0.085),
+                            Color.white.opacity(0.035)
+                        ],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    )
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: 26, style: .continuous)
+                        .stroke(Color.white.opacity(0.10), lineWidth: 1)
+                )
+        )
     }
 }
 
@@ -349,41 +407,41 @@ struct RealAssetChartView: View {
     @EnvironmentObject var settingsManager: SettingsManager
 
     var body: some View {
-        VStack(spacing: 20) {
+        VStack(spacing: 16) {
             HStack {
                 Text(L10n.Market.priceChart.localized)
-                    .font(.wpayinHeadline)
+                    .font(.system(size: 18, weight: .bold, design: .rounded))
                     .foregroundColor(WpayinColors.text)
 
                 Spacer()
             }
 
-            // Timeframe selector
-            HStack(spacing: 8) {
+            HStack(spacing: 4) {
                 ForEach(Array(timeframes.enumerated()), id: \.offset) { index, timeframe in
                     Button(action: {
                         selectedTimeframe = index
                         onTimeframeChanged(index)
                     }) {
                         Text(timeframe)
-                            .font(.wpayinCaption)
-                            .foregroundColor(selectedTimeframe == index ? WpayinColors.secondary : WpayinColors.textSecondary)
-                            .padding(.horizontal, 12)
+                            .font(.system(size: 12, weight: .semibold))
+                            .foregroundColor(selectedTimeframe == index ? WpayinColors.primary : WpayinColors.textTertiary)
                             .padding(.vertical, 8)
-                            .background(selectedTimeframe == index ? WpayinColors.primary : WpayinColors.surfaceLight)
-                            .cornerRadius(16)
+                            .frame(maxWidth: .infinity)
+                            .background(
+                                Capsule()
+                                    .fill(selectedTimeframe == index ? WpayinColors.primary.opacity(0.14) : Color.clear)
+                            )
                     }
                     .buttonStyle(PlainButtonStyle())
                 }
             }
+            .padding(4)
+            .background(Capsule().fill(WpayinColors.surfaceLight))
 
-            // Real Chart Area
             VStack(spacing: 16) {
-                // Actual price chart
                 PriceChartView(chartData: chartData)
-                    .frame(height: 200)
+                    .frame(height: 170)
 
-                // Real Chart stats
                 HStack {
                     ChartStatItem(
                         title: L10n.Market.high24h.localized,
@@ -403,9 +461,15 @@ struct RealAssetChartView: View {
                 }
             }
         }
-        .padding(24)
-        .background(WpayinColors.surface)
-        .cornerRadius(20)
+        .padding(20)
+        .background(
+            RoundedRectangle(cornerRadius: 22, style: .continuous)
+                .fill(WpayinColors.surface)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 22, style: .continuous)
+                        .stroke(WpayinColors.surfaceBorder, lineWidth: 1)
+                )
+        )
     }
 
 }
@@ -416,12 +480,12 @@ struct PriceChartView: View {
     var body: some View {
         GeometryReader { geometry in
             Path { path in
-                guard !chartData.prices.isEmpty else { return }
+                guard chartData.prices.count > 1 else { return }
 
                 let prices = chartData.prices.map { $0[1] }
                 let minPrice = prices.min() ?? 0
                 let maxPrice = prices.max() ?? 0
-                let priceRange = maxPrice - minPrice
+                let priceRange = max(maxPrice - minPrice, max(abs(maxPrice) * 0.001, 0.000001))
 
                 let width = geometry.size.width
                 let height = geometry.size.height
@@ -449,12 +513,12 @@ struct PriceChartView: View {
 
             // Background gradient
             Path { path in
-                guard !chartData.prices.isEmpty else { return }
+                guard chartData.prices.count > 1 else { return }
 
                 let prices = chartData.prices.map { $0[1] }
                 let minPrice = prices.min() ?? 0
                 let maxPrice = prices.max() ?? 0
-                let priceRange = maxPrice - minPrice
+                let priceRange = max(maxPrice - minPrice, max(abs(maxPrice) * 0.001, 0.000001))
 
                 let width = geometry.size.width
                 let height = geometry.size.height
@@ -515,35 +579,42 @@ struct AssetBalanceView: View {
     @EnvironmentObject var settingsManager: SettingsManager
 
     var body: some View {
-        VStack(spacing: 20) {
-            // Balance section
-            VStack(spacing: 12) {
-                Text(L10n.Tokens.balance.localized)
-                    .font(.wpayinBody)
-                    .foregroundColor(WpayinColors.textSecondary)
+        VStack(alignment: .leading, spacing: 20) {
+            HStack(alignment: .top) {
+                VStack(alignment: .leading, spacing: 8) {
+                    Text(L10n.Tokens.balance.localized)
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundColor(WpayinColors.textSecondary)
 
-                let balanceString = token.balance == 0 ? "0.00" : String(format: "%.6f", token.balance)
-                Text("\(balanceString) \(token.symbol)")
-                    .font(.system(size: 28, weight: .bold, design: .rounded))
-                    .foregroundColor(WpayinColors.text)
+                    let balanceString = token.balance == 0 ? "0.00" : String(format: "%.6f", token.balance)
+                    Text("\(balanceString) \(token.symbol)")
+                        .font(.system(size: 26, weight: .bold, design: .rounded))
+                        .foregroundColor(WpayinColors.text)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.65)
+                }
 
-                Text("≈ \(token.totalValue.formatted(as: settingsManager.selectedCurrency))")
-                    .font(.wpayinBody)
+                Spacer()
+
+                Text(token.totalValue.formatted(as: settingsManager.selectedCurrency))
+                    .font(.system(size: 14, weight: .semibold))
                     .foregroundColor(WpayinColors.textSecondary)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 7)
+                    .background(Capsule().fill(WpayinColors.surfaceLight))
             }
 
-            // Action buttons
             HStack(spacing: 12) {
                 AssetActionButton(
-                    icon: "arrow.down.circle.fill",
+                    icon: "arrow.down",
                     title: L10n.Action.receive.localized,
                     subtitle: L10n.Action.depositSubtitle.localized(token.symbol),
-                    color: WpayinColors.success,
+                    color: WpayinColors.primary,
                     action: onDeposit
                 )
 
                 AssetActionButton(
-                    icon: "arrow.up.circle.fill",
+                    icon: "arrow.up",
                     title: L10n.Action.send.localized,
                     subtitle: L10n.Action.sendSubtitle.localized,
                     color: WpayinColors.primary,
@@ -551,7 +622,7 @@ struct AssetBalanceView: View {
                 )
 
                 AssetActionButton(
-                    icon: "arrow.triangle.2.circlepath",
+                    icon: "arrow.left.arrow.right",
                     title: L10n.Action.swap.localized,
                     subtitle: L10n.Action.swapSubtitle.localized,
                     color: WpayinColors.primary,
@@ -559,9 +630,15 @@ struct AssetBalanceView: View {
                 )
             }
         }
-        .padding(24)
-        .background(WpayinColors.surface)
-        .cornerRadius(20)
+        .padding(20)
+        .background(
+            RoundedRectangle(cornerRadius: 22, style: .continuous)
+                .fill(WpayinColors.surface)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 22, style: .continuous)
+                        .stroke(WpayinColors.surfaceBorder, lineWidth: 1)
+                )
+        )
     }
 }
 
@@ -574,28 +651,29 @@ struct AssetActionButton: View {
 
     var body: some View {
         Button(action: action) {
-            VStack(spacing: 8) {
-                Image(systemName: icon)
-                    .font(.system(size: 24, weight: .medium))
-                    .foregroundColor(color)
+            VStack(spacing: 9) {
+                Circle()
+                    .fill(color.opacity(0.14))
+                    .frame(width: 46, height: 46)
+                    .overlay(
+                        Circle()
+                            .stroke(color.opacity(0.18), lineWidth: 1)
+                    )
+                    .overlay(
+                        Image(systemName: icon)
+                            .font(.system(size: 16, weight: .semibold))
+                            .foregroundColor(color)
+                    )
 
-                VStack(spacing: 2) {
-                    Text(title.localized)
-                        .font(.wpayinBody)
-                        .foregroundColor(WpayinColors.text)
-
-                    Text(subtitle.localized)
-                        .font(.wpayinCaption)
-                        .foregroundColor(WpayinColors.textSecondary)
-                        .lineLimit(1)
-                }
+                Text(title.localized)
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundColor(WpayinColors.text)
+                    .lineLimit(1)
             }
             .frame(maxWidth: .infinity)
-            .padding(.vertical, 20)
-            .background(WpayinColors.surfaceLight)
-            .cornerRadius(16)
+            .contentShape(Rectangle())
         }
-        .buttonStyle(PlainButtonStyle())
+        .buttonStyle(WpayinPressableStyle())
     }
 }
 
@@ -644,9 +722,15 @@ struct RealAssetStatsView: View {
                 }
             }
         }
-        .padding(24)
-        .background(WpayinColors.surface)
-        .cornerRadius(20)
+        .padding(20)
+        .background(
+            RoundedRectangle(cornerRadius: 22, style: .continuous)
+                .fill(WpayinColors.surface)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 22, style: .continuous)
+                        .stroke(WpayinColors.surfaceBorder, lineWidth: 1)
+                )
+        )
     }
 
     private func formatSupply(_ supply: Double) -> String {
@@ -685,9 +769,15 @@ struct AssetStatsView: View {
                 StatRow(title: "Contract Address".localized, value: formatAddress(token.contractAddress ?? "N/A"))
             }
         }
-        .padding(24)
-        .background(WpayinColors.surface)
-        .cornerRadius(20)
+        .padding(20)
+        .background(
+            RoundedRectangle(cornerRadius: 22, style: .continuous)
+                .fill(WpayinColors.surface)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 22, style: .continuous)
+                        .stroke(WpayinColors.surfaceBorder, lineWidth: 1)
+                )
+        )
     }
 
     private func formatAddress(_ address: String) -> String {
@@ -718,10 +808,13 @@ struct StatRow: View {
 struct AssetTransactionHistoryView: View {
     let token: Token
     @EnvironmentObject var walletManager: WalletManager
+    @EnvironmentObject var settingsManager: SettingsManager
+    @State private var selectedTransaction: Transaction?
 
     var relevantTransactions: [Transaction] {
         return walletManager.transactions
-            .filter { $0.token == token.symbol }
+            .filter { $0.token.caseInsensitiveCompare(token.symbol) == .orderedSame }
+            .sorted { $0.timestamp > $1.timestamp }
             .prefix(3)
             .map { $0 }
     }
@@ -735,8 +828,17 @@ struct AssetTransactionHistoryView: View {
 
                 Spacer()
 
-                Button(L10n.Wallet.viewAll.localized) {
-                    // Navigate to full transaction history
+                NavigationLink(
+                    destination: AllTransactionsView(token: token)
+                        .environmentObject(walletManager)
+                        .environmentObject(settingsManager)
+                ) {
+                    HStack(spacing: 5) {
+                        Text(L10n.Wallet.viewAll.localized)
+
+                        Image(systemName: "chevron.right")
+                            .font(.system(size: 11, weight: .semibold))
+                    }
                 }
                 .foregroundColor(WpayinColors.primary)
                 .font(.wpayinCaption)
@@ -763,7 +865,9 @@ struct AssetTransactionHistoryView: View {
             } else {
                 VStack(spacing: 12) {
                     ForEach(relevantTransactions, id: \.id) { transaction in
-                        NavigationLink(destination: TransactionDetailView(transaction: transaction)) {
+                        Button {
+                            selectedTransaction = transaction
+                        } label: {
                             TransactionRowView(transaction: transaction)
                         }
                         .buttonStyle(PlainButtonStyle())
@@ -771,9 +875,20 @@ struct AssetTransactionHistoryView: View {
                 }
             }
         }
-        .padding(24)
-        .background(WpayinColors.surface)
-        .cornerRadius(20)
+        .padding(20)
+        .background(
+            RoundedRectangle(cornerRadius: 22, style: .continuous)
+                .fill(WpayinColors.surface)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 22, style: .continuous)
+                        .stroke(WpayinColors.surfaceBorder, lineWidth: 1)
+                )
+        )
+        .sheet(item: $selectedTransaction) { transaction in
+            TransactionDetailView(transaction: transaction)
+                .environmentObject(walletManager)
+                .environmentObject(settingsManager)
+        }
     }
 }
 

@@ -71,7 +71,7 @@ struct BrowserView: View {
                 .background(
                     LinearGradient(
                         gradient: Gradient(colors: [
-                            WpayinColors.headerBackground,
+                            WpayinColors.primary.opacity(0.12),
                             Color.clear
                         ]),
                         startPoint: .top,

@@ -71,14 +71,31 @@ final class MnemonicService {
 
     // Derive address with custom account index (for multi-account support)
     func address(for coin: CoinType, wallet: HDWallet, accountIndex: Int) -> String {
-        // Use wallet's getDerivedKey to get the private key at the specific account index
-        let privateKey = wallet.getDerivedKey(coin: coin, account: 0, change: 0, address: UInt32(accountIndex))
+        if accountIndex == 0 {
+            // Default derivation per coin (BIP84 bech32 for Bitcoin, ed25519 for
+            // Solana, BIP44 for EVM) — matches what signing services use to spend.
+            return wallet.getAddressForCoin(coin: coin)
+        }
 
-        // Use compressed public key for coins that require it (Bitcoin, etc.)
-        // Ethereum works with both, but compressed is more standard
-        let publicKey = privateKey.getPublicKeySecp256k1(compressed: true)
-        let address = AnyAddress(publicKey: publicKey, coin: coin)
-        return address.description
+        let privateKey = wallet.getKey(coin: coin, derivationPath: derivationPath(for: coin, accountIndex: accountIndex))
+        // getPublicKey(coinType:) picks the correct curve for the coin
+        // (ed25519 for Solana, secp256k1 for Bitcoin/EVM).
+        let publicKey = privateKey.getPublicKey(coinType: coin)
+        return AnyAddress(publicKey: publicKey, coin: coin).description
+    }
+
+    /// Derivation path for a given account index, consistent with spending paths.
+    func derivationPath(for coin: CoinType, accountIndex: Int) -> String {
+        switch coin {
+        case .bitcoin:
+            return "m/84'/0'/0'/0/\(accountIndex)" // Native SegWit (BIP84)
+        case .litecoin:
+            return "m/84'/2'/0'/0/\(accountIndex)"
+        case .solana:
+            return "m/44'/501'/\(accountIndex)'/0'"
+        default:
+            return "m/44'/\(coin.slip44Id)'/0'/0/\(accountIndex)"
+        }
     }
 
     func privateKeyHex(for coin: CoinType, wallet: HDWallet) -> String {

@@ -3,31 +3,33 @@
 //  Config.swift
 //  Wpayin_Wallet
 //
-//  Configuration for API keys and sensitive data
+//  Public application configuration
 //
 
 import Foundation
 
-/// Application configuration containing API keys and endpoints
+/// Public defaults required to build and run the app.
+///
+/// Optional third-party API keys can be supplied through the Xcode scheme's
+/// environment variables. No key or secret is stored in the repository.
 struct AppConfig {
 
-    // MARK: - API Keys
+    private static let environment = ProcessInfo.processInfo.environment
 
-    /// Alchemy API key for NFT and blockchain data
-    static let alchemyApiKey = "YOUR_ALCHEMY_API_KEY_HERE"
+    // MARK: - Optional API Keys
 
-    /// Etherscan API key for transaction history and blockchain data
-    static let etherscanApiKey = "YOUR_ETHERSCAN_API_KEY_HERE"
+    static let alchemyApiKey = environment["ALCHEMY_API_KEY"]?
+        .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
 
-    /// CoinGecko API key (optional - free tier works without key)
-    static let coinGeckoApiKey: String? = nil
+    static let etherscanApiKey = environment["ETHERSCAN_API_KEY"]?
+        .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+
+    static let coinGeckoApiKey = environment["COINGECKO_API_KEY"]?
+        .trimmingCharacters(in: .whitespacesAndNewlines)
 
     // MARK: - RPC Endpoints
 
-    /// Default Ethereum RPC endpoint
     static let ethereumRpcUrl = "https://cloudflare-eth.com"
-
-    /// Default Bitcoin RPC endpoint
     static let bitcoinRpcUrl = "https://blockstream.info/api"
 
     // MARK: - Feature Flags
@@ -43,25 +45,19 @@ struct AppConfig {
 
     // MARK: - Validation
 
-    /// Check if all required API keys are configured
+    /// Optional integrations are fully configured when both provider keys exist.
     static var isConfigured: Bool {
-        return !alchemyApiKey.contains("YOUR_") &&
-               !etherscanApiKey.contains("YOUR_")
+        !alchemyApiKey.isEmpty && !etherscanApiKey.isEmpty
     }
 
-    /// Get configuration status message
     static var configurationMessage: String {
         if isConfigured {
             return "✅ All API keys configured"
-        } else {
-            var missing: [String] = []
-            if alchemyApiKey.contains("YOUR_") {
-                missing.append("Alchemy API Key")
-            }
-            if etherscanApiKey.contains("YOUR_") {
-                missing.append("Etherscan API Key")
-            }
-            return "⚠️ Missing: \(missing.joined(separator: ", "))"
         }
+
+        var missing: [String] = []
+        if alchemyApiKey.isEmpty { missing.append("Alchemy API Key") }
+        if etherscanApiKey.isEmpty { missing.append("Etherscan API Key") }
+        return "Optional integrations unavailable: \(missing.joined(separator: ", "))"
     }
 }

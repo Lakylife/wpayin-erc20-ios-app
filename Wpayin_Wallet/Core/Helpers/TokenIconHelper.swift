@@ -22,37 +22,26 @@ struct TokenIconHelper {
             "btc_bitcoin": "BTC",
             "bitcoin_bitcoin": "BTC",
             
-            // Ethereum mainnet
+            // ETH keeps its coin icon on every network — the chain itself is
+            // shown by the network badge / row context, not by swapping the coin icon.
             "eth_ethereum": "ETH",
-            "weth_ethereum": "ETH",
-            
+            "eth_polygon": "ETH",
+            "eth_binance-smart-chain": "ETH",
+            "eth_arbitrum": "ETH",
+            "eth_optimism": "ETH",
+            "eth_avalanche": "ETH",
+            "eth_base": "ETH",
+
             // Polygon
             "matic_polygon": "polygon-pos_eip20_32",
-            "weth_polygon": "ETH",
-            "eth_polygon": "ethereum_eip20_32",
-            
+
             // BSC
             "bnb_binance-smart-chain": "BNB",
             "wbnb_binance-smart-chain": "binance-smart-chain_eip20_32",
-            "eth_binance-smart-chain": "ethereum_eip20_32",
-            
-            // Arbitrum
-            "eth_arbitrum": "arbitrum-one_trx_32",
-            "weth_arbitrum": "ETH",
-            
-            // Optimism
-            "eth_optimism": "optimistic-ethereum_trx_32",
-            "weth_optimism": "ETH",
-            
-            // Avalanche
-            "avax_avalanche": "avalanche_trx_32",
+
+            // Avalanche (native AVAX uses the colored CoinGecko icon via iconUrl)
             "wavax_avalanche": "avalanche_eip20_32",
-            "eth_avalanche": "ethereum_eip20_32",
-            
-            // Base
-            "eth_base": "base_trx_32",
-            "weth_base": "ETH",
-            
+
             // Solana has no bundled raster asset yet; use placeholder fallback.
         ]
         
@@ -66,11 +55,11 @@ struct TokenIconHelper {
         let fallbackMap: [String: String] = [
             "BTC": "BTC",
             "ETH": "ETH",
-            "WETH": "ETH",
             "BNB": "BNB",
             "WBNB": "binance-smart-chain_eip20_32",
             "MATIC": "polygon-pos_eip20_32",
-            "AVAX": "avalanche_trx_32",
+            // AVAX intentionally omitted: the bundled asset is a white glyph;
+            // the colored CoinGecko icon is used via iconUrl instead.
             "WAVAX": "avalanche_eip20_32",
         ]
         

@@ -34,7 +34,7 @@ struct FiatRampView: View {
                         Logger.log("📍 Address: \(config.walletAddress)")
                     }
                 } else {
-                    ErrorView(message: "\(config.provider.displayName) requires API key configuration. Please use Mt Pelerin or contact support.")
+                    ErrorView(message: "%@ requires API key configuration. Please use Mt Pelerin or contact support.".localized(config.provider.displayName))
                         .onAppear {
                             Logger.log("❌ FiatRampView - Failed to generate URL")
                             Logger.log("💳 Provider: \(config.provider.displayName)")
@@ -46,11 +46,11 @@ struct FiatRampView: View {
                     LoadingOverlay()
                 }
             }
-            .navigationTitle("Buy \(config.crypto)")
+            .navigationTitle("Buy %@".localized(config.crypto))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
-                    Button("Close") {
+                    Button("Close".localized) {
                         dismiss()
                     }
                     .foregroundColor(WpayinColors.primary)
@@ -61,13 +61,13 @@ struct FiatRampView: View {
                         Button {
                             showProviderInfo()
                         } label: {
-                            Label("About \(config.provider.displayName)", systemImage: "info.circle")
+                            Label("About %@".localized(config.provider.displayName), systemImage: "info.circle")
                         }
                         
                         Button(role: .destructive) {
                             dismiss()
                         } label: {
-                            Label("Cancel Purchase", systemImage: "xmark.circle")
+                            Label("Cancel Purchase".localized, systemImage: "xmark.circle")
                         }
                     } label: {
                         Image(systemName: "ellipsis.circle")
@@ -76,8 +76,8 @@ struct FiatRampView: View {
                 }
             }
         }
-        .alert("Error", isPresented: $showError) {
-            Button("OK") {
+        .alert("Error".localized, isPresented: $showError) {
+            Button("OK".localized) {
                 dismiss()
             }
         } message: {
@@ -118,7 +118,7 @@ struct LoadingOverlay: View {
                     .progressViewStyle(CircularProgressViewStyle(tint: .white))
                     .scaleEffect(1.5)
                 
-                Text("Loading...")
+                Text("Loading...".localized)
                     .foregroundColor(.white)
                     .font(.wpayinSubheadline)
             }
@@ -142,7 +142,7 @@ struct ErrorView: View {
                 .font(.system(size: 60))
                 .foregroundColor(.orange)
             
-            Text("Configuration Required")
+            Text("Configuration Required".localized)
                 .font(.wpayinTitle)
                 .foregroundColor(WpayinColors.text)
             
@@ -152,7 +152,7 @@ struct ErrorView: View {
                 .multilineTextAlignment(.center)
                 .padding(.horizontal, 40)
             
-            Text("Mt Pelerin is available and doesn't require API keys")
+            Text("Mt Pelerin is available and doesn't require API keys".localized)
                 .font(.wpayinCaption)
                 .foregroundColor(WpayinColors.primary)
                 .multilineTextAlignment(.center)

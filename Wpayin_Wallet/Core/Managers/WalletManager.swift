@@ -62,6 +62,7 @@ final class WalletManager: ObservableObject {
     private let favoritesStorageKey = "FavoriteTokens"
     private let selectedBlockchainsKey = "SelectedBlockchains"  // NEW: Persistence key
     private let cachedTokenPricesKey = "CachedTokenPrices"
+    private let cachedTransactionsPrefix = "CachedTransactions"
     private let seenTransactionsPrefix = "SeenTransactionHashes"
 
     private var chainAccounts: [BlockchainType: ChainAccount] = [:]
@@ -433,6 +434,8 @@ final class WalletManager: ObservableObject {
             return "https://assets.coingecko.com/coins/images/1/large/bitcoin.png"
         case "ETH":
             return "https://assets.coingecko.com/coins/images/279/large/ethereum.png"
+        case "WETH":
+            return "https://assets.coingecko.com/coins/images/2518/large/weth.png"
         case "USDT":
             return "https://assets.coingecko.com/coins/images/325/large/Tether.png"
         case "USDC":
@@ -460,6 +463,9 @@ final class WalletManager: ObservableObject {
             // Get account index for the active wallet
             let accountIndex = activeWallet.map { getAccountIndex(for: $0) } ?? 0
             Logger.log("📊 Account index: \(accountIndex)")
+            // Signing services (TransactionService, SwapService, BitcoinService)
+            // read this so they spend from the same account we show balances for.
+            UserDefaults.standard.set(accountIndex, forKey: "ActiveAccountIndex")
 
             let accounts = deriveAccounts(using: wallet, accountIndex: accountIndex)
             chainAccounts = accounts
@@ -716,6 +722,14 @@ final class WalletManager: ObservableObject {
         self.walletAddress = resolvedAddress
         Logger.log("📍 Wallet address: \(resolvedAddress)")
 
+        if transactions.isEmpty {
+            let cached = cachedTransactions(for: resolvedAddress)
+            if !cached.isEmpty {
+                transactions = cached
+                Logger.log("📚 Restored \(cached.count) cached transactions")
+            }
+        }
+
         // Calculate new balance from visible tokens only (respecting selectedBlockchains)
         let newBalance = self.visibleTokens.reduce(0) { $0 + $1.totalValue }
         Logger.log("💰 New balance calculated: $\(newBalance) (from \(self.visibleTokens.count) visible tokens)")
@@ -790,18 +804,36 @@ final class WalletManager: ObservableObject {
             let fetchedTransactions = try await apiService.getTransactions(for: resolvedAddress, using: configs)
             notifyForNewTransactions(fetchedTransactions, walletAddress: resolvedAddress)
             transactions = fetchedTransactions
+            cacheTransactions(fetchedTransactions, for: resolvedAddress)
         } catch let apiError as APIError {
             Logger.log("Transaction fetch error: \(apiError.localizedDescription)")
-            switch apiError {
-            case .missingAPIKeys:
-                transactions = []
-            default:
-                transactions = []
-            }
         } catch {
             Logger.log("Transaction fetch unexpected error: \(error.localizedDescription)")
-            transactions = []
         }
+    }
+
+    private func cachedTransactions(for walletAddress: String) -> [Transaction] {
+        guard !walletAddress.isEmpty,
+              let data = UserDefaults.standard.data(
+                forKey: "\(cachedTransactionsPrefix)_\(walletAddress.lowercased())"
+              ),
+              let cached = try? JSONDecoder().decode([Transaction].self, from: data) else {
+            return []
+        }
+
+        return cached.sorted { $0.timestamp > $1.timestamp }
+    }
+
+    private func cacheTransactions(_ transactions: [Transaction], for walletAddress: String) {
+        guard !walletAddress.isEmpty,
+              let data = try? JSONEncoder().encode(transactions) else {
+            return
+        }
+
+        UserDefaults.standard.set(
+            data,
+            forKey: "\(cachedTransactionsPrefix)_\(walletAddress.lowercased())"
+        )
     }
 
     private func notifyForNewTransactions(_ fetchedTransactions: [Transaction], walletAddress: String) {
@@ -923,6 +955,17 @@ final class WalletManager: ObservableObject {
             multiChainWallets = []
         }
 
+        // Migration: unify legacy "main_seed" identifier with the canonical "main-seed"
+        // (a mismatch here made new accounts reuse account index 0).
+        var needsSave = false
+        for i in 0..<multiChainWallets.count where multiChainWallets[i].seedPhraseId == "main_seed" {
+            multiChainWallets[i].seedPhraseId = "main-seed"
+            needsSave = true
+        }
+        if needsSave {
+            saveWallets()
+        }
+
         // IMPORTANT: Migrate old keychain wallet to new multi-wallet system
         // If we have a seed phrase/private key in keychain but no wallets in the new system,
         // create a "Main Wallet" entry automatically
@@ -934,7 +977,7 @@ final class WalletManager: ObservableObject {
             var mainWallet = MultiChainWallet(
                 name: "Main Wallet",
                 type: walletType,
-                seedPhraseId: keychain.hasSeedPhrase() ? "main_seed" : nil
+                seedPhraseId: keychain.hasSeedPhrase() ? "main-seed" : nil
             )
             mainWallet.isActive = true
             multiChainWallets.append(mainWallet)
@@ -1295,6 +1338,7 @@ final class WalletManager: ObservableObject {
         // Find the highest account index from existing seed wallets
         let seedWallets = multiChainWallets.filter { $0.type == .seed && $0.seedPhraseId == "main-seed" }
         let nextAccountIndex = seedWallets.count
+        UserDefaults.standard.set(nextAccountIndex, forKey: "ActiveAccountIndex")
 
         // Derive addresses for all supported mainnet blockchains with the new account index.
         var chainAccounts: [BlockchainType: ChainAccount] = [:]
@@ -1324,7 +1368,7 @@ final class WalletManager: ObservableObject {
         // Convert chainAccounts to WalletAccount array and populate newWallet.accounts
         newWallet.accounts = chainAccounts.compactMap { (blockchainType, chainAccount) in
             guard let coinType = chainAccount.coinType else { return nil }
-            let derivationPath = "m/44'/\(coinType.slip44Id)/0'/0/\(nextAccountIndex)"
+            let derivationPath = mnemonicService.derivationPath(for: coinType, accountIndex: nextAccountIndex)
             return WalletAccount(
                 blockchainConfig: chainAccount.config,
                 address: chainAccount.address,

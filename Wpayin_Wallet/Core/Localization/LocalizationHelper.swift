@@ -180,6 +180,10 @@ enum L10n {
         static let recent = "activity.recent"
         static let emptyDesc = "activity.emptyDesc"
         static let tokenEmptyDesc = "activity.tokenEmptyDesc"
+        static let transactions = "activity.transactions"
+        static let overview = "activity.overview"
+        static let today = "activity.today"
+        static let yesterday = "activity.yesterday"
     }
 
     // MARK: - Market

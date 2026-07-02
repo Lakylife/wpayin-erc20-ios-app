@@ -10,6 +10,24 @@
 import SwiftUI
 import LocalAuthentication
 
+private enum AppVersionInfo {
+    static let version = Bundle.main.object(
+        forInfoDictionaryKey: "CFBundleShortVersionString"
+    ) as? String ?? "—"
+
+    static let build = Bundle.main.object(
+        forInfoDictionaryKey: "CFBundleVersion"
+    ) as? String ?? "—"
+
+    static var localizedVersion: String {
+        "\("Version".localized) \(version)"
+    }
+
+    static var versionWithBuild: String {
+        "\(version) (Build \(build))"
+    }
+}
+
 struct SettingsView: View {
     @EnvironmentObject var walletManager: WalletManager
     @EnvironmentObject var settingsManager: SettingsManager
@@ -58,7 +76,7 @@ struct SettingsView: View {
                 .background(
                     LinearGradient(
                         gradient: Gradient(colors: [
-                            WpayinColors.headerBackground,
+                            WpayinColors.primary.opacity(0.12),
                             Color.clear
                         ]),
                         startPoint: .top,
@@ -171,7 +189,7 @@ struct SettingsView: View {
                                 .font(.wpayinCaption)
                                 .foregroundColor(WpayinColors.textSecondary)
 
-                            Text("Version 1.1.5".localized)
+                            Text(AppVersionInfo.localizedVersion)
                                 .font(.wpayinSmall)
                                 .foregroundColor(WpayinColors.textSecondary)
                         }
@@ -321,11 +339,15 @@ struct SettingsRow: View {
                     Image(systemName: "chevron.right")
                         .font(.system(size: 14))
                         .foregroundColor(WpayinColors.textSecondary)
+                        .allowsHitTesting(false)
                 }
             }
             .padding(16)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .contentShape(Rectangle())
         }
         .buttonStyle(PlainButtonStyle())
+        .frame(maxWidth: .infinity)
     }
 }
 
@@ -351,7 +373,10 @@ struct BiometricSettingsRow: View {
 
             Spacer()
 
-            Toggle("", isOn: $settingsManager.biometricAuthEnabled)
+            Toggle("", isOn: Binding(
+                get: { settingsManager.biometricAuthEnabled },
+                set: { settingsManager.updateBiometricAuth($0) }
+            ))
                 .labelsHidden()
                 .disabled(!settingsManager.isBiometricAvailable)
         }
@@ -447,7 +472,7 @@ struct AboutView: View {
                                     .font(.wpayinTitle)
                                     .foregroundColor(WpayinColors.text)
 
-                                Text("Version 1.1.5".localized)
+                                Text(AppVersionInfo.localizedVersion)
                                     .font(.wpayinSubheadline)
                                     .foregroundColor(WpayinColors.textSecondary)
                             }
@@ -461,7 +486,7 @@ struct AboutView: View {
 
                             AboutSection(
                                 title: "Version",
-                                content: "1.1.5 (Build 2026.06.08)"
+                                content: AppVersionInfo.versionWithBuild
                             )
                         }
                     }

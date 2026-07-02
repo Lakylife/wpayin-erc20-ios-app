@@ -89,24 +89,25 @@ fastlane/test_output
 
 iOSInjectionProject/
 
-# API Keys and Secrets
-# IMPORTANT: Never commit these files!
-Wpayin_Wallet/Core/Config/Secrets.swift
+# API keys, secrets, and local configuration
+**/Secrets.swift
 *.xcconfig
-!Debug.xcconfig.example
-!Release.xcconfig.example
-
-# Environment files
 .env
-.env.local
-.env.*.local
+.env.*
+*.example
+*.sample
+*.template
 
 # Local assistant/work artifacts
 backups/
 .agents/
 .codex/
+AGENTS.md
+CLAUDE.md
+CODEX.md
 *.bak
 *.backup
+*.xcresult
 
 # Public app screenshots used in README
 screenshots/*

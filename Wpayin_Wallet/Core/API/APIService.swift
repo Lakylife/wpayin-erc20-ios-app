@@ -28,12 +28,19 @@ class APIService: ObservableObject {
         func resolveAPIKey() -> String? {
             let environment = ProcessInfo.processInfo.environment
             for key in apiKeyEnvs {
-                if let value = environment[key], !value.isEmpty {
+                if let value = environment[key], Self.isUsableAPIKey(value) {
                     return value
                 }
             }
-            // Use Etherscan API key from config
-            return AppConfig.etherscanApiKey
+
+            return Self.isUsableAPIKey(AppConfig.etherscanApiKey)
+                ? AppConfig.etherscanApiKey
+                : nil
+        }
+
+        private static func isUsableAPIKey(_ value: String) -> Bool {
+            let normalized = value.trimmingCharacters(in: .whitespacesAndNewlines)
+            return !normalized.isEmpty && !normalized.uppercased().contains("YOUR_")
         }
     }
 
@@ -155,6 +162,11 @@ class APIService: ObservableObject {
                 switch request.tokenType {
                 case .bitcoin:
                     balance = try await fetchBitcoinBalance(address: request.address)
+                case .solana:
+                    balance = try await fetchSolanaBalance(
+                        address: request.address,
+                        rpcURL: request.config.rpcUrl
+                    )
                 default:
                     balance = try await fetchEVMNativeBalance(
                         address: request.address,
@@ -198,57 +210,62 @@ class APIService: ObservableObject {
 
         let normalizedAddress = trimmedAddress.lowercased()
         var aggregated: [Transaction] = []
-        let missingKeys: Set<String> = []
         var firstFailure: Error?
+        var hadSuccessfulFetch = false
 
         for config in supportedConfigs {
             guard let blockchain = config.platform.blockchainType, blockchain.isEVM else { continue }
-            guard let endpoint = etherscanEndpoint(for: config.platform) else { continue }
 
-            guard let apiKey = endpoint.resolveAPIKey() else {
-                Logger.log("⚠️ Missing API key for \(config.platform.name)")
-                continue
-            }
+            let etherscan = etherscanEndpoint(for: config.platform)
+            let etherscanKey = etherscan?.resolveAPIKey()
+            var loadedThisChain = false
 
-            do {
-                let normalTransactions = try await fetchEtherscanTransactions(
-                    address: trimmedAddress,
-                    normalizedAddress: normalizedAddress,
-                    blockchain: blockchain,
-                    config: config,
-                    endpoint: endpoint,
-                    apiKey: apiKey,
-                    action: .normal
-                )
-                aggregated.append(contentsOf: normalTransactions)
-
-                if endpoint.supportsTokenTransfers {
-                    let tokenTransfers = try await fetchEtherscanTransactions(
+            if let etherscan, let etherscanKey {
+                do {
+                    let fetched = try await fetchTransactionHistory(
                         address: trimmedAddress,
                         normalizedAddress: normalizedAddress,
                         blockchain: blockchain,
                         config: config,
-                        endpoint: endpoint,
-                        apiKey: apiKey,
-                        action: .tokenTransfers
+                        endpoint: etherscan,
+                        apiKey: etherscanKey
                     )
-                    aggregated.append(contentsOf: tokenTransfers)
+                    aggregated.append(contentsOf: fetched)
+                    hadSuccessfulFetch = true
+                    loadedThisChain = true
+                } catch {
+                    if firstFailure == nil {
+                        firstFailure = error
+                    }
+                    Logger.log("⚠️ Etherscan transaction fetch failed for \(config.platform.name): \(error)")
                 }
+            }
+
+            guard !loadedThisChain, let fallback = blockscoutEndpoint(for: config.platform) else {
+                continue
+            }
+
+            do {
+                let fetched = try await fetchTransactionHistory(
+                    address: trimmedAddress,
+                    normalizedAddress: normalizedAddress,
+                    blockchain: blockchain,
+                    config: config,
+                    endpoint: fallback,
+                    apiKey: nil
+                )
+                aggregated.append(contentsOf: fetched)
+                hadSuccessfulFetch = true
             } catch {
                 if firstFailure == nil {
                     firstFailure = error
                 }
-                Logger.log("⚠️ Transaction fetch failed for \(config.platform.name): \(error)")
+                Logger.log("⚠️ Blockscout transaction fetch failed for \(config.platform.name): \(error)")
             }
         }
 
-        if aggregated.isEmpty {
-            if !missingKeys.isEmpty {
-                throw APIError.missingAPIKeys(Array(missingKeys))
-            }
-            if let failure = firstFailure {
-                throw failure
-            }
+        if aggregated.isEmpty, !hadSuccessfulFetch, let failure = firstFailure {
+            throw failure
         }
 
         var seen: Set<String> = []
@@ -262,25 +279,100 @@ class APIService: ObservableObject {
 
         return deduped.sorted { $0.timestamp > $1.timestamp }
     }
+
+    private func fetchTransactionHistory(
+        address: String,
+        normalizedAddress: String,
+        blockchain: BlockchainType,
+        config: BlockchainConfig,
+        endpoint: ExplorerEndpoint,
+        apiKey: String?
+    ) async throws -> [Transaction] {
+        var transactions: [Transaction] = []
+        var firstFailure: Error?
+        var hadSuccessfulRequest = false
+
+        do {
+            let normalTransactions = try await fetchEtherscanTransactions(
+                address: address,
+                normalizedAddress: normalizedAddress,
+                blockchain: blockchain,
+                config: config,
+                endpoint: endpoint,
+                apiKey: apiKey,
+                action: .normal
+            )
+            transactions.append(contentsOf: normalTransactions)
+            hadSuccessfulRequest = true
+        } catch {
+            firstFailure = error
+        }
+
+        if endpoint.supportsTokenTransfers {
+            do {
+                let tokenTransfers = try await fetchEtherscanTransactions(
+                    address: address,
+                    normalizedAddress: normalizedAddress,
+                    blockchain: blockchain,
+                    config: config,
+                    endpoint: endpoint,
+                    apiKey: apiKey,
+                    action: .tokenTransfers
+                )
+                transactions.append(contentsOf: tokenTransfers)
+                hadSuccessfulRequest = true
+            } catch {
+                if firstFailure == nil {
+                    firstFailure = error
+                }
+            }
+        }
+
+        if !hadSuccessfulRequest, let firstFailure {
+            throw firstFailure
+        }
+
+        return transactions
+    }
+
     private func etherscanEndpoint(for platform: BlockchainPlatform) -> ExplorerEndpoint? {
         switch platform {
-        case .ethereum:
-            return ExplorerEndpoint(apiBase: "https://api.etherscan.io/v2/api", apiKeyEnvs: ["ETHERSCAN_API_KEY"], supportsTokenTransfers: true)
-        case .polygon:
-            return ExplorerEndpoint(apiBase: "https://api.polygonscan.com/v2/api", apiKeyEnvs: ["POLYGONSCAN_API_KEY"], supportsTokenTransfers: true)
-        case .bsc:
-            return ExplorerEndpoint(apiBase: "https://api.bscscan.com/v2/api", apiKeyEnvs: ["BSCSCAN_API_KEY"], supportsTokenTransfers: true)
-        case .arbitrum:
-            return ExplorerEndpoint(apiBase: "https://api.arbiscan.io/v2/api", apiKeyEnvs: ["ARBISCAN_API_KEY"], supportsTokenTransfers: true)
-        case .optimism:
-            return ExplorerEndpoint(apiBase: "https://api-optimistic.etherscan.io/api", apiKeyEnvs: ["OPTIMISMSCAN_API_KEY"], supportsTokenTransfers: true)
-        case .avalanche:
-            return ExplorerEndpoint(apiBase: "https://api.snowtrace.io/api", apiKeyEnvs: ["SNOWTRACE_API_KEY"], supportsTokenTransfers: true)
-        case .base:
-            return ExplorerEndpoint(apiBase: "https://api.basescan.org/api", apiKeyEnvs: ["BASESCAN_API_KEY"], supportsTokenTransfers: true)
+        case .ethereum, .polygon, .bsc, .arbitrum, .optimism, .avalanche, .base, .gnosis:
+            return ExplorerEndpoint(
+                apiBase: "https://api.etherscan.io/v2/api",
+                apiKeyEnvs: ["ETHERSCAN_API_KEY"],
+                supportsTokenTransfers: true
+            )
         default:
             return nil
         }
+    }
+
+    private func blockscoutEndpoint(for platform: BlockchainPlatform) -> ExplorerEndpoint? {
+        let apiBase: String
+
+        switch platform {
+        case .ethereum:
+            apiBase = "https://eth.blockscout.com/api"
+        case .polygon:
+            apiBase = "https://polygon.blockscout.com/api"
+        case .arbitrum:
+            apiBase = "https://arbitrum.blockscout.com/api"
+        case .optimism:
+            apiBase = "https://optimism.blockscout.com/api"
+        case .base:
+            apiBase = "https://base.blockscout.com/api"
+        case .gnosis:
+            apiBase = "https://gnosis.blockscout.com/api"
+        default:
+            return nil
+        }
+
+        return ExplorerEndpoint(
+            apiBase: apiBase,
+            apiKeyEnvs: [],
+            supportsTokenTransfers: true
+        )
     }
 
     private func getChainId(for blockchain: BlockchainType) -> Int {
@@ -299,6 +391,8 @@ class APIService: ObservableObject {
             return 43114
         case .base:
             return 8453
+        case .gnosis:
+            return 100
         default:
             return 1 // Default to Ethereum
         }
@@ -310,7 +404,7 @@ class APIService: ObservableObject {
         blockchain: BlockchainType,
         config: BlockchainConfig,
         endpoint: ExplorerEndpoint,
-        apiKey: String,
+        apiKey: String?,
         action: EtherscanAction
     ) async throws -> [Transaction] {
         guard var components = URLComponents(string: endpoint.apiBase) else {
@@ -323,12 +417,15 @@ class APIService: ObservableObject {
             URLQueryItem(name: "address", value: address),
             URLQueryItem(name: "page", value: "1"),
             URLQueryItem(name: "offset", value: "50"),
-            URLQueryItem(name: "sort", value: "desc"),
-            URLQueryItem(name: "apikey", value: apiKey)
+            URLQueryItem(name: "sort", value: "desc")
         ]
 
-        // Add chainid for V2 API
-        if endpoint.apiBase.contains("/v2/") {
+        if let apiKey {
+            queryItems.append(URLQueryItem(name: "apikey", value: apiKey))
+        }
+
+        // Etherscan V2 uses one endpoint for every supported EVM chain.
+        if endpoint.apiBase.contains("api.etherscan.io/v2/") {
             let chainId = getChainId(for: blockchain)
             queryItems.append(URLQueryItem(name: "chainid", value: "\(chainId)"))
         }
@@ -765,9 +862,12 @@ class APIService: ObservableObject {
     func fetchNFTs(for address: String) async throws -> [NFT] {
         Logger.log("🎨 Fetching NFTs for address: \(address)")
 
-        // Use Alchemy NFT API (v3) - free tier, more reliable
-        // API key loaded from AppConfig
         let alchemyApiKey = AppConfig.alchemyApiKey
+        guard !alchemyApiKey.isEmpty else {
+            Logger.log("ℹ️ NFT loading skipped: optional Alchemy API key is not configured")
+            return []
+        }
+
         let alchemyUrl = "https://eth-mainnet.g.alchemy.com/nft/v3/\(alchemyApiKey)/getNFTsForOwner"
 
         guard var urlComponents = URLComponents(string: alchemyUrl) else {
@@ -791,7 +891,7 @@ class APIService: ObservableObject {
         request.timeoutInterval = 30.0
 
         do {
-            Logger.log("🚀 Making Alchemy NFT API request to: \(url)")
+            Logger.log("🚀 Making Alchemy NFT API request")
             let (data, response) = try await URLSession.shared.data(for: request)
 
             guard let httpResponse = response as? HTTPURLResponse else {
@@ -1058,6 +1158,47 @@ extension APIService {
         let divisor = powerOfTen(decimals)
         let normalized = decimalDividing(rawAmount, by: divisor)
         return NSDecimalNumber(decimal: normalized).doubleValue
+    }
+
+    func fetchSolanaBalance(address: String, rpcURL: String) async throws -> Double {
+        guard let url = URL(string: rpcURL) else {
+            throw APIError.invalidURL
+        }
+
+        let payload: [String: Any] = [
+            "jsonrpc": "2.0",
+            "method": "getBalance",
+            "params": [address],
+            "id": Int.random(in: 1...Int(Int32.max))
+        ]
+
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.httpBody = try JSONSerialization.data(withJSONObject: payload)
+
+        let (data, response) = try await session.data(for: request)
+
+        guard let httpResponse = response as? HTTPURLResponse,
+              (200..<300).contains(httpResponse.statusCode) else {
+            throw APIError.invalidResponse
+        }
+
+        struct SolanaBalanceResult: Decodable {
+            let value: UInt64
+        }
+
+        let rpcResponse = try JSONDecoder().decode(RPCResponse<SolanaBalanceResult>.self, from: data)
+
+        if let error = rpcResponse.error {
+            throw APIError.rpcError(code: error.code, message: error.message)
+        }
+
+        guard let lamports = rpcResponse.result?.value else {
+            throw APIError.noData
+        }
+
+        return Double(lamports) / 1_000_000_000 // lamports → SOL
     }
 
     func fetchBitcoinBalance(address: String) async throws -> Double {

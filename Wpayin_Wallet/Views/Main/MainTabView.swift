@@ -51,6 +51,7 @@ struct MainTabView: View {
                 ModernBottomNavigation(selectedTab: $selectedTab)
             }
         }
+        .environment(\.locale, Locale(identifier: settingsManager.selectedLanguage.rawValue))
     }
 }
 
@@ -119,7 +120,7 @@ struct ModernNavItem: View {
             VStack(spacing: 3) {
                 Image(systemName: icon)
                     .font(.system(size: 18, weight: isSelected ? .semibold : .medium))
-                    .foregroundColor(isSelected ? WpayinColors.text : WpayinColors.textTertiary)
+                    .foregroundColor(isSelected ? WpayinColors.primary : WpayinColors.textTertiary)
                     .frame(width: 34, height: 24)
 
                 Text(title.localized)
@@ -134,16 +135,8 @@ struct ModernNavItem: View {
             .contentShape(Rectangle())
             .background(
                 Capsule()
-                    .fill(isSelected ? WpayinColors.primary.opacity(0.18) : Color.clear)
+                    .fill(isSelected ? WpayinColors.primary.opacity(0.14) : Color.clear)
             )
-            .overlay(alignment: .top) {
-                if isSelected {
-                    Capsule()
-                        .fill(WpayinColors.primary)
-                        .frame(width: 18, height: 3)
-                        .offset(y: -2)
-                }
-            }
         }
         .buttonStyle(PlainButtonStyle())
         .animation(.easeInOut(duration: 0.2), value: isSelected)

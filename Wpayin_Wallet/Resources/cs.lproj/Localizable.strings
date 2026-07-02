@@ -128,6 +128,10 @@
 "activity.noResultsFound" = "Nebyly nalezeny žádné výsledky";
 "activity.tryAdjusting" = "Zkuste upravit hledaný výraz nebo filtry";
 "activity.recent" = "Nedávné transakce";
+"activity.transactions" = "Transakce";
+"activity.overview" = "Přehled";
+"activity.today" = "Dnes";
+"activity.yesterday" = "Včera";
 "activity.emptyDesc" = "Zde se zobrazí historie vašich transakcí, jakmile začnete peněženku používat.";
 "activity.tokenEmptyDesc" = "Zde se zobrazí vaše transakce měny %@";
 "market.priceChart" = "Graf ceny";
@@ -645,3 +649,38 @@
 "Base Layer 1" = "Základní sítě L1";
 "EVM Chains" = "EVM sítě";
 "Other L1s" = "Ostatní L1";
+
+/* App Lock (v1.1.6) */
+"Wallet Locked" = "Peněženka uzamčena";
+"Authenticate to access your wallet" = "Ověřte se pro přístup k peněžence";
+"Unlock your wallet" = "Odemkněte svou peněženku";
+"Unlock" = "Odemknout";
+"Swap Failed" = "Swap se nezdařil";
+"Swap Submitted" = "Swap odeslán";
+"Transaction: %@" = "Transakce: %@";
+"Please enter a valid wallet address" = "Zadejte platnou adresu peněženky";
+
+/* Buy & pickers (v1.1.6) */
+"Buy" = "Koupit";
+"Buy Crypto" = "Koupit krypto";
+"Purchase cryptocurrency with your card or bank account" = "Nakupte kryptoměny kartou nebo bankovním převodem";
+"No address" = "Chybí adresa";
+"No active assets available for purchase" = "Žádná aktivní aktiva k nákupu";
+"Enable networks in Settings → Manage Networks" = "Zapněte sítě v Nastavení → Správa sítí";
+"Choose Payment Provider" = "Vyberte platebního poskytovatele";
+"Select how you want to buy %@" = "Vyberte, jak chcete koupit %@";
+"Compare rates from %@ providers" = "Porovnat kurzy od %@ poskytovatelů";
+"No payment providers are currently configured for %@. API keys are required for most providers." = "Pro %@ není momentálně nakonfigurován žádný platební poskytovatel. Většina poskytovatelů vyžaduje API klíče.";
+"Available once configured: MoonPay, Transak, Ramp, Banxa" = "Po konfiguraci dostupné: MoonPay, Transak, Ramp, Banxa";
+"Buy %@" = "Koupit %@";
+"RECOMMENDED" = "DOPORUČENO";
+"Fee: %@" = "Poplatek: %@";
+"Important Information" = "Důležité informace";
+"%@ requires API key configuration. Please use Mt Pelerin or contact support." = "%@ vyžaduje konfiguraci API klíče. Použijte Mt Pelerin nebo kontaktujte podporu.";
+"Close" = "Zavřít";
+"About %@" = "O poskytovateli %@";
+"Cancel Purchase" = "Zrušit nákup";
+"Configuration Required" = "Vyžadována konfigurace";
+"Mt Pelerin is available and doesn't require API keys" = "Mt Pelerin je dostupný a nevyžaduje API klíče";
+"Notifications enabled" = "Notifikace zapnuty";
+"You will be notified about wallet activity." = "Budeme vás informovat o aktivitě peněženky.";

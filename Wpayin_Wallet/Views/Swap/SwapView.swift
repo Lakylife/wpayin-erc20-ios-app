@@ -56,6 +56,10 @@ struct SwapView: View {
     @State private var showGasSettings = false
     @State private var selectedNetwork: BlockchainPlatform = .ethereum
     @State private var showNetworkSelector = false
+    @State private var showSwapError = false
+    @State private var swapErrorMessage = ""
+    @State private var showSwapSuccess = false
+    @State private var swapSuccessMessage = ""
 
     init(initialFromToken: Token? = nil) {
         self.initialFromToken = initialFromToken
@@ -406,6 +410,16 @@ struct SwapView: View {
         .onChange(of: walletManager.selectedBlockchains) { _ in
             ensureSelectedNetworkIsAvailable()
         }
+        .alert("Swap Failed".localized, isPresented: $showSwapError) {
+            Button("OK".localized) { }
+        } message: {
+            Text(swapErrorMessage)
+        }
+        .alert("Swap Submitted".localized, isPresented: $showSwapSuccess) {
+            Button("OK".localized) { }
+        } message: {
+            Text(swapSuccessMessage)
+        }
     }
 
     private func ensureSelectedNetworkIsAvailable() {
@@ -500,6 +514,12 @@ struct SwapView: View {
                 await MainActor.run {
                     isSwapping = false
                     fromAmount = ""
+                    swapSuccessMessage = "Transaction: %@".localized(result.transactionHash)
+                    showSwapSuccess = true
+                    NotificationManager.shared.notifySwapCompleted(
+                        from: fromToken.symbol,
+                        to: toToken.symbol
+                    )
 
                     // Refresh wallet data to show updated balances
                     Task {
@@ -510,8 +530,8 @@ struct SwapView: View {
                 Logger.log("❌ Swap failed: \(error.localizedDescription)")
                 await MainActor.run {
                     isSwapping = false
-                    // Show error to user
-                    // You could add @State var showError and errorMessage here
+                    swapErrorMessage = error.localizedDescription
+                    showSwapError = true
                 }
             }
         }
@@ -715,17 +735,10 @@ struct TokenPickerView: View {
                                             if let proto = token.tokenProtocol {
                                                 TokenProtocolBadge(tokenProtocol: proto, size: .small)
                                             }
-                                            
-                                            // Network badge
-                                            Circle()
-                                                .fill(tokenPlatform.color)
-                                                .frame(width: 14, height: 14)
-                                                .overlay(
-                                                    Image(systemName: tokenPlatform.iconName)
-                                                        .font(.system(size: 7, weight: .medium))
-                                                        .foregroundColor(.white)
-                                                )
-                                            
+
+                                            // Network badge — real chain icon
+                                            NetworkIconView(blockchain: token.blockchain, size: 14)
+
                                             Text(tokenPlatform.name)
                                                 .font(.system(size: 11))
                                                 .foregroundColor(WpayinColors.textSecondary)

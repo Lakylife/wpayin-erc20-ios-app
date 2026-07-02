@@ -41,8 +41,8 @@ struct WpayinButton: View {
         var borderColor: Color {
             switch self {
             case .primary: return Color.clear
-            case .secondary: return Color.clear
-            case .tertiary: return WpayinColors.primary
+            case .secondary: return WpayinColors.surfaceBorder
+            case .tertiary: return WpayinColors.primary.opacity(0.6)
             case .destructive: return Color.clear
             }
         }
@@ -53,20 +53,32 @@ struct WpayinButton: View {
             HStack {
                 Spacer()
                 Text(title.localized)
-                    .font(.wpayinSubheadline)
+                    .font(.system(size: 16, weight: .semibold, design: .rounded))
                     .foregroundColor(style.foregroundColor)
                 Spacer()
             }
             .padding(.vertical, 16)
             .padding(.horizontal, 24)
-            .background(style.backgroundColor)
-            .overlay(
-                RoundedRectangle(cornerRadius: 12)
-                    .stroke(style.borderColor, lineWidth: 2)
+            .background(
+                Group {
+                    if style == .primary {
+                        WpayinColors.accentGradient
+                    } else {
+                        style.backgroundColor
+                    }
+                }
             )
-            .cornerRadius(12)
+            .overlay(
+                RoundedRectangle(cornerRadius: WpayinRadius.medium, style: .continuous)
+                    .stroke(style.borderColor, lineWidth: 1.5)
+            )
+            .cornerRadius(WpayinRadius.medium)
+            .shadow(
+                color: style == .primary ? WpayinColors.primary.opacity(0.35) : .clear,
+                radius: 12, x: 0, y: 6
+            )
         }
-        .buttonStyle(PlainButtonStyle())
+        .buttonStyle(WpayinPressableStyle())
     }
 }
 

@@ -12,7 +12,7 @@ import SwiftUI
 struct OnboardingView: View {
     @EnvironmentObject var walletManager: WalletManager
     @State private var currentStep = 0
-    @State private var showWelcome = false
+    @State private var showWelcome = true
 
     private let totalSteps = 3
 
@@ -75,64 +75,150 @@ struct OnboardingView: View {
                 }
             }
         }
-        .onAppear {
-            showWelcome = true
-        }
     }
 }
 
 struct AppWelcomeView: View {
     let onContinue: () -> Void
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var isVisible = false
+    @State private var isFloating = false
 
     var body: some View {
-        VStack(spacing: 40) {
-            Spacer()
+        GeometryReader { geometry in
+            ZStack {
+                Image("Intro - Background")
+                    .resizable()
+                    .scaledToFill()
+                    .opacity(0.48)
+                    .ignoresSafeArea()
 
-            // App Logo
-            VStack(spacing: 20) {
-                WpayinLogoView(size: 120)
-
-                VStack(spacing: 12) {
-                    Text("Wpayin Wallet")
-                        .font(.system(size: 36, weight: .bold))
-                        .foregroundColor(WpayinColors.text)
-
-                    Text("Your gateway to decentralized finance")
-                        .font(.system(size: 18))
-                        .foregroundColor(WpayinColors.textSecondary)
-                        .multilineTextAlignment(.center)
-                }
-            }
-
-            Spacer()
-
-            // Continue button
-            Button(action: onContinue) {
-                HStack {
-                    Text("Get Started")
-                        .font(.system(size: 18, weight: .semibold))
-                        .foregroundColor(.white)
-
-                    Image(systemName: "arrow.right")
-                        .font(.system(size: 16, weight: .semibold))
-                        .foregroundColor(.white)
-                }
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 16)
-                .background(
-                    LinearGradient(
-                        gradient: Gradient(colors: [
-                            WpayinColors.primary,
-                            WpayinColors.primaryDark
-                        ]),
-                        startPoint: .leading,
-                        endPoint: .trailing
-                    )
+                LinearGradient(
+                    colors: [
+                        Color.black.opacity(0.12),
+                        Color.clear,
+                        Color.black.opacity(0.72)
+                    ],
+                    startPoint: .top,
+                    endPoint: .bottom
                 )
-                .cornerRadius(16)
+                .ignoresSafeArea()
+
+                VStack(spacing: 0) {
+                    Spacer(minLength: geometry.safeAreaInsets.top + 36)
+
+                    VStack(spacing: 28) {
+                        ZStack {
+                            Circle()
+                                .fill(
+                                    RadialGradient(
+                                        colors: [
+                                            WpayinColors.primary.opacity(0.3),
+                                            Color.clear
+                                        ],
+                                        center: .center,
+                                        startRadius: 0,
+                                        endRadius: 100
+                                    )
+                                )
+                                .frame(width: 210, height: 210)
+                                .blur(radius: 8)
+                                .scaleEffect(isFloating ? 1.08 : 0.96)
+
+                            RoundedRectangle(cornerRadius: 30, style: .continuous)
+                                .fill(Color.black.opacity(0.68))
+                                .frame(width: 126, height: 126)
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 30, style: .continuous)
+                                        .stroke(
+                                            LinearGradient(
+                                                colors: [
+                                                    Color.white.opacity(0.2),
+                                                    WpayinColors.primary.opacity(0.55),
+                                                    Color.white.opacity(0.04)
+                                                ],
+                                                startPoint: .topLeading,
+                                                endPoint: .bottomTrailing
+                                            ),
+                                            lineWidth: 1
+                                        )
+                                )
+                                .shadow(color: WpayinColors.primary.opacity(0.3), radius: 24)
+
+                            Image("WpayinLogo")
+                                .resizable()
+                                .scaledToFit()
+                                .frame(width: 88, height: 88)
+                                .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
+                        }
+                        .frame(width: 220, height: 220)
+                        .offset(y: isFloating ? -6 : 4)
+
+                        VStack(spacing: 12) {
+                            Text("Wpayin Wallet")
+                                .font(.wpayinBrand)
+                                .foregroundColor(WpayinColors.text)
+                                .lineLimit(1)
+                                .minimumScaleFactor(0.75)
+
+                            Text(L10n.Onboarding.welcome.localized)
+                                .font(.system(size: 17, weight: .medium, design: .rounded))
+                                .foregroundColor(WpayinColors.textSecondary)
+                                .multilineTextAlignment(.center)
+                                .lineLimit(3)
+                                .padding(.horizontal, 28)
+                        }
+                    }
+                    .opacity(isVisible ? 1 : 0)
+                    .scaleEffect(isVisible ? 1 : 0.92)
+
+                    Spacer()
+
+                    Button(action: onContinue) {
+                        HStack(spacing: 10) {
+                            Text(L10n.Action.getStarted.localized)
+                                .font(.system(size: 17, weight: .semibold, design: .rounded))
+
+                            Image(systemName: "arrow.right")
+                                .font(.system(size: 15, weight: .semibold))
+                        }
+                        .foregroundColor(.white)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 17)
+                        .background(
+                            LinearGradient(
+                                colors: [
+                                    WpayinColors.primary,
+                                    WpayinColors.primaryDark
+                                ],
+                                startPoint: .leading,
+                                endPoint: .trailing
+                            ),
+                            in: RoundedRectangle(cornerRadius: 18, style: .continuous)
+                        )
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                                .stroke(Color.white.opacity(0.12), lineWidth: 1)
+                        )
+                        .shadow(color: WpayinColors.primary.opacity(0.28), radius: 18, y: 8)
+                    }
+                    .buttonStyle(PlainButtonStyle())
+                    .padding(.horizontal, 20)
+                    .padding(.bottom, max(geometry.safeAreaInsets.bottom, 20) + 24)
+                    .opacity(isVisible ? 1 : 0)
+                }
             }
-            .padding(.horizontal, 20)
-            .padding(.bottom, 50)
+        }
+        .ignoresSafeArea()
+        .onAppear {
+            withAnimation(.easeOut(duration: 0.6)) {
+                isVisible = true
+            }
+
+            guard !reduceMotion else { return }
+            withAnimation(.easeInOut(duration: 2.8).repeatForever(autoreverses: true)) {
+                isFloating = true
+            }
         }
     }
 }
@@ -144,7 +230,7 @@ struct OnboardingProgressView: View {
     var body: some View {
         VStack(spacing: 12) {
             HStack {
-                Text("Step \(currentStep + 1) of \(totalSteps)")
+                Text(L10n.Onboarding.step.localized(currentStep + 1, totalSteps))
                     .font(.system(size: 14, weight: .medium))
                     .foregroundColor(WpayinColors.textSecondary)
 
@@ -216,12 +302,12 @@ struct OnboardingStep2View: View {
 
             // Content
             VStack(spacing: 20) {
-                Text("Easy Trading")
+                Text(L10n.Onboarding.tradingTitle.localized)
                     .font(.system(size: 28, weight: .bold))
                     .foregroundColor(WpayinColors.text)
                     .multilineTextAlignment(.center)
 
-                Text("Swap tokens instantly with best rates. Access DeFi protocols, track your portfolio, and manage all your crypto in one place.")
+                Text(L10n.Onboarding.tradingDesc.localized)
                     .font(.system(size: 16))
                     .foregroundColor(WpayinColors.textSecondary)
                     .multilineTextAlignment(.center)
@@ -251,12 +337,12 @@ struct OnboardingStep3View: View {
 
             // Content
             VStack(spacing: 20) {
-                Text("Multi-Chain Support")
+                Text(L10n.Onboarding.multiChainTitle.localized)
                     .font(.system(size: 28, weight: .bold))
                     .foregroundColor(WpayinColors.text)
                     .multilineTextAlignment(.center)
 
-                Text("Support for Ethereum, Bitcoin, Polygon, BSC, and more. Switch between networks seamlessly and manage all your assets.")
+                Text(L10n.Onboarding.multiChainDesc.localized)
                     .font(.system(size: 16))
                     .foregroundColor(WpayinColors.textSecondary)
                     .multilineTextAlignment(.center)

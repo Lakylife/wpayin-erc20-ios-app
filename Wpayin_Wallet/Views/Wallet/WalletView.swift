@@ -28,19 +28,9 @@ struct WalletView: View {
 
     var body: some View {
         ZStack {
-            // Background gradient matching design specification
-            LinearGradient(
-                gradient: Gradient(colors: [
-                    WpayinColors.backgroundGradientStart,
-                    WpayinColors.backgroundGradientEnd
-                ]),
-                startPoint: .top,
-                endPoint: .bottom
-            )
-            .ignoresSafeArea(.all)
+            HomeAmbientBackground()
 
             VStack(spacing: 0) {
-                // Fixed Header at top - completely from top
                 ModernHeaderView(
                     walletManager: walletManager,
                     onMenuTap: { showMenuSheet = true },
@@ -50,19 +40,15 @@ struct WalletView: View {
                 .ignoresSafeArea(.all, edges: .top)
                 .zIndex(1)
 
-                // Scrollable content area
                 ScrollView(.vertical, showsIndicators: false) {
-                    VStack(spacing: 0) {
-                        // Balance Card
+                    LazyVStack(spacing: 0) {
                         ModernBalanceCardView(
                             balance: totalPortfolioValue,
-                            isLoading: walletManager.isLoading,
-                            walletAddress: walletManager.walletAddress
+                            isLoading: walletManager.isLoading
                         )
                         .environmentObject(walletManager)
                         .environmentObject(settingsManager)
 
-                        // Quick Actions
                         ModernQuickActionsView(
                             onSend: { showWithdrawSheet = true },
                             onReceive: { showDepositSheet = true },
@@ -70,7 +56,6 @@ struct WalletView: View {
                             onSwap: { showSwapSheet = true }
                         )
 
-                        // Tabs and Content
                         ModernTabsView(
                             tokens: walletManager.visibleGroupedTokens,
                             isLoading: walletManager.isLoading,
@@ -82,10 +67,11 @@ struct WalletView: View {
                         .environmentObject(walletManager)
                         .environmentObject(settingsManager)
 
-                        // Bottom padding to account for bottom navigation
-                        Spacer()
-                            .frame(height: 100)
+                        Color.clear.frame(height: 32)
                     }
+                }
+                .refreshable {
+                    await walletManager.refreshWalletData()
                 }
             }
         }
@@ -170,6 +156,35 @@ struct WalletView: View {
 
     private var totalPortfolioValue: Double {
         walletManager.visibleGroupedTokens.reduce(0) { $0 + $1.totalValue }
+    }
+}
+
+private struct HomeAmbientBackground: View {
+    var body: some View {
+        ZStack {
+            LinearGradient(
+                colors: [
+                    WpayinColors.backgroundGradientStart,
+                    WpayinColors.background
+                ],
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            )
+
+            Circle()
+                .fill(WpayinColors.primary.opacity(0.15))
+                .frame(width: 300, height: 300)
+                .blur(radius: 90)
+                .offset(x: 150, y: -270)
+
+            Circle()
+                .fill(WpayinColors.accent.opacity(0.08))
+                .frame(width: 240, height: 240)
+                .blur(radius: 100)
+                .offset(x: -170, y: 260)
+        }
+        .ignoresSafeArea()
+        .allowsHitTesting(false)
     }
 }
 
@@ -361,163 +376,242 @@ struct ModernHeaderView: View {
     let onMenuTap: () -> Void
     let onQRTap: () -> Void
     let onWalletTap: () -> Void
-    @State private var showWalletDropdown = false
 
     var body: some View {
         VStack(spacing: 0) {
-            // Header background with gradient - starts from very top including safe area
+            Spacer()
+                .frame(height: 48)
+
+            HStack(spacing: 10) {
+                HeaderIconButton(
+                    icon: "line.3.horizontal",
+                    action: onMenuTap
+                )
+
+                Button(action: onWalletTap) {
+                    HStack(spacing: 10) {
+                        WpayinLogoView(size: 30)
+
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(walletName)
+                                .font(.system(size: 15, weight: .semibold))
+                                .foregroundColor(WpayinColors.text)
+                                .lineLimit(1)
+
+                            Text(formattedAddress)
+                                .font(.system(size: 11, weight: .medium, design: .monospaced))
+                                .foregroundColor(WpayinColors.textSecondary)
+                                .lineLimit(1)
+                        }
+
+                        Spacer(minLength: 4)
+
+                        Image(systemName: "chevron.down")
+                            .font(.system(size: 11, weight: .semibold))
+                            .foregroundColor(WpayinColors.textTertiary)
+                    }
+                    .padding(.horizontal, 14)
+                    .frame(height: 44)
+                    .background(
+                        Capsule()
+                            .fill(WpayinColors.surfaceLight)
+                            .overlay(
+                                Capsule()
+                                    .stroke(WpayinColors.surfaceBorder, lineWidth: 1)
+                            )
+                    )
+                }
+                .buttonStyle(WpayinPressableStyle())
+                .contextMenu {
+                    Button {
+                        UIPasteboard.general.string = walletManager.walletAddress
+                    } label: {
+                        Label(L10n.Action.copy.localized, systemImage: "doc.on.doc")
+                    }
+                    .disabled(walletManager.walletAddress.isEmpty)
+                }
+
+                HeaderIconButton(
+                    icon: "qrcode.viewfinder",
+                    action: onQRTap
+                )
+            }
+            .padding(.horizontal, 20)
+            .padding(.bottom, 12)
+        }
+        .background(
             LinearGradient(
-                gradient: Gradient(colors: [
-                    WpayinColors.headerBackground,
-                    Color.clear
-                ]),
+                colors: [
+                    WpayinColors.background.opacity(0.92),
+                    WpayinColors.background.opacity(0)
+                ],
                 startPoint: .top,
                 endPoint: .bottom
             )
-            .frame(height: 140)
-            .overlay(
-                VStack(spacing: 0) {
-                    // Top safe area spacer
-                    Spacer()
-                        .frame(height: 50)
-
-                    HStack(spacing: 12) {
-                        // Hamburger Menu Button
-                        Button(action: onMenuTap) {
-                            Circle()
-                                .fill(WpayinColors.buttonBackground)
-                                .frame(width: 40, height: 40)
-                                .overlay(
-                                    Circle()
-                                        .stroke(WpayinColors.buttonBorder, lineWidth: 1)
-                                )
-                                .overlay(
-                                    Image(systemName: "line.3.horizontal")
-                                        .foregroundColor(WpayinColors.text)
-                                        .font(.system(size: 16, weight: .medium))
-                                )
-                        }
-
-                        // Wallet Selector
-                        Button(action: onWalletTap) {
-                            HStack(spacing: 8) {
-                                // Wallet Avatar
-                                WpayinLogoView(size: 28)
-
-                                VStack(alignment: .leading, spacing: 2) {
-                                    Text("Main Wallet".localized)
-                                        .font(.system(size: 15, weight: .semibold))
-                                        .foregroundColor(WpayinColors.text)
-
-                                    Text(formatAddress(walletManager.walletAddress))
-                                        .font(.system(size: 13, design: .monospaced))
-                                        .foregroundColor(WpayinColors.textSecondary)
-                                }
-
-                                Spacer()
-
-                                Button {
-                                    UIPasteboard.general.string = walletManager.walletAddress
-                                } label: {
-                                    Image(systemName: "doc.on.doc")
-                                        .font(.system(size: 13, weight: .semibold))
-                                        .foregroundColor(WpayinColors.primary)
-                                        .frame(width: 28, height: 28)
-                                        .background(Circle().fill(WpayinColors.primary.opacity(0.12)))
-                                }
-                                .buttonStyle(PlainButtonStyle())
-                                .disabled(walletManager.walletAddress.isEmpty)
-
-                                Image(systemName: "chevron.down")
-                                    .font(.system(size: 12, weight: .medium))
-                                    .foregroundColor(WpayinColors.textSecondary)
-                            }
-                            .padding(.horizontal, 16)
-                            .padding(.vertical, 10)
-                            .background(
-                                RoundedRectangle(cornerRadius: 100)
-                                    .fill(WpayinColors.buttonBackground)
-                                    .overlay(
-                                        RoundedRectangle(cornerRadius: 100)
-                                            .stroke(WpayinColors.buttonBorder, lineWidth: 1)
-                                    )
-                            )
-                        }
-
-                        // QR Button
-                        Button(action: onQRTap) {
-                            Circle()
-                                .fill(WpayinColors.buttonBackground)
-                                .frame(width: 40, height: 40)
-                                .overlay(
-                                    Circle()
-                                        .stroke(WpayinColors.buttonBorder, lineWidth: 1)
-                                )
-                                .overlay(
-                                    Image(systemName: "qrcode.viewfinder")
-                                        .foregroundColor(WpayinColors.text)
-                                        .font(.system(size: 16))
-                                )
-                        }
-                    }
-                    .padding(.horizontal, 20)
-                }
-            )
-        }
+        )
     }
 
-    private func formatAddress(_ address: String) -> String {
+    private var walletName: String {
+        (walletManager.activeWallet?.name ?? L10n.Wallet.mainWallet).localized
+    }
+
+    private var formattedAddress: String {
+        let address = walletManager.walletAddress
+        guard !address.isEmpty else { return "—" }
         guard address.count > 10 else { return address }
         return "\(address.prefix(6))...\(address.suffix(4))"
+    }
+}
+
+private struct HeaderIconButton: View {
+    let icon: String
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            Image(systemName: icon)
+                .font(.system(size: 16, weight: .semibold))
+                .foregroundColor(WpayinColors.text)
+                .frame(width: 44, height: 44)
+                .background(
+                    Circle()
+                        .fill(WpayinColors.surfaceLight)
+                        .overlay(
+                            Circle()
+                                .stroke(WpayinColors.surfaceBorder, lineWidth: 1)
+                        )
+                )
+        }
+        .buttonStyle(WpayinPressableStyle())
     }
 }
 
 struct ModernBalanceCardView: View {
     let balance: Double
     let isLoading: Bool
-    let walletAddress: String
     @EnvironmentObject var walletManager: WalletManager
     @EnvironmentObject var settingsManager: SettingsManager
+    @State private var isBalanceHidden = false
 
     var body: some View {
-        VStack(spacing: 12) {
-            // Balance Label
-            Text(L10n.Wallet.totalBalance.localized)
-                .font(.system(size: 13, weight: .medium))
+        VStack(alignment: .leading, spacing: 18) {
+            HStack {
+                Label {
+                    Text(L10n.Wallet.totalBalance.localized)
+                        .font(.system(size: 13, weight: .semibold))
+                } icon: {
+                    Image(systemName: "chart.pie.fill")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundColor(WpayinColors.primary)
+                }
                 .foregroundColor(WpayinColors.textSecondary)
-                .textCase(.uppercase)
 
-            // Main Balance with gradient text
-            HStack(alignment: .firstTextBaseline, spacing: 8) {
-                Text(balance.formatted(as: settingsManager.selectedCurrency))
-                    .font(.system(size: 52, weight: .heavy, design: .rounded))
-                    .foregroundStyle(
+                Spacer()
+
+                if isLoading {
+                    ProgressView()
+                        .progressViewStyle(CircularProgressViewStyle(tint: WpayinColors.primary))
+                        .scaleEffect(0.75)
+                }
+
+                Button {
+                    withAnimation(.easeInOut(duration: 0.2)) {
+                        isBalanceHidden.toggle()
+                    }
+                } label: {
+                    Image(systemName: isBalanceHidden ? "eye.slash" : "eye")
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundColor(WpayinColors.textSecondary)
+                        .frame(width: 32, height: 32)
+                        .background(Circle().fill(Color.white.opacity(0.05)))
+                }
+                .buttonStyle(WpayinPressableStyle())
+                .accessibilityLabel(L10n.Wallet.totalBalance.localized)
+            }
+
+            Text(isBalanceHidden ? "••••••" : balance.formatted(as: settingsManager.selectedCurrency))
+                .font(.system(size: 40, weight: .bold, design: .rounded))
+                .foregroundColor(WpayinColors.text)
+                .lineLimit(1)
+                .minimumScaleFactor(0.55)
+
+            HStack(spacing: 10) {
+                if abs(walletManager.balanceChangePercentage) > 0.01 {
+                    HStack(spacing: 4) {
+                        Image(systemName: walletManager.balanceChangePercentage >= 0 ? "arrow.up.right" : "arrow.down.right")
+                            .font(.system(size: 10, weight: .bold))
+
+                        Text(String(format: "%.2f%%", abs(walletManager.balanceChangePercentage)))
+                            .font(.system(size: 12, weight: .semibold))
+                    }
+                    .foregroundColor(walletManager.balanceChangePercentage >= 0 ? WpayinColors.success : WpayinColors.error)
+                    .padding(.horizontal, 9)
+                    .padding(.vertical, 6)
+                    .background(
+                        Capsule()
+                            .fill(
+                                (walletManager.balanceChangePercentage >= 0 ? WpayinColors.success : WpayinColors.error)
+                                    .opacity(0.12)
+                            )
+                    )
+                }
+
+                if !isBalanceHidden,
+                   balance > 0,
+                   let ethToken = walletManager.visibleTokens.first(where: { $0.symbol == "ETH" }),
+                   ethToken.price > 0 {
+                    Text(String(format: "≈ %.4f ETH", balance / ethToken.price))
+                        .font(.system(size: 13, weight: .medium, design: .rounded))
+                        .foregroundColor(WpayinColors.textSecondary)
+                } else {
+                    Text(isLoading ? L10n.Wallet.syncing.localized : L10n.Wallet.portfolioUpToDate.localized)
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundColor(WpayinColors.textTertiary)
+                }
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(22)
+        .background(
+            ZStack(alignment: .topTrailing) {
+                RoundedRectangle(cornerRadius: 26, style: .continuous)
+                    .fill(
                         LinearGradient(
-                            gradient: Gradient(colors: [
-                                WpayinColors.text,
-                                WpayinColors.textSecondary
-                            ]),
+                            colors: [
+                                Color.white.opacity(0.085),
+                                Color.white.opacity(0.035)
+                            ],
                             startPoint: .topLeading,
                             endPoint: .bottomTrailing
                         )
                     )
 
-                if isLoading {
-                    ProgressView()
-                        .progressViewStyle(CircularProgressViewStyle(tint: WpayinColors.primary))
-                        .scaleEffect(0.7)
-                }
+                Circle()
+                    .fill(WpayinColors.primary.opacity(0.20))
+                    .frame(width: 150, height: 150)
+                    .blur(radius: 45)
+                    .offset(x: 50, y: -70)
             }
-
-            // ETH Balance equivalent
-            if balance > 0, let ethToken = walletManager.visibleTokens.first(where: { $0.symbol == "ETH" }), ethToken.price > 0 {
-                Text(String(format: "%.4f ETH", balance / ethToken.price))
-                    .font(.system(size: 18, weight: .medium))
-                    .foregroundColor(WpayinColors.textTertiary)
-            }
-        }
+            .clipShape(RoundedRectangle(cornerRadius: 26, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: 26, style: .continuous)
+                    .stroke(
+                        LinearGradient(
+                            colors: [
+                                Color.white.opacity(0.16),
+                                WpayinColors.primary.opacity(0.10),
+                                Color.white.opacity(0.05)
+                            ],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        ),
+                        lineWidth: 1
+                    )
+            )
+        )
         .padding(.horizontal, 20)
-        .padding(.vertical, 30)
+        .padding(.top, 8)
+        .padding(.bottom, 22)
     }
 }
 
@@ -528,7 +622,7 @@ struct ModernQuickActionsView: View {
     let onSwap: () -> Void
 
     var body: some View {
-        HStack(spacing: 12) {
+        HStack(spacing: 8) {
             QuickActionButton(
                 icon: "arrow.up",
                 title: L10n.Action.send.localized,
@@ -553,8 +647,8 @@ struct ModernQuickActionsView: View {
                 action: onSwap
             )
         }
-        .padding(.horizontal, 20)
-        .padding(.bottom, 24)
+        .padding(.horizontal, 24)
+        .padding(.bottom, 22)
     }
 }
 
@@ -565,37 +659,30 @@ struct QuickActionButton: View {
 
     var body: some View {
         Button(action: action) {
-            VStack(spacing: 8) {
+            VStack(spacing: 9) {
                 Circle()
-                    .fill(WpayinColors.buttonBackground)
-                    .frame(width: 36, height: 36)
+                    .fill(WpayinColors.surfaceLight)
+                    .frame(width: 50, height: 50)
                     .overlay(
                         Circle()
-                            .stroke(WpayinColors.buttonBorder, lineWidth: 1)
+                            .stroke(WpayinColors.surfaceBorder, lineWidth: 1)
                     )
                     .overlay(
                         Image(systemName: icon)
-                            .font(.system(size: 16))
-                            .foregroundColor(WpayinColors.text)
+                            .font(.system(size: 17, weight: .semibold))
+                            .foregroundColor(WpayinColors.primary)
                     )
 
                 Text(title.localized)
                     .font(.system(size: 12, weight: .medium))
-                    .foregroundColor(WpayinColors.textSecondary)
+                    .foregroundColor(WpayinColors.text)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.8)
             }
             .frame(maxWidth: .infinity)
-            .padding(.vertical, 16)
-            .padding(.horizontal, 12)
-            .background(
-                RoundedRectangle(cornerRadius: 16)
-                    .fill(WpayinColors.surface)
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 16)
-                            .stroke(WpayinColors.surfaceBorder, lineWidth: 1)
-                    )
-            )
+            .contentShape(Rectangle())
         }
-        .buttonStyle(PlainButtonStyle())
+        .buttonStyle(WpayinPressableStyle())
     }
 }
 
@@ -614,27 +701,31 @@ struct ModernTabsView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            // Sticky tabs container
-            VStack(spacing: 0) {
-                HStack(spacing: 8) {
-                    ForEach(Array(tabs.enumerated()), id: \.offset) { index, tab in
-                        TabButton(
-                            title: tab,
-                            isSelected: selectedTab == index,
-                            onTap: { selectedTab = index }
-                        )
-                    }
+            HStack(spacing: 4) {
+                ForEach(Array(tabs.enumerated()), id: \.offset) { index, tab in
+                    TabButton(
+                        title: tab,
+                        isSelected: selectedTab == index,
+                        onTap: {
+                            withAnimation(.easeOut(duration: 0.2)) {
+                                selectedTab = index
+                            }
+                        }
+                    )
                 }
-                .padding(.horizontal, 20)
-                .padding(.vertical, 14)
-
-                Rectangle()
-                    .fill(WpayinColors.surfaceBorder)
-                    .frame(height: 1)
             }
-            .background(WpayinColors.background)
+            .padding(4)
+            .background(
+                Capsule()
+                    .fill(WpayinColors.surface)
+                    .overlay(
+                        Capsule()
+                            .stroke(WpayinColors.surfaceBorder, lineWidth: 1)
+                )
+            )
+            .padding(.horizontal, 20)
+            .padding(.bottom, 8)
 
-            // Content area - no ScrollView here since parent handles scrolling
             LazyVStack(spacing: 16) {
                 if selectedTab == 0 {
                     TokensTabContent(tokens: tokens, onTokenTap: onTokenTap, onViewAllTap: onViewAllTap)
@@ -660,17 +751,16 @@ struct TabButton: View {
 
     var body: some View {
         Button(action: onTap) {
-            VStack(spacing: 0) {
-                Text(title.localized)
-                    .font(.system(size: 14, weight: .semibold))
-                    .foregroundColor(isSelected ? WpayinColors.text : WpayinColors.textTertiary)
-                    .padding(.vertical, 14)
-                    .frame(maxWidth: .infinity)
-
-                Rectangle()
-                    .fill(isSelected ? WpayinColors.text : Color.clear)
-                    .frame(height: 2)
-            }
+            Text(title.localized)
+                .font(.system(size: 14, weight: .semibold, design: .rounded))
+                .foregroundColor(isSelected ? WpayinColors.primary : WpayinColors.textTertiary)
+                .padding(.vertical, 10)
+                .frame(maxWidth: .infinity)
+                .background(
+                    Capsule()
+                        .fill(isSelected ? WpayinColors.primary.opacity(0.14) : Color.clear)
+                )
+                .contentShape(Capsule())
         }
         .buttonStyle(PlainButtonStyle())
     }
@@ -683,19 +773,31 @@ struct TokensTabContent: View {
     @EnvironmentObject var walletManager: WalletManager
 
     var body: some View {
-        VStack(spacing: 16) {
+        VStack(spacing: 14) {
             HStack {
                 Text(L10n.Wallet.yourAssets.localized)
-                    .font(.system(size: 16, weight: .bold))
+                    .font(.system(size: 18, weight: .bold, design: .rounded))
                     .foregroundColor(WpayinColors.text)
 
                 Spacer()
 
-                Button(L10n.Wallet.viewAll.localized, action: onViewAllTap)
-                .font(.system(size: 13, weight: .semibold))
-                .foregroundColor(WpayinColors.primary)
+                Button(action: onViewAllTap) {
+                    HStack(spacing: 4) {
+                        Text(L10n.Wallet.viewAll.localized)
+                        Image(systemName: "chevron.right")
+                            .font(.system(size: 10, weight: .bold))
+                    }
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundColor(WpayinColors.primary)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 6)
+                    .background(
+                        Capsule()
+                            .fill(WpayinColors.primary.opacity(0.10))
+                    )
+                }
+                .buttonStyle(WpayinPressableStyle())
             }
-            .padding(.horizontal, 4)
 
             if tokens.isEmpty {
                 VStack(spacing: 20) {
@@ -735,7 +837,7 @@ struct TokensTabContent: View {
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 40)
             } else {
-                LazyVStack(spacing: 16) {
+                LazyVStack(spacing: 10) {
                     ForEach(walletManager.visibleGroupedTokens) { token in
                         ExpandableTokenCard(
                             token: token,
@@ -1457,13 +1559,10 @@ struct BlockchainSwitcherView: View {
                 HStack {
                     HStack(spacing: -4) {
                         ForEach(Array(selectedBlockchains.prefix(3)), id: \.self) { blockchain in
-                            Circle()
-                                .fill(blockchain.color)
-                                .frame(width: 20, height: 20)
+                            PlatformIconView(platform: blockchain, size: 20)
                                 .overlay(
-                                    Image(systemName: blockchain.iconName)
-                                        .font(.system(size: 8, weight: .medium))
-                                        .foregroundColor(.white)
+                                    Circle()
+                                        .stroke(WpayinColors.surfaceElegant, lineWidth: 1.5)
                                 )
                         }
                     }

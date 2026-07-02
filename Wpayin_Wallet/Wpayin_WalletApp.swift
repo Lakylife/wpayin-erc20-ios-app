@@ -15,6 +15,12 @@ import SwiftUI
 
 @main
 struct Wpayin_WalletApp: App {
+    init() {
+        // Register the notification-center delegate before any notification
+        // can arrive (needed for foreground banner presentation).
+        _ = NotificationManager.shared
+    }
+
     var body: some Scene {
         WindowGroup {
             ContentView()
