@@ -4,138 +4,249 @@
 //  LoadingView.swift
 //  Wpayin_Wallet
 //
-//  Created by Lukas Helebrandt on 25.09.2025.
+//  Branded launch experience shown while the wallet state is restored.
 //
 
 import SwiftUI
 
 struct LoadingView: View {
-    @State private var rotation: Double = 0
-    @State private var pulseScale: CGFloat = 1.0
-    @State private var opacity: Double = 0.0
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var isVisible = false
+    @State private var orbitRotation: Double = 0
+    @State private var pulseLogo = false
+    @State private var moveBackground = false
 
     var body: some View {
-        ZStack {
-            // Background - solid black for modern look
-            Color.black
-                .ignoresSafeArea()
+        GeometryReader { geometry in
+            ZStack {
+                LaunchBackground(isMoving: moveBackground)
 
-            VStack(spacing: 0) {
-                Spacer()
+                VStack(spacing: 0) {
+                    Spacer(minLength: geometry.safeAreaInsets.top + 40)
 
-                // Logo with multiple animation layers
-                ZStack {
-                    // Outer rotating ring
-                    Circle()
-                        .stroke(
-                            LinearGradient(
-                                colors: [
-                                    WpayinColors.primary.opacity(0.6),
-                                    WpayinColors.primary.opacity(0.1),
-                                    Color.clear
-                                ],
-                                startPoint: .topLeading,
-                                endPoint: .bottomTrailing
-                            ),
-                            lineWidth: 2
+                    VStack(spacing: 34) {
+                        LaunchLogo(
+                            rotation: orbitRotation,
+                            isPulsing: pulseLogo
                         )
-                        .frame(width: 140, height: 140)
-                        .rotationEffect(.degrees(rotation))
 
-                    // Middle pulsing ring
-                    Circle()
-                        .stroke(
-                            WpayinColors.primary.opacity(0.3),
-                            lineWidth: 1
-                        )
-                        .frame(width: 120, height: 120)
-                        .scaleEffect(pulseScale)
+                        VStack(spacing: 10) {
+                            Text("Wpayin")
+                                .font(.wpayinBrand)
+                                .foregroundColor(WpayinColors.text)
+                                .lineLimit(1)
+                                .minimumScaleFactor(0.8)
 
-                    // Logo container with glow
-                    ZStack {
-                        // Glow effect
-                        Circle()
-                            .fill(
-                                RadialGradient(
-                                    colors: [
-                                        WpayinColors.primary.opacity(0.3),
-                                        Color.clear
-                                    ],
-                                    center: .center,
-                                    startRadius: 0,
-                                    endRadius: 50
-                                )
-                            )
-                            .frame(width: 100, height: 100)
-                            .blur(radius: 10)
-
-                        // Logo image
-                        Image("WpayinLogo")
-                            .resizable()
-                            .scaledToFit()
-                            .frame(width: 80, height: 80)
-                            .cornerRadius(16)
-                            .shadow(color: WpayinColors.primary.opacity(0.5), radius: 20, x: 0, y: 0)
+                            Text(L10n.Welcome.subtitle.localized)
+                                .font(.system(size: 15, weight: .medium, design: .rounded))
+                                .foregroundColor(WpayinColors.textSecondary)
+                                .multilineTextAlignment(.center)
+                                .lineLimit(2)
+                                .padding(.horizontal, 32)
+                        }
                     }
+                    .scaleEffect(isVisible ? 1 : 0.9)
+                    .opacity(isVisible ? 1 : 0)
+
+                    Spacer()
+
+                    VStack(spacing: 14) {
+                        Text(L10n.Wallet.syncing.localized)
+                            .font(.wpayinSmall)
+                            .foregroundColor(WpayinColors.textSecondary)
+
+                        LaunchProgressView(reduceMotion: reduceMotion)
+                            .frame(height: 4)
+                            .padding(.horizontal, 56)
+                    }
+                    .opacity(isVisible ? 1 : 0)
+                    .padding(.bottom, max(geometry.safeAreaInsets.bottom, 24) + 26)
                 }
-                .opacity(opacity)
-
-                Spacer()
-
-                // Modern loading dots
-                ModernLoadingDots()
-                    .padding(.bottom, 60)
-                    .opacity(opacity)
             }
         }
+        .ignoresSafeArea()
         .onAppear {
-            withAnimation(.easeIn(duration: 0.6)) {
-                opacity = 1.0
+            withAnimation(.easeOut(duration: 0.55)) {
+                isVisible = true
             }
 
-            // Rotating ring animation
-            withAnimation(
-                Animation.linear(duration: 3.0)
-                    .repeatForever(autoreverses: false)
-            ) {
-                rotation = 360
+            guard !reduceMotion else { return }
+
+            withAnimation(.linear(duration: 12).repeatForever(autoreverses: false)) {
+                orbitRotation = 360
             }
 
-            // Pulsing animation
-            withAnimation(
-                Animation.easeInOut(duration: 1.5)
-                    .repeatForever(autoreverses: true)
-            ) {
-                pulseScale = 1.1
+            withAnimation(.easeInOut(duration: 2.4).repeatForever(autoreverses: true)) {
+                pulseLogo = true
+            }
+
+            withAnimation(.easeInOut(duration: 6).repeatForever(autoreverses: true)) {
+                moveBackground = true
             }
         }
     }
 }
 
-struct ModernLoadingDots: View {
-    @State private var currentDot = 0
-    let dotCount = 3
+private struct LaunchBackground: View {
+    let isMoving: Bool
 
     var body: some View {
-        HStack(spacing: 12) {
-            ForEach(0..<dotCount, id: \.self) { index in
+        ZStack {
+            Color.black
+
+            Image("Intro - Background")
+                .resizable()
+                .scaledToFill()
+                .opacity(0.42)
+                .scaleEffect(isMoving ? 1.06 : 1)
+                .offset(x: isMoving ? -12 : 8, y: isMoving ? 8 : -8)
+
+            RadialGradient(
+                colors: [
+                    WpayinColors.primary.opacity(0.18),
+                    Color.clear
+                ],
+                center: .center,
+                startRadius: 20,
+                endRadius: 260
+            )
+
+            LinearGradient(
+                colors: [
+                    Color.black.opacity(0.18),
+                    Color.clear,
+                    Color.black.opacity(0.58)
+                ],
+                startPoint: .top,
+                endPoint: .bottom
+            )
+        }
+        .ignoresSafeArea()
+    }
+}
+
+private struct LaunchLogo: View {
+    let rotation: Double
+    let isPulsing: Bool
+
+    var body: some View {
+        ZStack {
+            Circle()
+                .fill(
+                    RadialGradient(
+                        colors: [
+                            WpayinColors.primary.opacity(isPulsing ? 0.34 : 0.22),
+                            WpayinColors.primary.opacity(0.06),
+                            Color.clear
+                        ],
+                        center: .center,
+                        startRadius: 8,
+                        endRadius: 112
+                    )
+                )
+                .frame(width: 230, height: 230)
+                .blur(radius: 8)
+                .scaleEffect(isPulsing ? 1.08 : 0.96)
+
+            Circle()
+                .stroke(
+                    WpayinColors.surfaceBorder,
+                    style: StrokeStyle(lineWidth: 1, dash: [3, 9])
+                )
+                .frame(width: 210, height: 210)
+                .rotationEffect(.degrees(-rotation * 0.65))
+
+            ZStack(alignment: .top) {
+                Circle()
+                    .stroke(
+                        AngularGradient(
+                            colors: [
+                                Color.clear,
+                                WpayinColors.primary.opacity(0.15),
+                                WpayinColors.primary,
+                                Color.white.opacity(0.75),
+                                Color.clear
+                            ],
+                            center: .center
+                        ),
+                        style: StrokeStyle(lineWidth: 2, lineCap: .round)
+                    )
+                    .frame(width: 176, height: 176)
+
                 Circle()
                     .fill(WpayinColors.primary)
                     .frame(width: 8, height: 8)
-                    .scaleEffect(currentDot == index ? 1.3 : 1.0)
-                    .opacity(currentDot == index ? 1.0 : 0.3)
-                    .animation(
-                        Animation.easeInOut(duration: 0.6)
-                            .repeatForever(autoreverses: false),
-                        value: currentDot
-                    )
+                    .shadow(color: WpayinColors.primary, radius: 7)
+                    .offset(y: -4)
             }
+            .rotationEffect(.degrees(rotation))
+
+            RoundedRectangle(cornerRadius: 30, style: .continuous)
+                .fill(Color.black.opacity(0.72))
+                .frame(width: 118, height: 118)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 30, style: .continuous)
+                        .stroke(
+                            LinearGradient(
+                                colors: [
+                                    Color.white.opacity(0.18),
+                                    WpayinColors.primary.opacity(0.55),
+                                    Color.white.opacity(0.05)
+                                ],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            ),
+                            lineWidth: 1
+                        )
+                )
+                .shadow(color: WpayinColors.primary.opacity(0.32), radius: 24)
+
+            Image("WpayinLogo")
+                .resizable()
+                .scaledToFit()
+                .frame(width: 82, height: 82)
+                .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
+        }
+        .frame(width: 240, height: 240)
+    }
+}
+
+private struct LaunchProgressView: View {
+    let reduceMotion: Bool
+    @State private var progress: CGFloat = -0.35
+
+    var body: some View {
+        GeometryReader { geometry in
+            ZStack(alignment: .leading) {
+                Capsule()
+                    .fill(WpayinColors.surfaceLight)
+
+                Capsule()
+                    .fill(
+                        LinearGradient(
+                            colors: [
+                                WpayinColors.primary.opacity(0.35),
+                                WpayinColors.primary,
+                                Color.white.opacity(0.85)
+                            ],
+                            startPoint: .leading,
+                            endPoint: .trailing
+                        )
+                    )
+                    .frame(width: geometry.size.width * 0.34)
+                    .offset(x: geometry.size.width * progress)
+                    .shadow(color: WpayinColors.primary.opacity(0.55), radius: 6)
+            }
+            .clipShape(Capsule())
         }
         .onAppear {
-            Timer.scheduledTimer(withTimeInterval: 0.4, repeats: true) { _ in
-                withAnimation {
-                    currentDot = (currentDot + 1) % dotCount
-                }
+            guard !reduceMotion else {
+                progress = 0.33
+                return
+            }
+
+            withAnimation(.easeInOut(duration: 1.25).repeatForever(autoreverses: true)) {
+                progress = 1.01
             }
         }
     }

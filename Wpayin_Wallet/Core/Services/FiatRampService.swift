@@ -240,7 +240,7 @@ class FiatRampService {
     
     private func generateMtPelerinURL(config: FiatRampConfig) -> URL? {
         var components = URLComponents(string: "https://widget.mtpelerin.com")!
-        
+
         var items: [URLQueryItem] = [
             URLQueryItem(name: "type", value: "direct-link"),
             URLQueryItem(name: "tabs", value: config.action == .sell ? "sell" : "buy"),
@@ -248,11 +248,42 @@ class FiatRampService {
             URLQueryItem(name: config.action == .sell ? "ssc" : "bdc", value: config.crypto),
             URLQueryItem(name: "addr", value: config.walletAddress),
             URLQueryItem(name: config.action == .sell ? "sdc" : "bsc", value: config.fiatCurrency),
-            URLQueryItem(name: "lang", value: Locale.current.languageCode ?? "en")
+            URLQueryItem(name: "lang", value: widgetLanguage())
         ]
-        if let net = config.network { items.append(URLQueryItem(name: "net", value: net)) }
+
+        // Mt Pelerin needs the network to resolve the asset (BTC/BNB/MATIC
+        // are not available on the default Ethereum network).
+        let network = config.network ?? mtPelerinNetwork(for: config.crypto)
+        if let network {
+            items.append(URLQueryItem(name: "net", value: network))
+        }
+
         components.queryItems = items
         return components.url
+    }
+
+    /// Mt Pelerin network identifier for a given asset symbol.
+    private func mtPelerinNetwork(for crypto: String) -> String? {
+        switch crypto.uppercased() {
+        case "BTC":
+            return "bitcoin_mainnet"
+        case "BNB":
+            return "bsc_mainnet"
+        case "MATIC":
+            return "matic_mainnet"
+        case "ETH", "USDT", "USDC", "DAI":
+            return "mainnet"
+        default:
+            return nil
+        }
+    }
+
+    /// Widget language taken from the in-app language setting (not the OS locale).
+    private func widgetLanguage() -> String {
+        let appLanguage = UserDefaults.standard.string(forKey: "SelectedLanguage") ?? "en"
+        // Languages the Mt Pelerin widget actually supports
+        let supported = ["en", "fr", "de", "es", "it", "pt", "nl"]
+        return supported.contains(appLanguage) ? appLanguage : "en"
     }
     
     private func generateSardineURL(config: FiatRampConfig) -> URL? {

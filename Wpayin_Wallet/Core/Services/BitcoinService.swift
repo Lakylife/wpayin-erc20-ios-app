@@ -9,6 +9,7 @@
 
 import Foundation
 import WalletCore
+import SwiftProtobuf
 import BigInt
 
 // MARK: - Bitcoin Models
@@ -269,7 +270,7 @@ class BitcoinService {
 
     // MARK: - Send Transaction
     
-    /// Send Bitcoin transaction (simplified implementation)
+    /// Send Bitcoin transaction (WalletCore BIP84 SegWit signing)
     func sendTransaction(
         to toAddress: String,
         amount: Decimal,
@@ -280,11 +281,13 @@ class BitcoinService {
               let wallet = try? mnemonicService.loadWallet(from: seedPhrase) else {
             throw BitcoinError.noSeedPhrase
         }
-        
-        let path = "m/84'/0'/0'/0/0"  // BIP84 Native SegWit
+
+        // Spend from the account the user currently has active (multi-wallet)
+        let accountIndex = UserDefaults.standard.integer(forKey: "ActiveAccountIndex")
+        let path = mnemonicService.derivationPath(for: .bitcoin, accountIndex: accountIndex)
         let privateKey = wallet.getKey(coin: .bitcoin, derivationPath: path)
         let fromAddress = CoinType.bitcoin.deriveAddress(privateKey: privateKey).description
-        
+
         // Fetch fee rate
         let actualFeeRate: Int
         if let custom = feeRate {
@@ -293,20 +296,24 @@ class BitcoinService {
             let fees = try await fetchFeeRates()
             actualFeeRate = fees.halfHourFee  // Use 30-minute fee as default
         }
-        
+
         // Convert amount to satoshis
         let amountSatoshis = btcToSatoshis(amount)
-        
+        guard amountSatoshis > 0 else {
+            throw BitcoinError.insufficientFunds
+        }
+
         // Build and broadcast transaction
         let signedTx = try await buildTransaction(
             from: fromAddress,
             to: toAddress,
             amount: amountSatoshis,
-            feeRate: actualFeeRate
+            feeRate: actualFeeRate,
+            privateKey: privateKey
         )
-        
+
         let txHash = try await broadcastTransaction(signedTx)
-        
+
         return TransactionResult(
             hash: txHash,
             from: fromAddress,
@@ -315,29 +322,75 @@ class BitcoinService {
             gasUsed: nil  // Bitcoin doesn't use gas
         )
     }
-    
+
     // MARK: - Transaction Building
 
-    /// Build and sign Bitcoin transaction
+    /// Build and sign Bitcoin transaction using WalletCore's Bitcoin signer.
     func buildTransaction(
         from fromAddress: String,
         to toAddress: String,
         amount: Int64,  // satoshis
         feeRate: Int,   // sat/vB
-        derivation: BitcoinDerivation = .default,
+        privateKey: PrivateKey,
         testnet: Bool = false
     ) async throws -> String {
-        // For MVP: Simplified implementation
-        // In production: Use proper UTXO selection and WalletCore Bitcoin signing
-        
-        Logger.log("⚠️ Bitcoin transaction simplified for MVP")
-        Logger.log("   From: \(fromAddress)")
-        Logger.log("   To: \(toAddress)")
-        Logger.log("   Amount: \(amount) satoshis")
-        Logger.log("   Fee: \(feeRate) sat/vB")
-        
-        // TODO: implement real transaction construction
-        return ""
+        // Validate destination address before touching UTXOs
+        guard AnyAddress(string: toAddress, coin: .bitcoin) != nil else {
+            throw BitcoinError.broadcastFailed("Invalid Bitcoin address")
+        }
+
+        // Fetch spendable UTXOs for our address
+        let utxos = try await fetchUTXOs(address: fromAddress, testnet: testnet)
+        let confirmed = utxos.filter { $0.status.confirmed }
+        guard !confirmed.isEmpty else {
+            throw BitcoinError.insufficientFunds
+        }
+
+        let lockScript = BitcoinScript.lockScriptForAddress(address: fromAddress, coin: .bitcoin)
+        guard !lockScript.data.isEmpty else {
+            throw BitcoinError.transactionSigningFailed
+        }
+
+        var input = BitcoinSigningInput.with {
+            $0.hashType = BitcoinScript.hashTypeForCoin(coinType: .bitcoin)
+            $0.amount = amount
+            $0.byteFee = Int64(feeRate)
+            $0.toAddress = toAddress
+            $0.changeAddress = fromAddress // change returns to sender
+            $0.coinType = CoinType.bitcoin.rawValue
+            $0.privateKey = [privateKey.data]
+        }
+
+        for utxo in confirmed {
+            guard let txidData = Data(hexString: utxo.txid) else { continue }
+            let unspent = BitcoinUnspentTransaction.with {
+                $0.outPoint.hash = txidData.reversedBytes() // txid is displayed big-endian
+                $0.outPoint.index = UInt32(utxo.vout)
+                $0.outPoint.sequence = UInt32.max
+                $0.amount = utxo.value
+                $0.script = lockScript.data
+            }
+            input.utxo.append(unspent)
+        }
+
+        // Let WalletCore plan the transaction (UTXO selection, fee, change)
+        let plan: BitcoinTransactionPlan = AnySigner.plan(input: input, coin: .bitcoin)
+        guard plan.error == .ok else {
+            Logger.log("❌ Bitcoin planning failed: \(plan.error)")
+            throw plan.error == .errorNotEnoughUtxos || plan.error == .errorMissingInputUtxos
+                ? BitcoinError.insufficientFunds
+                : BitcoinError.transactionSigningFailed
+        }
+        input.plan = plan
+
+        let output: BitcoinSigningOutput = AnySigner.sign(input: input, coin: .bitcoin)
+        guard output.error == .ok, !output.encoded.isEmpty else {
+            Logger.log("❌ Bitcoin signing failed: \(output.errorMessage)")
+            throw BitcoinError.transactionSigningFailed
+        }
+
+        Logger.log("✅ Bitcoin tx signed: \(amount) sat → \(toAddress), fee \(plan.fee) sat")
+        return output.encoded.hexString
     }
 
     /// Broadcast signed transaction

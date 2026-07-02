@@ -10,16 +10,18 @@
 import SwiftUI
 
 extension Color {
-    static let wpayinBlack = Color(red: 0.0, green: 0.0, blue: 0.0)
-    static let wpayinDarkGray = Color(red: 0.059, green: 0.059, blue: 0.059)
-    static let wpayinMediumGray = Color(red: 0.102, green: 0.102, blue: 0.102)
-    static let wpayinLightGray = Color(red: 0.161, green: 0.161, blue: 0.161)
+    // Deep ink-navy scale — softer and more elegant than pure black
+    static let wpayinBlack = Color(red: 0.027, green: 0.031, blue: 0.055) // #070810
+    static let wpayinDarkGray = Color(red: 0.055, green: 0.063, blue: 0.102) // #0E101A
+    static let wpayinMediumGray = Color(red: 0.086, green: 0.098, blue: 0.149) // #161926
+    static let wpayinLightGray = Color(red: 0.125, green: 0.141, blue: 0.204) // #202434
     static let wpayinWhite = Color(red: 1.0, green: 1.0, blue: 1.0)
-    static let wpayinBlue = Color(red: 0.4, green: 0.494, blue: 0.918) // #667eea
+    static let wpayinBlue = Color(red: 0.443, green: 0.541, blue: 0.973) // #718AF8
     static let wpayinBlueDark = Color(red: 0.333, green: 0.412, blue: 0.827) // #5568d3
-    static let wpayinSuccess = Color(red: 0.298, green: 0.686, blue: 0.314) // #4caf50
-    static let wpayinError = Color(red: 0.957, green: 0.263, blue: 0.212) // #f44336
-    static let wpayinWarning = Color(red: 1.0, green: 0.8, blue: 0.0)
+    static let wpayinViolet = Color(red: 0.545, green: 0.408, blue: 0.965) // #8B68F6
+    static let wpayinSuccess = Color(red: 0.204, green: 0.827, blue: 0.6) // #34D399
+    static let wpayinError = Color(red: 0.973, green: 0.443, blue: 0.443) // #F87171
+    static let wpayinWarning = Color(red: 0.984, green: 0.749, blue: 0.141) // #FBBF24
 
     // Token colors from design specification
     static let tokenEth = Color(red: 0.384, green: 0.494, blue: 0.918) // #627eea
@@ -33,7 +35,15 @@ struct WpayinColors {
     // Primary colors matching the design specification
     static let primary = Color.wpayinBlue
     static let primaryDark = Color.wpayinBlueDark
+    static let accent = Color.wpayinViolet
     static let secondary = Color.wpayinWhite
+
+    // Signature accent gradient (indigo → violet)
+    static let accentGradient = LinearGradient(
+        gradient: Gradient(colors: [Color.wpayinBlue, Color.wpayinViolet]),
+        startPoint: .topLeading,
+        endPoint: .bottomTrailing
+    )
 
     // Background colors with gradient support
     static let background = Color.wpayinBlack
@@ -41,18 +51,18 @@ struct WpayinColors {
     static let backgroundGradientEnd = Color.wpayinBlack
 
     // Surface colors for cards and components
-    static let surface = Color.white.opacity(0.03)
-    static let surfaceLight = Color.white.opacity(0.05)
-    static let surfaceHover = Color.white.opacity(0.08)
-    static let surfaceBorder = Color.white.opacity(0.08)
+    static let surface = Color.white.opacity(0.045)
+    static let surfaceLight = Color.white.opacity(0.07)
+    static let surfaceHover = Color.white.opacity(0.1)
+    static let surfaceBorder = Color.white.opacity(0.09)
 
     // Header background
     static let headerBackground = Color.wpayinLightGray
 
     // Text colors
     static let text = Color.wpayinWhite
-    static let textSecondary = Color(red: 0.533, green: 0.533, blue: 0.533) // #888
-    static let textTertiary = Color(red: 0.4, green: 0.4, blue: 0.4) // #666
+    static let textSecondary = Color(red: 0.61, green: 0.639, blue: 0.71) // #9CA3B5
+    static let textTertiary = Color(red: 0.42, green: 0.447, blue: 0.52) // #6B7285
 
     // Status colors
     static let success = Color.wpayinSuccess
@@ -60,15 +70,52 @@ struct WpayinColors {
     static let warning = Color.wpayinWarning
 
     // Button colors
-    static let buttonBackground = Color.white.opacity(0.05)
+    static let buttonBackground = Color.white.opacity(0.06)
     static let buttonBorder = Color.white.opacity(0.1)
-    static let buttonHover = Color.white.opacity(0.08)
+    static let buttonHover = Color.white.opacity(0.09)
 
     // Navigation colors
-    static let navBackground = Color(red: 0.039, green: 0.039, blue: 0.039).opacity(0.95) // rgba(10, 10, 10, 0.95)
-    static let navBorder = Color.white.opacity(0.05)
+    static let navBackground = Color(red: 0.047, green: 0.055, blue: 0.09).opacity(0.92)
+    static let navBorder = Color.white.opacity(0.07)
 
     // Legacy colors for compatibility
     static let surfaceElegant = Color.white.opacity(0.05)
     static let borderElegant = Color.white.opacity(0.1)
+}
+
+// MARK: - Layout constants
+
+enum WpayinRadius {
+    static let small: CGFloat = 10
+    static let medium: CGFloat = 14
+    static let card: CGFloat = 20
+    static let large: CGFloat = 24
+}
+
+// MARK: - Shared view styles
+
+extension View {
+    /// Standard card container: soft surface, hairline border, rounded corners.
+    func wpayinCard(padding: CGFloat = 16, radius: CGFloat = WpayinRadius.card) -> some View {
+        self
+            .padding(padding)
+            .background(
+                RoundedRectangle(cornerRadius: radius, style: .continuous)
+                    .fill(WpayinColors.surface)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: radius, style: .continuous)
+                            .stroke(WpayinColors.surfaceBorder, lineWidth: 1)
+                    )
+            )
+    }
+}
+
+/// Button style with a gentle press-down scale for tactile feedback.
+struct WpayinPressableStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .scaleEffect(configuration.isPressed ? 0.97 : 1.0)
+            .opacity(configuration.isPressed ? 0.85 : 1.0)
+            .animation(.easeOut(duration: 0.15), value: configuration.isPressed)
+    }
 }

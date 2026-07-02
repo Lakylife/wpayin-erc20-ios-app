@@ -141,7 +141,20 @@ struct TokenIconView: View {
             
             Group {
                 if token.symbol.uppercased() == "WETH" {
-                    WrappedEthIconMark(size: size)
+                    // Official WETH icon with drawn mark as offline fallback
+                    AsyncImage(url: URL(string: token.iconUrl?.hasPrefix("http") == true
+                                        ? token.iconUrl!
+                                        : "https://assets.coingecko.com/coins/images/2518/large/weth.png")) { phase in
+                        if case .success(let image) = phase {
+                            image
+                                .resizable()
+                                .scaledToFit()
+                        } else {
+                            WrappedEthIconMark(size: size)
+                        }
+                    }
+                    .frame(width: size, height: size)
+                    .clipShape(Circle())
                 } else if token.symbol.uppercased() == "USDT" {
                     StablecoinIconMark(size: size, symbol: "₮", color: Color(red: 0.20, green: 0.63, blue: 0.54))
                 } else if token.symbol.uppercased() == "USDC" {
@@ -202,13 +215,16 @@ struct TokenIconView: View {
             
             // Network badge for non-native tokens
             if showNetworkBadge && !token.isNative {
-                Circle()
-                    .fill(WpayinColors.surface)
-                    .frame(width: size * 0.35, height: size * 0.35)
+                NetworkIconView(blockchain: token.blockchain, size: size * 0.42)
+                    .frame(width: size * 0.42, height: size * 0.42)
+                    .clipShape(Circle())
                     .overlay(
-                        NetworkIconView(blockchain: token.blockchain, size: size * 0.3)
+                        // Ring in the app background color visually separates
+                        // the badge from the token icon underneath.
+                        Circle()
+                            .stroke(WpayinColors.background, lineWidth: max(1.5, size * 0.055))
                     )
-                    .offset(x: size * 0.1, y: size * 0.1)
+                    .offset(x: size * 0.12, y: size * 0.12)
             }
         }
     }

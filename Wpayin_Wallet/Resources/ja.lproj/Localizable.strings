@@ -442,6 +442,10 @@
 "activity.noResultsFound" = "結果が見つかりません";
 "activity.tryAdjusting" = "検索語句またはフィルターを調整してください";
 "activity.recent" = "最近の取引";
+"activity.transactions" = "取引";
+"activity.overview" = "概要";
+"activity.today" = "今日";
+"activity.yesterday" = "昨日";
 "activity.emptyDesc" = "ウォレットの使用を開始すると、取引履歴がここに表示されます。";
 "activity.tokenEmptyDesc" = "%@ の取引はここに表示されます";
 "market.priceChart" = "価格チャート";
@@ -618,3 +622,38 @@
 
 "Transaction Update" = "取引の更新";
 "%@ %@ %@" = "%@ %@ %@";
+
+/* App Lock (v1.1.6) */
+"Wallet Locked" = "Wallet Locked";
+"Authenticate to access your wallet" = "Authenticate to access your wallet";
+"Unlock your wallet" = "Unlock your wallet";
+"Unlock" = "Unlock";
+"Swap Failed" = "Swap Failed";
+"Swap Submitted" = "Swap Submitted";
+"Transaction: %@" = "Transaction: %@";
+"Please enter a valid wallet address" = "Please enter a valid wallet address";
+
+/* Buy & pickers (v1.1.6) */
+"Buy" = "Buy";
+"Buy Crypto" = "Buy Crypto";
+"Purchase cryptocurrency with your card or bank account" = "Purchase cryptocurrency with your card or bank account";
+"No address" = "No address";
+"No active assets available for purchase" = "No active assets available for purchase";
+"Enable networks in Settings → Manage Networks" = "Enable networks in Settings → Manage Networks";
+"Choose Payment Provider" = "Choose Payment Provider";
+"Select how you want to buy %@" = "Select how you want to buy %@";
+"Compare rates from %@ providers" = "Compare rates from %@ providers";
+"No payment providers are currently configured for %@. API keys are required for most providers." = "No payment providers are currently configured for %@. API keys are required for most providers.";
+"Available once configured: MoonPay, Transak, Ramp, Banxa" = "Available once configured: MoonPay, Transak, Ramp, Banxa";
+"Buy %@" = "Buy %@";
+"RECOMMENDED" = "RECOMMENDED";
+"Fee: %@" = "Fee: %@";
+"Important Information" = "Important Information";
+"%@ requires API key configuration. Please use Mt Pelerin or contact support." = "%@ requires API key configuration. Please use Mt Pelerin or contact support.";
+"Close" = "Close";
+"About %@" = "About %@";
+"Cancel Purchase" = "Cancel Purchase";
+"Configuration Required" = "Configuration Required";
+"Mt Pelerin is available and doesn't require API keys" = "Mt Pelerin is available and doesn't require API keys";
+"Notifications enabled" = "Notifications enabled";
+"You will be notified about wallet activity." = "You will be notified about wallet activity.";

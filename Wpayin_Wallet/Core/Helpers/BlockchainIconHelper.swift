@@ -10,16 +10,25 @@
 import SwiftUI
 
 struct BlockchainIconHelper {
-    static func iconName(for blockchain: BlockchainType) -> String {
+    /// Full-color circular assets that can be rendered as-is.
+    private static func fullColorAssetName(for blockchain: BlockchainType) -> String? {
         switch blockchain {
         case .bitcoin:
             return "BTC"
         case .ethereum:
-            return "ethereum_trx_32"
+            return "ETH"
         case .bsc:
             return "BNB"
-        case .polygon:
-            return "polygon-pos_eip20_32"
+        default:
+            return nil
+        }
+    }
+
+    /// White glyph assets (the `*_trx_32` set) — these are monochrome marks on
+    /// a transparent background and MUST be drawn on a brand-colored circle,
+    /// otherwise they show up as white blobs.
+    private static func glyphAssetName(for blockchain: BlockchainType) -> String? {
+        switch blockchain {
         case .arbitrum:
             return "arbitrum-one_trx_32"
         case .optimism:
@@ -34,30 +43,63 @@ struct BlockchainIconHelper {
             return "zksync_trx_32"
         case .fantom:
             return "fantom_trx_32"
-        case .solana:
-            return ""
-        case .litecoin, .dash, .zcash, .bitcoinCash, .monero, .eCash:
-            return "" // Will use fallback - not in assets
+        default:
+            return nil
         }
     }
-    
+
+    /// Official brand background color behind the white glyph.
+    private static func glyphBackgroundColor(for blockchain: BlockchainType) -> Color {
+        switch blockchain {
+        case .arbitrum:
+            return Color(red: 0.13, green: 0.19, blue: 0.28)   // #213147 navy
+        case .optimism:
+            return Color(red: 1.0, green: 0.02, blue: 0.13)    // #FF0420 red
+        case .avalanche:
+            return Color(red: 0.91, green: 0.26, blue: 0.26)   // #E84142 red
+        case .base:
+            return Color(red: 0.0, green: 0.32, blue: 1.0)     // #0052FF blue
+        case .gnosis:
+            return Color(red: 0.02, green: 0.47, blue: 0.36)   // #04795B green
+        case .zkSync:
+            return Color(red: 0.31, green: 0.36, blue: 0.90)   // indigo
+        case .fantom:
+            return Color(red: 0.10, green: 0.41, blue: 1.0)    // #1969FF blue
+        default:
+            return fallbackColor(for: blockchain)
+        }
+    }
+
     static func icon(for blockchain: BlockchainType, size: CGFloat = 32) -> some View {
-        let imageName = iconName(for: blockchain)
-        
-        return Group {
-            if !imageName.isEmpty {
-                // Try to load from Assets
-                Image(imageName)
+        Group {
+            if let assetName = fullColorAssetName(for: blockchain) {
+                Image(assetName)
                     .resizable()
                     .scaledToFit()
                     .frame(width: size, height: size)
+                    .clipShape(Circle())
+            } else if let glyphName = glyphAssetName(for: blockchain) {
+                ZStack {
+                    Circle()
+                        .fill(glyphBackgroundColor(for: blockchain))
+                        .frame(width: size, height: size)
+
+                    Image(glyphName)
+                        .resizable()
+                        .scaledToFit()
+                        .frame(width: size * 0.62, height: size * 0.62)
+                }
+            } else if blockchain == .polygon {
+                PolygonIconMark(size: size)
+            } else if blockchain == .solana {
+                SolanaIconMark(size: size)
             } else {
                 // Fallback to colored circle with symbol
                 ZStack {
                     Circle()
                         .fill(fallbackColor(for: blockchain))
                         .frame(width: size, height: size)
-                    
+
                     Text(fallbackSymbol(for: blockchain))
                         .font(.system(size: size * 0.5, weight: .bold))
                         .foregroundColor(.white)

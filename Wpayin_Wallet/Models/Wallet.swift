@@ -37,7 +37,7 @@ struct MultiChainWallet: Identifiable, Codable, Sendable {
     let name: String
     let type: WalletType
     let createdAt: Date
-    let seedPhraseId: String? // Reference to keychain stored seed
+    var seedPhraseId: String? // Reference to keychain stored seed
     var accounts: [WalletAccount]
     var isActive: Bool
 

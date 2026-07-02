@@ -432,7 +432,7 @@ struct BlockchainConfig: Identifiable, Codable, Sendable {
         BlockchainConfig(
             platform: .ethereum,
             network: .mainnet,
-            rpcUrl: "https://mainnet.infura.io/v3/f6a4dd53d9f945c4a29b9cd2a3af0ad6",
+            rpcUrl: AppConfig.ethereumRpcUrl,
             explorerUrl: "https://etherscan.io",
             chainId: 1,
             isEnabled: true
@@ -440,9 +440,9 @@ struct BlockchainConfig: Identifiable, Codable, Sendable {
         BlockchainConfig(
             platform: .ethereum,
             network: .testnet,
-            rpcUrl: "https://goerli.infura.io/v3/YOUR_API_KEY",
-            explorerUrl: "https://goerli.etherscan.io",
-            chainId: 5,
+            rpcUrl: "https://ethereum-sepolia-rpc.publicnode.com",
+            explorerUrl: "https://sepolia.etherscan.io",
+            chainId: 11155111,
             isEnabled: false
         ),
 
@@ -450,7 +450,7 @@ struct BlockchainConfig: Identifiable, Codable, Sendable {
         BlockchainConfig(
             platform: .bitcoin,
             network: .mainnet,
-            rpcUrl: "https://bitcoin-mainnet.g.alchemy.com/v2/eU9nuznz2dU1ZKQNK8mYIeBrLOUcDsaP",
+            rpcUrl: "https://blockstream.info/api",
             explorerUrl: "https://www.blockchain.com/explorer/addresses/btc",
             chainId: nil,
             isEnabled: true
@@ -478,7 +478,7 @@ struct BlockchainConfig: Identifiable, Codable, Sendable {
         BlockchainConfig(
             platform: .polygon,
             network: .mainnet,
-            rpcUrl: "https://polygon-mainnet.infura.io/v3/f6a4dd53d9f945c4a29b9cd2a3af0ad6",
+            rpcUrl: "https://polygon-rpc.com",
             explorerUrl: "https://polygonscan.com",
             chainId: 137,
             isEnabled: true
@@ -488,7 +488,7 @@ struct BlockchainConfig: Identifiable, Codable, Sendable {
         BlockchainConfig(
             platform: .bsc,
             network: .mainnet,
-            rpcUrl: "https://bsc-mainnet.infura.io/v3/f6a4dd53d9f945c4a29b9cd2a3af0ad6",
+            rpcUrl: "https://bsc-dataseed.binance.org",
             explorerUrl: "https://bscscan.com",
             chainId: 56,
             isEnabled: true
@@ -498,7 +498,7 @@ struct BlockchainConfig: Identifiable, Codable, Sendable {
         BlockchainConfig(
             platform: .arbitrum,
             network: .mainnet,
-            rpcUrl: "https://arbitrum-mainnet.infura.io/v3/f6a4dd53d9f945c4a29b9cd2a3af0ad6",
+            rpcUrl: "https://arb1.arbitrum.io/rpc",
             explorerUrl: "https://arbiscan.io",
             chainId: 42161,
             isEnabled: true
@@ -508,7 +508,7 @@ struct BlockchainConfig: Identifiable, Codable, Sendable {
         BlockchainConfig(
             platform: .optimism,
             network: .mainnet,
-            rpcUrl: "https://optimism-mainnet.infura.io/v3/f6a4dd53d9f945c4a29b9cd2a3af0ad6",
+            rpcUrl: "https://mainnet.optimism.io",
             explorerUrl: "https://optimistic.etherscan.io",
             chainId: 10,
             isEnabled: false
@@ -528,7 +528,7 @@ struct BlockchainConfig: Identifiable, Codable, Sendable {
         BlockchainConfig(
             platform: .base,
             network: .mainnet,
-            rpcUrl: "https://base-mainnet.infura.io/v3/f6a4dd53d9f945c4a29b9cd2a3af0ad6",
+            rpcUrl: "https://mainnet.base.org",
             explorerUrl: "https://basescan.org",
             chainId: 8453,
             isEnabled: false

@@ -9,6 +9,7 @@
 
 import Foundation
 import WalletCore
+import SwiftProtobuf
 import BigInt
 
 // Helper extension for Decimal rounding
@@ -275,7 +276,10 @@ class TransactionService {
                 return nil
             }
 
-            let privateKey = wallet.getKey(coin: coinType, derivationPath: blockchain.derivationPath)
+            // Spend from the account the user currently has active (multi-wallet)
+            let accountIndex = UserDefaults.standard.integer(forKey: "ActiveAccountIndex")
+            let path = mnemonicService.derivationPath(for: coinType, accountIndex: accountIndex)
+            let privateKey = wallet.getKey(coin: coinType, derivationPath: path)
             return privateKey.data
         } else if let privateKeyHex = keychain.getPrivateKey() {
             // Use existing private key
@@ -307,101 +311,32 @@ class TransactionService {
         chainId: Int,
         privateKey: Data
     ) throws -> String {
-        // Create transaction fields for RLP encoding
-        var rlpItems: [Any] = []
-
-        // Add nonce
-        rlpItems.append(nonce.serialize())
-
-        // Add gas price
-        rlpItems.append(gasPrice.serialize())
-
-        // Add gas limit
-        rlpItems.append(gasLimit.serialize())
-
-        // Add to address
-        let toData = Data(hexString: String(to.dropFirst(2)))!
-        rlpItems.append(toData)
-
-        // Add value
-        rlpItems.append(value.serialize())
-
-        // Add data
-        rlpItems.append(data)
-
-        // Add chain ID for EIP-155
-        rlpItems.append(BigUInt(chainId).serialize())
-        rlpItems.append(Data())
-        rlpItems.append(Data())
-
-        // RLP encode (simplified - in production use proper RLP library)
-        let txHash = keccak256(rlpEncode(rlpItems))
-
-        // Sign with private key
-        guard let privKey = PrivateKey(data: privateKey) else {
-            throw TransactionError.noPrivateKey
-        }
-
-        let signature = privKey.sign(digest: txHash, curve: .secp256k1)!
-
-        // Extract r, s, v from signature
-        let r = signature.dropLast(1).prefix(32)
-        let s = signature.dropLast(1).suffix(32)
-        let v = BigUInt(chainId * 2 + 35 + Int(signature.last ?? 0))
-
-        // Re-encode with signature
-        var signedItems: [Any] = []
-        signedItems.append(nonce.serialize())
-        signedItems.append(gasPrice.serialize())
-        signedItems.append(gasLimit.serialize())
-        signedItems.append(toData)
-        signedItems.append(value.serialize())
-        signedItems.append(data)
-        signedItems.append(v.serialize())
-        signedItems.append(r)
-        signedItems.append(s)
-
-        let signedTx = rlpEncode(signedItems)
-        return signedTx.hexString
-    }
-
-    private func keccak256(_ data: Data) -> Data {
-        // Use WalletCore's Hash.keccak256
-        return Hash.keccak256(data: data)
-    }
-
-    private func rlpEncode(_ items: [Any]) -> Data {
-        // Simplified RLP encoding - in production use proper library
-        var result = Data()
-
-        for item in items {
-            if let data = item as? Data {
-                if data.count == 1 && data[0] < 0x80 {
-                    result.append(data)
-                } else if data.count < 56 {
-                    result.append(UInt8(0x80 + data.count))
-                    result.append(data)
-                } else {
-                    let lengthData = BigUInt(data.count).serialize()
-                    result.append(UInt8(0xb7 + lengthData.count))
-                    result.append(lengthData)
-                    result.append(data)
+        // Sign via WalletCore AnySigner — produces a canonical, EIP-155 signed
+        // legacy transaction (correct RLP integer encoding, r/s normalization).
+        let input = EthereumSigningInput.with {
+            $0.chainID = BigUInt(chainId).serialize()
+            $0.nonce = nonce.serialize()
+            $0.txMode = .legacy
+            $0.gasPrice = gasPrice.serialize()
+            $0.gasLimit = gasLimit.serialize()
+            $0.toAddress = to
+            $0.privateKey = privateKey
+            $0.transaction = EthereumTransaction.with {
+                $0.contractGeneric = EthereumTransaction.ContractGeneric.with {
+                    $0.amount = value.serialize()
+                    $0.data = data
                 }
             }
         }
 
-        // Wrap in list prefix
-        if result.count < 56 {
-            var final = Data([UInt8(0xc0 + result.count)])
-            final.append(result)
-            return final
-        } else {
-            let lengthData = BigUInt(result.count).serialize()
-            var final = Data([UInt8(0xf7 + lengthData.count)])
-            final.append(lengthData)
-            final.append(result)
-            return final
+        let output: EthereumSigningOutput = AnySigner.sign(input: input, coin: .ethereum)
+
+        guard output.error == .ok, !output.encoded.isEmpty else {
+            Logger.log("❌ Signing failed: \(output.errorMessage)")
+            throw TransactionError.failedToSignTransaction
         }
+
+        return output.encoded.hexString
     }
 
     private func createERC20TransferData(to address: String, amount: BigUInt) -> Data {
@@ -434,7 +369,7 @@ class TransactionService {
         let body: [String: Any] = [
             "jsonrpc": "2.0",
             "method": "eth_getTransactionCount",
-            "params": [address, "latest"],
+            "params": [address, "pending"], // include queued transactions
             "id": 1
         ]
 

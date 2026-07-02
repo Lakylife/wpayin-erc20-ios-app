@@ -58,14 +58,33 @@ enum NotificationType {
     }
 }
 
-final class NotificationManager: ObservableObject {
+final class NotificationManager: NSObject, ObservableObject, UNUserNotificationCenterDelegate {
     static let shared = NotificationManager()
 
     @Published var currentNotification: NotificationType?
     @Published var showNotification = false
 
-    private init() {
-        requestPermission()
+    private override init() {
+        super.init()
+        // Permission is requested when the user enables notifications in Settings
+        // (SettingsManager.setNotificationsEnabled), not eagerly at launch.
+        // Delegate is required for notifications to be visible while the app
+        // is in the foreground.
+        UNUserNotificationCenter.current().delegate = self
+    }
+
+    // Show notifications as banners even when the app is in the foreground
+    func userNotificationCenter(
+        _ center: UNUserNotificationCenter,
+        willPresent notification: UNNotification,
+        withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void
+    ) {
+        completionHandler([.banner, .list, .sound])
+    }
+
+    /// User-facing toggle from Settings; push notifications are suppressed when off.
+    private var notificationsEnabled: Bool {
+        UserDefaults.standard.bool(forKey: "NotificationsEnabled")
     }
 
     func requestPermission() {
@@ -92,6 +111,8 @@ final class NotificationManager: ObservableObject {
 
     /// Send push notification (when app is in background)
     func sendPushNotification(_ type: NotificationType) {
+        guard notificationsEnabled else { return }
+
         let content = UNMutableNotificationContent()
         content.title = type.title
         content.body = type.body

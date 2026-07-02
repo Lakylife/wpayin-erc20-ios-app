@@ -140,7 +140,8 @@ final class SettingsManager: ObservableObject {
     @Published var selectedLanguage: Language = .english
     @Published var biometricAuthEnabled: Bool = false
     @Published var autoLockDuration: AutoLockDuration = .after5min
-    @Published var notificationsEnabled: Bool = true
+    // Off until the user opts in (permission is requested at that moment)
+    @Published var notificationsEnabled: Bool = false
 
     // State variable to force UI refresh when settings change
     @Published var refreshID = UUID()
@@ -264,6 +265,21 @@ final class SettingsManager: ObservableObject {
 
             DispatchQueue.main.async {
                 self?.updateNotifications(granted)
+
+                if granted {
+                    // Immediate visible confirmation that notifications work
+                    let content = UNMutableNotificationContent()
+                    content.title = "Notifications enabled".localized
+                    content.body = "You will be notified about wallet activity.".localized
+                    content.sound = .default
+
+                    let request = UNNotificationRequest(
+                        identifier: "notifications_enabled_confirmation",
+                        content: content,
+                        trigger: UNTimeIntervalNotificationTrigger(timeInterval: 1, repeats: false)
+                    )
+                    UNUserNotificationCenter.current().add(request)
+                }
             }
         }
     }

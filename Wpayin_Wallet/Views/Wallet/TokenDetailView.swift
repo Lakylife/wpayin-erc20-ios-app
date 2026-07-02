@@ -264,9 +264,7 @@ struct TokenDetailView: View {
                     } else {
                         VStack(spacing: 1) {
                             ForEach(recentTransactions.prefix(3)) { transaction in
-                                TransactionRow(transaction: transaction)
-                                    .environmentObject(settingsManager)
-                                    .background(WpayinColors.surface)
+                                TransactionRowView(transaction: transaction)
                             }
                         }
                         .background(WpayinColors.surface)
@@ -291,7 +289,7 @@ struct TokenDetailView: View {
     
     private var recentTransactions: [Transaction] {
         walletManager.transactions
-            .filter { $0.token == token.symbol }
+            .filter { $0.token.caseInsensitiveCompare(token.symbol) == .orderedSame }
             .sorted { $0.timestamp > $1.timestamp }
     }
 
@@ -368,21 +366,8 @@ struct NetworkTokenRow: View {
 
     var body: some View {
         HStack(spacing: 16) {
-            // Network Icon - Modern design
-            ZStack {
-                Circle()
-                    .fill(networkColor.opacity(0.15))
-                    .frame(width: 48, height: 48)
-
-                Circle()
-                    .fill(networkColor)
-                    .frame(width: 40, height: 40)
-                    .overlay(
-                        Text(networkSymbol)
-                            .font(.system(size: 18, weight: .bold))
-                            .foregroundColor(.white)
-                    )
-            }
+            NetworkIconView(blockchain: token.blockchain, size: 48)
+                .frame(width: 48, height: 48)
 
             // Network Info
             VStack(alignment: .leading, spacing: 4) {
@@ -450,26 +435,6 @@ struct NetworkTokenRow: View {
         }
     }
 
-    private var networkSymbol: String {
-        switch token.blockchain {
-        case .ethereum:
-            return "E"
-        case .arbitrum:
-            return "A"
-        case .polygon:
-            return "P"
-        case .bsc:
-            return "B"
-        case .optimism:
-            return "O"
-        case .avalanche:
-            return "V"
-        case .base:
-            return "B"
-        default:
-            return "?"
-        }
-    }
 }
 
 struct TokenActionButton: View {

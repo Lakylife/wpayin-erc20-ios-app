@@ -15,36 +15,59 @@ class KeychainManager {
     private let privateKeyKey = "PrivateKey"
     private let seedPhraseKey = "SeedPhrase"
 
-    func storePrivateKey(_ privateKey: String) -> Bool {
-        let data = Data(privateKey.utf8)
+    init() {
+        // One-time hardening of items stored before accessibility was enforced.
+        migrateAccessibilityIfNeeded()
+    }
 
-        let query: [String: Any] = [
+    private func store(_ value: String, account: String) -> Bool {
+        let data = Data(value.utf8)
+
+        let deleteQuery: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: service,
-            kSecAttrAccount as String: privateKeyKey,
+            kSecAttrAccount as String: account
+        ]
+        SecItemDelete(deleteQuery as CFDictionary)
+
+        // ThisDeviceOnly: secrets never leave this device via backup/restore
+        let addQuery: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: service,
+            kSecAttrAccount as String: account,
+            kSecAttrAccessible as String: kSecAttrAccessibleWhenUnlockedThisDeviceOnly,
             kSecValueData as String: data
         ]
 
-        SecItemDelete(query as CFDictionary)
-
-        let status = SecItemAdd(query as CFDictionary, nil)
+        let status = SecItemAdd(addQuery as CFDictionary, nil)
         return status == errSecSuccess
     }
 
+    private func migrateAccessibilityIfNeeded() {
+        let migrationKey = "KeychainAccessibilityMigrated_v1"
+        guard !UserDefaults.standard.bool(forKey: migrationKey) else { return }
+
+        for account in [privateKeyKey, seedPhraseKey] {
+            let query: [String: Any] = [
+                kSecClass as String: kSecClassGenericPassword,
+                kSecAttrService as String: service,
+                kSecAttrAccount as String: account
+            ]
+            let attributes: [String: Any] = [
+                kSecAttrAccessible as String: kSecAttrAccessibleWhenUnlockedThisDeviceOnly
+            ]
+            SecItemUpdate(query as CFDictionary, attributes as CFDictionary)
+        }
+
+        UserDefaults.standard.set(true, forKey: migrationKey)
+    }
+
+    func storePrivateKey(_ privateKey: String) -> Bool {
+        store(privateKey, account: privateKeyKey)
+    }
+
     func storeSeedPhrase(_ seedPhrase: String) -> Bool {
-        let data = Data(seedPhrase.utf8)
-
-        let query: [String: Any] = [
-            kSecClass as String: kSecClassGenericPassword,
-            kSecAttrService as String: service,
-            kSecAttrAccount as String: seedPhraseKey,
-            kSecValueData as String: data
-        ]
-
-        SecItemDelete(query as CFDictionary)
-
-        let status = SecItemAdd(query as CFDictionary, nil)
-        return status == errSecSuccess
+        store(seedPhrase, account: seedPhraseKey)
     }
 
     func getPrivateKey() -> String? {

@@ -35,11 +35,11 @@ struct ProviderSelectionView: View {
                                 .font(.system(size: 50))
                                 .foregroundColor(WpayinColors.primary)
                             
-                            Text("Choose Payment Provider")
+                            Text("Choose Payment Provider".localized)
                                 .font(.wpayinTitle)
                                 .foregroundColor(WpayinColors.text)
                             
-                            Text("Select how you want to buy \(crypto)")
+                            Text("Select how you want to buy %@".localized(crypto))
                                 .font(.wpayinBody)
                                 .foregroundColor(WpayinColors.textSecondary)
                                 .multilineTextAlignment(.center)
@@ -54,7 +54,7 @@ struct ProviderSelectionView: View {
                                 HStack {
                                     Image(systemName: "chart.bar.xaxis")
                                         .font(.system(size: 16))
-                                    Text("Compare rates from \(availableProviders.count) providers")
+                                    Text("Compare rates from %@ providers".localized("\(availableProviders.count)"))
                                         .font(.wpayinSubheadline)
                                     Image(systemName: "chevron.right")
                                         .font(.system(size: 12))
@@ -91,10 +91,10 @@ struct ProviderSelectionView: View {
                         
                         if availableProviders.isEmpty {
                             VStack(spacing: 16) {
-                                ErrorView(message: "No payment providers are currently configured for \(crypto). API keys are required for most providers.")
+                                ErrorView(message: "No payment providers are currently configured for %@. API keys are required for most providers.".localized(crypto))
                                     .padding(.horizontal)
                                 
-                                Text("Available once configured: MoonPay, Transak, Ramp, Banxa")
+                                Text("Available once configured: MoonPay, Transak, Ramp, Banxa".localized)
                                     .font(.wpayinCaption)
                                     .foregroundColor(WpayinColors.textSecondary)
                                     .multilineTextAlignment(.center)
@@ -109,11 +109,11 @@ struct ProviderSelectionView: View {
                     .padding(.bottom, 20)
                 }
             }
-            .navigationTitle("Buy \(crypto)")
+            .navigationTitle("Buy %@".localized(crypto))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
-                    Button("Cancel") {
+                    Button("Cancel".localized) {
                         dismiss()
                     }
                     .foregroundColor(WpayinColors.primary)
@@ -156,7 +156,7 @@ struct ProviderCard: View {
                     HStack {
                         Image(systemName: "star.fill")
                             .font(.system(size: 12))
-                        Text("RECOMMENDED")
+                        Text("RECOMMENDED".localized)
                             .font(.system(size: 12, weight: .bold))
                     }
                     .foregroundColor(.white)
@@ -187,12 +187,12 @@ struct ProviderCard: View {
                             .font(.wpayinSubheadline)
                             .foregroundColor(WpayinColors.text)
                         
-                        Text(provider.description)
+                        Text(provider.description.localized)
                             .font(.wpayinCaption)
                             .foregroundColor(WpayinColors.textSecondary)
                             .lineLimit(1)
                         
-                        Text("Fee: \(provider.feeRange)")
+                        Text("Fee: %@".localized(provider.feeRange))
                             .font(.system(size: 11))
                             .foregroundColor(WpayinColors.primary)
                     }
@@ -224,7 +224,7 @@ struct InfoCard: View {
             HStack(spacing: 8) {
                 Image(systemName: "info.circle.fill")
                     .foregroundColor(WpayinColors.primary)
-                Text("Important Information")
+                Text("Important Information".localized)
                     .font(.wpayinSubheadline)
                     .foregroundColor(WpayinColors.text)
             }

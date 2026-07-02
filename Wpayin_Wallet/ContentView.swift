@@ -10,9 +10,11 @@
 import SwiftUI
 
 struct ContentView: View {
-    @StateObject private var walletManager = WalletManager()
-    @StateObject private var settingsManager = SettingsManager()
+    @StateObject private var walletManager: WalletManager
+    @StateObject private var settingsManager: SettingsManager
     @StateObject private var networkManager = NetworkConfigManager()
+    @StateObject private var lockManager = AppLockManager()
+    @Environment(\.scenePhase) private var scenePhase
 
     init() {
         // Setup settings listener after both managers are initialized
@@ -22,39 +24,53 @@ struct ContentView: View {
 
         _walletManager = StateObject(wrappedValue: wallet)
         _settingsManager = StateObject(wrappedValue: settings)
-        _networkManager = StateObject(wrappedValue: NetworkConfigManager())
     }
 
     var body: some View {
-        Group {
-            if walletManager.isInitializing {
-                LoadingView()
-            } else if !walletManager.hasCompletedOnboarding {
-                OnboardingView()
-                    .environmentObject(walletManager)
-                    .environmentObject(settingsManager)
-                    .environmentObject(networkManager)
-            } else if walletManager.hasWallet {
-                MainTabView()
-                    .environmentObject(walletManager)
-                    .environmentObject(settingsManager)
-                    .environmentObject(networkManager)
-            } else {
-                WelcomeView()
-                    .environmentObject(walletManager)
-                    .environmentObject(settingsManager)
-                    .environmentObject(networkManager)
+        ZStack {
+            Group {
+                if walletManager.isInitializing {
+                    LoadingView()
+                        .transition(.opacity)
+                } else if !walletManager.hasCompletedOnboarding {
+                    OnboardingView()
+                        .environmentObject(walletManager)
+                        .environmentObject(settingsManager)
+                        .environmentObject(networkManager)
+                } else if walletManager.hasWallet {
+                    MainTabView()
+                        .environmentObject(walletManager)
+                        .environmentObject(settingsManager)
+                        .environmentObject(networkManager)
+                } else {
+                    WelcomeView()
+                        .environmentObject(walletManager)
+                        .environmentObject(settingsManager)
+                        .environmentObject(networkManager)
+                }
+            }
+            .id(settingsManager.refreshID) // Force refresh when currency or language changes
+            .animation(.easeOut(duration: 0.3), value: walletManager.isInitializing)
+
+            if lockManager.isLocked {
+                LockScreenView(lockManager: lockManager)
+                    .transition(.opacity)
+                    .zIndex(1)
             }
         }
-        .id(settingsManager.refreshID) // Force refresh when currency or language changes
         .preferredColorScheme(.dark)
+        .environment(\.locale, Locale(identifier: settingsManager.selectedLanguage.rawValue))
         .task {
+            lockManager.lockOnLaunchIfNeeded(hasWallet: walletManager.keychain.hasSeedPhrase() || walletManager.keychain.hasPrivateKey())
             await walletManager.checkExistingWallet()
 
             // Start automatic price updates when wallet is ready
             if walletManager.hasWallet {
                 walletManager.startPriceUpdates()
             }
+        }
+        .onChange(of: scenePhase) { newPhase in
+            lockManager.handleScenePhaseChange(newPhase, hasWallet: walletManager.hasWallet)
         }
         .onDisappear {
             walletManager.stopPriceUpdates()
