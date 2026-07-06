@@ -478,7 +478,7 @@ struct BlockchainConfig: Identifiable, Codable, Sendable {
         BlockchainConfig(
             platform: .polygon,
             network: .mainnet,
-            rpcUrl: "https://polygon-rpc.com",
+            rpcUrl: "https://polygon-bor-rpc.publicnode.com",
             explorerUrl: "https://polygonscan.com",
             chainId: 137,
             isEnabled: true

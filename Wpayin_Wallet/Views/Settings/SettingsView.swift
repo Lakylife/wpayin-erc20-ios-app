@@ -43,6 +43,7 @@ struct SettingsView: View {
     @State private var showHelpCenter = false
     @State private var showExportWalletCompliance = false
     @State private var showContactSupport = false
+    @State private var showAppearanceSettings = false
 
     var body: some View {
         ZStack {
@@ -59,20 +60,16 @@ struct SettingsView: View {
 
             VStack(spacing: 0) {
                 // Modern Header
-                VStack(spacing: 0) {
+                HStack {
+                    Text(L10n.Settings.title.localized)
+                        .font(.system(size: 28, weight: .bold, design: .rounded))
+                        .foregroundColor(WpayinColors.text)
+
                     Spacer()
-                        .frame(height: 50)
-
-                    HStack {
-                        Text(L10n.Settings.title.localized)
-                            .font(.system(size: 32, weight: .bold))
-                            .foregroundColor(WpayinColors.text)
-
-                        Spacer()
-                    }
-                    .padding(.horizontal, 20)
-                    .padding(.bottom, 20)
                 }
+                .padding(.horizontal, 20)
+                .padding(.top, 12)
+                .padding(.bottom, 16)
                 .background(
                     LinearGradient(
                         gradient: Gradient(colors: [
@@ -129,6 +126,13 @@ struct SettingsView: View {
                                 title: L10n.Settings.language.localized,
                                 subtitle: "\(settingsManager.selectedLanguage.flag) \(settingsManager.selectedLanguage.name)",
                                 action: { showLanguageSelection = true }
+                            )
+
+                            SettingsRow(
+                                icon: "paintbrush.fill",
+                                title: "Appearance",
+                                subtitle: settingsManager.selectedColorTheme.displayName,
+                                action: { showAppearanceSettings = true }
                             )
 
                             NotificationSettingsRow(settingsManager: settingsManager)
@@ -222,6 +226,10 @@ struct SettingsView: View {
         }
         .sheet(isPresented: $showAutoLockSelection) {
             AutoLockSelectionView()
+                .environmentObject(settingsManager)
+        }
+        .sheet(isPresented: $showAppearanceSettings) {
+            AppearanceSettingsView()
                 .environmentObject(settingsManager)
         }
         .sheet(isPresented: $showNetworkManagement) {
@@ -561,7 +569,7 @@ struct ContactSupportView: View {
                         .cornerRadius(12)
 
                     WpayinButton(title: copied ? "Copied!" : "Copy Address", style: .primary) {
-                        UIPasteboard.general.string = supportEmail
+                        AppToast.copyToClipboard(supportEmail)
                         copied = true
                     }
 

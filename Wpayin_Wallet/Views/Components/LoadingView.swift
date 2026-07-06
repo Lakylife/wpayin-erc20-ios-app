@@ -129,6 +129,10 @@ private struct LaunchLogo: View {
     let rotation: Double
     let isPulsing: Bool
 
+    static let orbitCoins: [BlockchainType] = [
+        .bitcoin, .ethereum, .solana, .bsc, .arbitrum, .base
+    ]
+
     var body: some View {
         ZStack {
             Circle()
@@ -155,6 +159,19 @@ private struct LaunchLogo: View {
                 )
                 .frame(width: 210, height: 210)
                 .rotationEffect(.degrees(-rotation * 0.65))
+
+            // Top coins riding the dashed orbit (counter-rotated to stay upright)
+            ZStack {
+                ForEach(Array(Self.orbitCoins.enumerated()), id: \.offset) { index, coin in
+                    let angle = Double(index) / Double(Self.orbitCoins.count) * 360
+                    NetworkIconView(blockchain: coin, size: 26)
+                        .shadow(color: Color.black.opacity(0.5), radius: 4, y: 2)
+                        .rotationEffect(.degrees(rotation * 0.65 - angle))
+                        .offset(y: -105)
+                        .rotationEffect(.degrees(angle))
+                }
+            }
+            .rotationEffect(.degrees(-rotation * 0.65))
 
             ZStack(alignment: .top) {
                 Circle()

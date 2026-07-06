@@ -127,7 +127,7 @@ struct PrivateKeyView: View {
                                                         title: L10n.Action.copy.localized,
                                                         style: .secondary
                                                     ) {
-                                                        UIPasteboard.general.string = exportedKey.privateKey
+                                                        AppToast.copyToClipboard(exportedKey.privateKey)
                                                     }
                                                 }
                                                 .padding(16)

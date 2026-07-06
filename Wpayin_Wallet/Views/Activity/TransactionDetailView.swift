@@ -373,7 +373,7 @@ private struct TransactionCopyCard: View {
                 Spacer()
 
                 Button {
-                    UIPasteboard.general.string = value
+                    AppToast.copyToClipboard(value)
                     withAnimation(.easeOut(duration: 0.2)) {
                         copied = true
                     }

@@ -37,7 +37,6 @@ struct WalletView: View {
                     onQRTap: { showQRScanner = true },
                     onWalletTap: { showWalletSelector = true }
                 )
-                .ignoresSafeArea(.all, edges: .top)
                 .zIndex(1)
 
                 ScrollView(.vertical, showsIndicators: false) {
@@ -235,7 +234,7 @@ struct WalletHeaderView: View {
                             .foregroundColor(WpayinColors.textSecondary)
 
                         Button(action: {
-                            UIPasteboard.general.string = address
+                            AppToast.copyToClipboard(address)
                         }) {
                             Image(systemName: "doc.on.doc")
                                 .font(.system(size: 12))
@@ -379,9 +378,6 @@ struct ModernHeaderView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            Spacer()
-                .frame(height: 48)
-
             HStack(spacing: 10) {
                 HeaderIconButton(
                     icon: "line.3.horizontal",
@@ -424,7 +420,7 @@ struct ModernHeaderView: View {
                 .buttonStyle(WpayinPressableStyle())
                 .contextMenu {
                     Button {
-                        UIPasteboard.general.string = walletManager.walletAddress
+                        AppToast.copyToClipboard(walletManager.walletAddress)
                     } label: {
                         Label(L10n.Action.copy.localized, systemImage: "doc.on.doc")
                     }
@@ -437,6 +433,7 @@ struct ModernHeaderView: View {
                 )
             }
             .padding(.horizontal, 20)
+            .padding(.top, 8)
             .padding(.bottom, 12)
         }
         .background(
@@ -771,9 +768,35 @@ struct TokensTabContent: View {
     let onTokenTap: (Token) -> Void
     let onViewAllTap: () -> Void
     @EnvironmentObject var walletManager: WalletManager
+    @EnvironmentObject var settingsManager: SettingsManager
+
+    private var favoriteTokens: [Token] {
+        tokens.filter { settingsManager.favoriteTokenSymbols.contains($0.symbol) }
+    }
+
+    private var regularTokens: [Token] {
+        tokens.filter { !settingsManager.favoriteTokenSymbols.contains($0.symbol) }
+    }
 
     var body: some View {
         VStack(spacing: 14) {
+            if !favoriteTokens.isEmpty {
+                HStack(spacing: 6) {
+                    Image(systemName: "star.fill")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundColor(WpayinColors.warning)
+
+                    Text("Favorites".localized)
+                        .font(.system(size: 18, weight: .bold, design: .rounded))
+                        .foregroundColor(WpayinColors.text)
+
+                    Spacer()
+                }
+
+                tokenList(favoriteTokens)
+                    .padding(.bottom, 8)
+            }
+
             HStack {
                 Text(L10n.Wallet.yourAssets.localized)
                     .font(.system(size: 18, weight: .bold, design: .rounded))
@@ -837,16 +860,39 @@ struct TokensTabContent: View {
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 40)
             } else {
-                LazyVStack(spacing: 10) {
-                    ForEach(walletManager.visibleGroupedTokens) { token in
-                        ExpandableTokenCard(
-                            token: token,
-                            onTokenTap: { selectedToken in onTokenTap(selectedToken) },
-                            onNetworkTokenTap: { networkToken in onTokenTap(networkToken) }
-                        )
-                    }
+                tokenList(regularTokens)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func tokenList(_ listTokens: [Token]) -> some View {
+        switch settingsManager.assetListStyle {
+        case .cards:
+            LazyVStack(spacing: 10) {
+                ForEach(listTokens) { token in
+                    ExpandableTokenCard(
+                        token: token,
+                        onTokenTap: { selectedToken in onTokenTap(selectedToken) },
+                        onNetworkTokenTap: { networkToken in onTokenTap(networkToken) }
+                    )
                 }
             }
+        case .compact:
+            VStack(spacing: 1) {
+                ForEach(listTokens) { token in
+                    CompactTokenRow(token: token, onTap: { onTokenTap(token) })
+                }
+            }
+            .background(
+                RoundedRectangle(cornerRadius: 18, style: .continuous)
+                    .fill(WpayinColors.surface)
+            )
+            .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: 18, style: .continuous)
+                    .stroke(WpayinColors.surfaceBorder, lineWidth: 1)
+            )
         }
     }
 }
@@ -1071,7 +1117,7 @@ struct EnhancedWalletHeaderView: View {
                             Spacer()
 
                             Button(action: {
-                                UIPasteboard.general.string = address
+                                AppToast.copyToClipboard(address)
                             }) {
                                 ZStack {
                                     RoundedRectangle(cornerRadius: 10)

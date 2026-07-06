@@ -11,14 +11,25 @@ struct ActivityView: View {
     @EnvironmentObject var walletManager: WalletManager
     @EnvironmentObject var settingsManager: SettingsManager
     @State private var selectedFilter: TransactionFilter = .all
+    @State private var selectedNetwork: BlockchainType?   // nil = all networks
     @State private var searchText = ""
     @State private var selectedTransaction: Transaction?
     @State private var visibleTransactionCount = 20
 
     private let pageSize = 20
 
+    /// Networks that actually appear in the loaded history, in a stable order.
+    private var availableNetworks: [BlockchainType] {
+        let present = Set(walletManager.transactions.map { $0.resolvedBlockchain })
+        return BlockchainType.allCases.filter { present.contains($0) }
+    }
+
     private var filteredTransactions: [Transaction] {
         var transactions = walletManager.transactions
+
+        if let selectedNetwork {
+            transactions = transactions.filter { $0.resolvedBlockchain == selectedNetwork }
+        }
 
         switch selectedFilter {
         case .all:
@@ -109,6 +120,9 @@ struct ActivityView: View {
         .onChange(of: selectedFilter) { _ in
             resetPagination()
         }
+        .onChange(of: selectedNetwork) { _ in
+            resetPagination()
+        }
         .onChange(of: searchText) { _ in
             resetPagination()
         }
@@ -145,19 +159,10 @@ struct ActivityView: View {
 
     private var activityHeader: some View {
         VStack(spacing: 16) {
-            Spacer()
-                .frame(height: 46)
-
             HStack {
-                VStack(alignment: .leading, spacing: 3) {
-                    Text(L10n.Activity.title.localized)
-                        .font(.system(size: 32, weight: .bold, design: .rounded))
-                        .foregroundColor(WpayinColors.text)
-
-                    Text(L10n.Activity.transactions.localized)
-                        .font(.wpayinCaption)
-                        .foregroundColor(WpayinColors.textSecondary)
-                }
+                Text(L10n.Activity.title.localized)
+                    .font(.system(size: 28, weight: .bold, design: .rounded))
+                    .foregroundColor(WpayinColors.text)
 
                 Spacer()
 
@@ -189,8 +194,16 @@ struct ActivityView: View {
 
             ActivitySearchBar(text: $searchText)
             ActivityFilterTabs(selectedFilter: $selectedFilter)
+
+            if availableNetworks.count > 1 {
+                ActivityNetworkTabs(
+                    selectedNetwork: $selectedNetwork,
+                    networks: availableNetworks
+                )
+            }
         }
         .padding(.horizontal, 20)
+        .padding(.top, 12)
         .padding(.bottom, 14)
         .background(
             LinearGradient(
@@ -331,6 +344,68 @@ struct ActivityFilterTabs: View {
             }
             .padding(.horizontal, 1)
         }
+    }
+}
+
+/// Per-network filter row — every chain keeps its own history.
+struct ActivityNetworkTabs: View {
+    @Binding var selectedNetwork: BlockchainType?
+    let networks: [BlockchainType]
+
+    var body: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 9) {
+                chip(
+                    isSelected: selectedNetwork == nil,
+                    action: { selectedNetwork = nil }
+                ) {
+                    Text("All Networks".localized)
+                        .font(.system(size: 13, weight: .semibold, design: .rounded))
+                        .lineLimit(1)
+                }
+
+                ForEach(networks, id: \.self) { network in
+                    chip(
+                        isSelected: selectedNetwork == network,
+                        action: { selectedNetwork = network }
+                    ) {
+                        HStack(spacing: 7) {
+                            NetworkIconView(blockchain: network, size: 17)
+
+                            Text(network.name)
+                                .font(.system(size: 13, weight: .semibold, design: .rounded))
+                                .lineLimit(1)
+                        }
+                    }
+                }
+            }
+            .padding(.horizontal, 1)
+        }
+    }
+
+    private func chip<Content: View>(
+        isSelected: Bool,
+        action: @escaping () -> Void,
+        @ViewBuilder content: () -> Content
+    ) -> some View {
+        Button(action: action) {
+            content()
+                .foregroundColor(isSelected ? WpayinColors.text : WpayinColors.textSecondary)
+                .padding(.horizontal, 13)
+                .frame(height: 34)
+                .background(
+                    Capsule()
+                        .fill(isSelected ? WpayinColors.primary.opacity(0.22) : WpayinColors.surface)
+                        .overlay(
+                            Capsule()
+                                .stroke(
+                                    isSelected ? WpayinColors.primary.opacity(0.65) : WpayinColors.surfaceBorder,
+                                    lineWidth: 1
+                                )
+                        )
+                )
+        }
+        .buttonStyle(PlainButtonStyle())
     }
 }
 
@@ -543,10 +618,20 @@ struct TransactionRowView: View {
                     CompactStatusBadge(status: transaction.status)
                 }
 
-                Text(transaction.counterpartyShortAddress)
-                    .font(.system(size: 11, design: .monospaced))
-                    .foregroundColor(WpayinColors.textSecondary)
-                    .lineLimit(1)
+                HStack(spacing: 6) {
+                    NetworkIconView(blockchain: transaction.resolvedBlockchain, size: 13)
+
+                    Text(transaction.resolvedBlockchain.name)
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundColor(WpayinColors.textTertiary)
+                        .lineLimit(1)
+
+                    Text(transaction.counterpartyShortAddress)
+                        .font(.system(size: 11, design: .monospaced))
+                        .foregroundColor(WpayinColors.textSecondary)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.8)
+                }
             }
 
             Spacer(minLength: 8)
@@ -585,7 +670,7 @@ struct TransactionTokenIcon: View {
     private var token: Token {
         walletManager.tokens.first {
             $0.symbol.caseInsensitiveCompare(transaction.token) == .orderedSame &&
-            $0.blockchain == transaction.inferredBlockchain
+            $0.blockchain == transaction.resolvedBlockchain
         } ?? walletManager.tokens.first {
             $0.symbol.caseInsensitiveCompare(transaction.token) == .orderedSame
         } ?? Token(
@@ -596,8 +681,8 @@ struct TransactionTokenIcon: View {
             balance: 0,
             price: 0,
             iconUrl: nil,
-            blockchain: transaction.inferredBlockchain,
-            isNative: transaction.inferredBlockchain.nativeToken.caseInsensitiveCompare(transaction.token) == .orderedSame
+            blockchain: transaction.resolvedBlockchain,
+            isNative: transaction.resolvedBlockchain.nativeToken.caseInsensitiveCompare(transaction.token) == .orderedSame
         )
     }
 
@@ -768,6 +853,12 @@ extension Transaction {
         let address = type == .send || type == .withdraw ? to : from
         guard address.count > 12 else { return address }
         return "\(address.prefix(6))…\(address.suffix(4))"
+    }
+
+    /// Real network of the transaction; explorer-URL inference only covers
+    /// legacy cached entries that predate the `blockchain` field.
+    var resolvedBlockchain: BlockchainType {
+        blockchain ?? inferredBlockchain
     }
 
     var inferredBlockchain: BlockchainType {

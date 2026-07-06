@@ -50,7 +50,7 @@ struct NetworkConfig: Identifiable, Codable, Equatable {
             id: UUID(uuidString: "11111111-1111-1111-1111-111111111111")!,
             name: "Ethereum",
             chainId: 1,
-            rpcUrl: "https://eth.llamarpc.com",
+            rpcUrl: "https://ethereum-rpc.publicnode.com",
             symbol: "ETH",
             blockExplorerUrl: "https://etherscan.io",
             blockchain: .ethereum
@@ -94,7 +94,7 @@ struct NetworkConfig: Identifiable, Codable, Equatable {
             id: UUID(uuidString: "55555555-5555-5555-5555-555555555555")!,
             name: "Polygon",
             chainId: 137,
-            rpcUrl: "https://polygon-rpc.com",
+            rpcUrl: "https://polygon-bor-rpc.publicnode.com",
             symbol: "MATIC",
             blockExplorerUrl: "https://polygonscan.com",
             blockchain: .polygon

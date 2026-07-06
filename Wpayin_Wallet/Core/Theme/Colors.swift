@@ -31,19 +31,88 @@ extension Color {
     static let tokenSol = Color(red: 0.6, green: 0.271, blue: 1.0) // #9945FF
 }
 
+// MARK: - App color themes (user-selectable accent palette)
+
+enum AppColorTheme: String, CaseIterable, Identifiable {
+    case indigo
+    case emerald
+    case amber
+    case rose
+    case sky
+
+    var id: String { rawValue }
+
+    /// Display name — pass through .localized at render time.
+    var displayName: String {
+        switch self {
+        case .indigo: return "Indigo"
+        case .emerald: return "Emerald"
+        case .amber: return "Amber"
+        case .rose: return "Rose"
+        case .sky: return "Sky"
+        }
+    }
+
+    var primary: Color {
+        switch self {
+        case .indigo: return Color.wpayinBlue // #718AF8
+        case .emerald: return Color(red: 0.204, green: 0.827, blue: 0.6) // #34D399
+        case .amber: return Color(red: 0.961, green: 0.62, blue: 0.043) // #F59E0B
+        case .rose: return Color(red: 0.984, green: 0.443, blue: 0.522) // #FB7185
+        case .sky: return Color(red: 0.22, green: 0.741, blue: 0.973) // #38BDF8
+        }
+    }
+
+    var primaryDark: Color {
+        switch self {
+        case .indigo: return Color.wpayinBlueDark // #5568D3
+        case .emerald: return Color(red: 0.063, green: 0.588, blue: 0.412) // #109669
+        case .amber: return Color(red: 0.851, green: 0.467, blue: 0.024) // #D97706
+        case .rose: return Color(red: 0.882, green: 0.267, blue: 0.369) // #E1445E
+        case .sky: return Color(red: 0.055, green: 0.647, blue: 0.914) // #0EA5E9
+        }
+    }
+
+    var accent: Color {
+        switch self {
+        case .indigo: return Color.wpayinViolet // #8B68F6
+        case .emerald: return Color(red: 0.176, green: 0.831, blue: 0.749) // #2DD4BF
+        case .amber: return Color(red: 0.976, green: 0.451, blue: 0.086) // #F97316
+        case .rose: return Color(red: 0.957, green: 0.447, blue: 0.714) // #F472B6
+        case .sky: return Color(red: 0.133, green: 0.827, blue: 0.933) // #22D3EE
+        }
+    }
+
+    static let storageKey = "AppColorTheme"
+
+    static func loadSaved() -> AppColorTheme {
+        guard let raw = UserDefaults.standard.string(forKey: storageKey),
+              let theme = AppColorTheme(rawValue: raw) else {
+            return .indigo
+        }
+        return theme
+    }
+}
+
 struct WpayinColors {
-    // Primary colors matching the design specification
-    static let primary = Color.wpayinBlue
-    static let primaryDark = Color.wpayinBlueDark
-    static let accent = Color.wpayinViolet
+    /// Active theme — loaded at startup, updated by SettingsManager.updateColorTheme
+    /// (which also bumps refreshID so the whole UI redraws).
+    static var currentTheme: AppColorTheme = AppColorTheme.loadSaved()
+
+    // Primary colors follow the selected theme
+    static var primary: Color { currentTheme.primary }
+    static var primaryDark: Color { currentTheme.primaryDark }
+    static var accent: Color { currentTheme.accent }
     static let secondary = Color.wpayinWhite
 
-    // Signature accent gradient (indigo → violet)
-    static let accentGradient = LinearGradient(
-        gradient: Gradient(colors: [Color.wpayinBlue, Color.wpayinViolet]),
-        startPoint: .topLeading,
-        endPoint: .bottomTrailing
-    )
+    // Signature accent gradient (primary → accent)
+    static var accentGradient: LinearGradient {
+        LinearGradient(
+            gradient: Gradient(colors: [currentTheme.primary, currentTheme.accent]),
+            startPoint: .topLeading,
+            endPoint: .bottomTrailing
+        )
+    }
 
     // Background colors with gradient support
     static let background = Color.wpayinBlack

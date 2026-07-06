@@ -196,7 +196,7 @@ struct RecoveryPhraseView: View {
 
     private func copyToClipboard() {
         guard let phrase = recoveryPhrase else { return }
-        UIPasteboard.general.string = phrase
+        AppToast.copyToClipboard(phrase)
         copied = true
 
         DispatchQueue.main.asyncAfter(deadline: .now() + 2) {

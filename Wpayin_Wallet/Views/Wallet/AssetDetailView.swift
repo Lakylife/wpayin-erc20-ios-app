@@ -812,8 +812,13 @@ struct AssetTransactionHistoryView: View {
     @State private var selectedTransaction: Transaction?
 
     var relevantTransactions: [Transaction] {
+        // Each network keeps its own history — ETH on Arbitrum must not show
+        // Ethereum-mainnet transactions.
         return walletManager.transactions
-            .filter { $0.token.caseInsensitiveCompare(token.symbol) == .orderedSame }
+            .filter {
+                $0.token.caseInsensitiveCompare(token.symbol) == .orderedSame &&
+                $0.resolvedBlockchain == token.blockchain
+            }
             .sorted { $0.timestamp > $1.timestamp }
             .prefix(3)
             .map { $0 }

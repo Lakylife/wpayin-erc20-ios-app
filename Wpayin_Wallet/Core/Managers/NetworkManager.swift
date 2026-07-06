@@ -64,9 +64,10 @@ class NetworkManager {
                 blockchain: .ethereum,
                 chainId: 1,
                 rpcSources: [
+                    // 2026-07: eth.llamarpc.com is down (HTTP 521) and rpc.ankr.com
+                    // requires an API key — PublicNode is the reliable free node.
+                    RPCSource(name: "PublicNode", urls: ["https://ethereum-rpc.publicnode.com"]),
                     RPCSource(name: "LlamaNodes", urls: ["https://eth.llamarpc.com"]),
-                    RPCSource(name: "Ankr", urls: ["https://rpc.ankr.com/eth"]),
-                    RPCSource(name: "PublicNode", urls: ["https://ethereum.publicnode.com"]),
                     RPCSource(name: "Cloudflare", urls: ["https://cloudflare-eth.com"])
                 ],
                 explorerUrl: "https://etherscan.io",
@@ -83,7 +84,6 @@ class NetworkManager {
                 rpcSources: [
                     RPCSource(name: "Binance", urls: ["https://bsc-dataseed.binance.org"]),
                     RPCSource(name: "BSC RPC", urls: ["https://bsc-dataseed1.defibit.io"]),
-                    RPCSource(name: "Ankr", urls: ["https://rpc.ankr.com/bsc"]),
                     RPCSource(name: "PublicNode", urls: ["https://bsc-rpc.publicnode.com"])
                 ],
                 explorerUrl: "https://bscscan.com",
@@ -98,10 +98,9 @@ class NetworkManager {
                 blockchain: .polygon,
                 chainId: 137,
                 rpcSources: [
-                    RPCSource(name: "Polygon RPC", urls: ["https://polygon-rpc.com"]),
-                    RPCSource(name: "LlamaNodes", urls: ["https://polygon.llamarpc.com"]),
-                    RPCSource(name: "Ankr", urls: ["https://rpc.ankr.com/polygon"]),
-                    RPCSource(name: "PublicNode", urls: ["https://polygon-bor.publicnode.com"])
+                    // 2026-07: polygon-rpc.com returns HTTP 401 ("tenant disabled")
+                    RPCSource(name: "PublicNode", urls: ["https://polygon-bor-rpc.publicnode.com"]),
+                    RPCSource(name: "Polygon RPC", urls: ["https://polygon-rpc.com"])
                 ],
                 explorerUrl: "https://polygonscan.com",
                 supportsEIP1559: true,
@@ -116,8 +115,7 @@ class NetworkManager {
                 chainId: 42161,
                 rpcSources: [
                     RPCSource(name: "Arbitrum", urls: ["https://arb1.arbitrum.io/rpc"]),
-                    RPCSource(name: "Ankr", urls: ["https://rpc.ankr.com/arbitrum"]),
-                    RPCSource(name: "PublicNode", urls: ["https://arbitrum-one.publicnode.com"])
+                    RPCSource(name: "PublicNode", urls: ["https://arbitrum-one-rpc.publicnode.com"])
                 ],
                 explorerUrl: "https://arbiscan.io",
                 supportsEIP1559: true,
@@ -132,8 +130,7 @@ class NetworkManager {
                 chainId: 10,
                 rpcSources: [
                     RPCSource(name: "Optimism", urls: ["https://mainnet.optimism.io"]),
-                    RPCSource(name: "Ankr", urls: ["https://rpc.ankr.com/optimism"]),
-                    RPCSource(name: "PublicNode", urls: ["https://optimism.publicnode.com"])
+                    RPCSource(name: "PublicNode", urls: ["https://optimism-rpc.publicnode.com"])
                 ],
                 explorerUrl: "https://optimistic.etherscan.io",
                 supportsEIP1559: true,
@@ -148,8 +145,7 @@ class NetworkManager {
                 chainId: 43114,
                 rpcSources: [
                     RPCSource(name: "Avax Network", urls: ["https://api.avax.network/ext/bc/C/rpc"]),
-                    RPCSource(name: "PublicNode", urls: ["https://avalanche-evm.publicnode.com"]),
-                    RPCSource(name: "Ankr", urls: ["https://rpc.ankr.com/avalanche"])
+                    RPCSource(name: "PublicNode", urls: ["https://avalanche-c-chain-rpc.publicnode.com"])
                 ],
                 explorerUrl: "https://snowtrace.io",
                 supportsEIP1559: true,
@@ -164,8 +160,7 @@ class NetworkManager {
                 chainId: 8453,
                 rpcSources: [
                     RPCSource(name: "Base", urls: ["https://mainnet.base.org"]),
-                    RPCSource(name: "PublicNode", urls: ["https://base-rpc.publicnode.com"]),
-                    RPCSource(name: "Ankr", urls: ["https://rpc.ankr.com/base"])
+                    RPCSource(name: "PublicNode", urls: ["https://base-rpc.publicnode.com"])
                 ],
                 explorerUrl: "https://basescan.org",
                 supportsEIP1559: true,
@@ -195,7 +190,7 @@ class NetworkManager {
             return NetworkConfiguration(
                 blockchain: blockchain,
                 chainId: 1,
-                rpcSources: [RPCSource(name: "Default", urls: ["https://eth.llamarpc.com"])],
+                rpcSources: [RPCSource(name: "Default", urls: ["https://ethereum-rpc.publicnode.com"])],
                 explorerUrl: "https://etherscan.io",
                 supportsEIP1559: false,
                 nativeSymbol: "ETH",

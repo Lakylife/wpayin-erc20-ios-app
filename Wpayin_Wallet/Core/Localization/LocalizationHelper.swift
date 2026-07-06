@@ -148,6 +148,21 @@ enum L10n {
         static let related = "help.related"
     }
 
+    // MARK: - Bridge
+    enum Bridge {
+        static let title = "bridge.title"
+        static let fromNetwork = "bridge.fromNetwork"
+        static let toNetwork = "bridge.toNetwork"
+        static let provider = "bridge.provider"
+        static let estimatedTime = "bridge.estimatedTime"
+        static let review = "bridge.review"
+        static let gettingQuote = "bridge.gettingQuote"
+        static let bridging = "bridge.bridging"
+        static let submitted = "bridge.submitted"
+        static let failed = "bridge.failed"
+        static let sameNetwork = "bridge.sameNetwork"
+    }
+
     // MARK: - Swap
     enum Swap {
         static let title = "swap.title"
@@ -161,7 +176,14 @@ enum L10n {
         static let selectNetwork = "swap.selectNetwork"
         static let slippageTolerance = "swap.slippageTolerance"
         static let slippageWarning = "swap.slippageWarning"
+        static let slippageHighWarning = "swap.slippageHighWarning"
         static let gasSpeed = "swap.gasSpeed"
+        static let youPay = "swap.youPay"
+        static let youReceive = "swap.youReceive"
+        static let estimatedAmount = "swap.estimatedAmount"
+        static let minimumReceived = "swap.minimumReceived"
+        static let review = "swap.review"
+        static let confirm = "swap.confirm"
     }
 
     // MARK: - Activity
