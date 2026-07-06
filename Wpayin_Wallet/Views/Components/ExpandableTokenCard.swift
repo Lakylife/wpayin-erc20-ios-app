@@ -48,6 +48,8 @@ struct ExpandableTokenCard: View {
                                 .font(.system(size: 13))
                                 .foregroundColor(WpayinColors.textSecondary)
 
+                            PriceChangeLabel(change: walletManager.priceChanges24h[token.symbol.uppercased()])
+
                             if networksForToken.count > 1 {
                                 HStack(spacing: -4) {
                                     ForEach(Array(networksForToken.prefix(3)), id: \.self) { network in
@@ -108,6 +110,9 @@ struct ExpandableTokenCard: View {
                 )
             }
             .buttonStyle(PlainButtonStyle())
+            .contextMenu {
+                FavoriteToggleButton(symbol: token.symbol)
+            }
 
             // Expanded network rows
             if isExpanded && networksForToken.count > 1 {
@@ -216,6 +221,73 @@ struct ExpandableTokenCard: View {
         case "USDC": return "◎"
         case "SOL": return "◎"
         default: return String(token.symbol.prefix(1))
+        }
+    }
+}
+
+/// Context-menu button that adds/removes a token from Favorites.
+struct FavoriteToggleButton: View {
+    let symbol: String
+    @EnvironmentObject var settingsManager: SettingsManager
+
+    var body: some View {
+        Button {
+            settingsManager.toggleFavoriteToken(symbol)
+        } label: {
+            if settingsManager.isFavoriteToken(symbol) {
+                Label("Remove from Favorites".localized, systemImage: "star.slash")
+            } else {
+                Label("Add to Favorites".localized, systemImage: "star")
+            }
+        }
+    }
+}
+
+/// Dense single-line row — the "Compact List" asset display style.
+struct CompactTokenRow: View {
+    let token: Token
+    let onTap: () -> Void
+    @EnvironmentObject var settingsManager: SettingsManager
+
+    var body: some View {
+        Button(action: onTap) {
+            HStack(spacing: 12) {
+                TokenIconView(token: token, size: 32, showNetworkBadge: false)
+
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(token.symbol)
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundColor(WpayinColors.text)
+
+                    Text(token.price.formatted(as: settingsManager.selectedCurrency))
+                        .font(.system(size: 12))
+                        .foregroundColor(WpayinColors.textTertiary)
+                }
+
+                Spacer()
+
+                VStack(alignment: .trailing, spacing: 1) {
+                    Text(token.totalValue.formatted(as: settingsManager.selectedCurrency))
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundColor(WpayinColors.text)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.7)
+
+                    Text(TokenIconHelper.formattedBalanceWithSymbol(token.balance, symbol: token.symbol))
+                        .font(.system(size: 12))
+                        .foregroundColor(WpayinColors.textTertiary)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.7)
+                }
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 10)
+            .background(WpayinColors.surfaceLight.opacity(0.5))
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(PlainButtonStyle())
+        .contextMenu {
+            FavoriteToggleButton(symbol: token.symbol)
         }
     }
 }

@@ -23,6 +23,8 @@ struct Transaction: Identifiable, Codable {
     let gasFee: Double
     let blockNumber: String?
     let explorerUrl: URL?
+    /// Network the transaction happened on; nil only for legacy cached entries.
+    let blockchain: BlockchainType?
 
     enum TransactionType: String, CaseIterable, Codable {
         case send = "send"
@@ -69,6 +71,7 @@ struct Transaction: Identifiable, Codable {
         gasFee: Double,
         blockNumber: String? = nil,
         explorerUrl: URL? = nil,
+        blockchain: BlockchainType? = nil,
         id: UUID = UUID()
     ) {
         self.id = id
@@ -84,6 +87,7 @@ struct Transaction: Identifiable, Codable {
         self.gasFee = gasFee
         self.blockNumber = blockNumber
         self.explorerUrl = explorerUrl
+        self.blockchain = blockchain
     }
 
     private enum CodingKeys: String, CodingKey {
@@ -100,6 +104,7 @@ struct Transaction: Identifiable, Codable {
         case gasFee
         case blockNumber
         case explorerUrl
+        case blockchain
     }
 
     init(from decoder: Decoder) throws {
@@ -123,6 +128,7 @@ struct Transaction: Identifiable, Codable {
         gasFee = try container.decode(Double.self, forKey: .gasFee)
         blockNumber = try container.decodeIfPresent(String.self, forKey: .blockNumber)
         explorerUrl = try container.decodeIfPresent(URL.self, forKey: .explorerUrl)
+        blockchain = try container.decodeIfPresent(BlockchainType.self, forKey: .blockchain)
         id = try container.decodeIfPresent(UUID.self, forKey: .id) ?? UUID()
     }
 
@@ -141,5 +147,6 @@ struct Transaction: Identifiable, Codable {
         try container.encode(gasFee, forKey: .gasFee)
         try container.encodeIfPresent(blockNumber, forKey: .blockNumber)
         try container.encodeIfPresent(explorerUrl, forKey: .explorerUrl)
+        try container.encodeIfPresent(blockchain, forKey: .blockchain)
     }
 }

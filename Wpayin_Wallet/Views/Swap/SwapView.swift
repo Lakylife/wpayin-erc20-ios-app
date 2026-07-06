@@ -60,6 +60,8 @@ struct SwapView: View {
     @State private var swapErrorMessage = ""
     @State private var showSwapSuccess = false
     @State private var swapSuccessMessage = ""
+    @State private var showReviewSwap = false
+    @State private var isBridgeMode = false
 
     init(initialFromToken: Token? = nil) {
         self.initialFromToken = initialFromToken
@@ -111,7 +113,7 @@ struct SwapView: View {
               let to = selectedToToken,
               let amount = Double(fromAmount),
               amount > 0 else { return false }
-        return from.id != to.id && amount <= from.balance
+        return tokenIdentity(from) != tokenIdentity(to) && amount <= from.balance
     }
 
     private var estimatedGasFee: Double {
@@ -147,224 +149,41 @@ struct SwapView: View {
         return estimatedGasFee * token.price
     }
 
+    private var portfolioBalance: Double {
+        walletManager.visibleGroupedTokens.reduce(0) { $0 + $1.totalValue }
+    }
+
+    private var minimumReceived: Double {
+        estimatedToAmount * max(0, 1 - (slippage / 100))
+    }
+
+    private var estimatedAmountText: String {
+        formattedTokenAmount(estimatedToAmount)
+    }
+
     var body: some View {
         ZStack {
-            // Background gradient
-            LinearGradient(
-                gradient: Gradient(colors: [
-                    WpayinColors.backgroundGradientStart,
-                    WpayinColors.backgroundGradientEnd
-                ]),
-                startPoint: .top,
-                endPoint: .bottom
-            )
-            .ignoresSafeArea(.all)
+            swapBackground
 
             VStack(spacing: 0) {
-                // Header
-                HStack {
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text(L10n.Swap.title.localized)
-                            .font(.system(size: 28, weight: .bold))
-                            .foregroundColor(WpayinColors.text)
+                header
+                modePicker
 
-                        Text(L10n.Swap.subtitle.localized)
-                            .font(.system(size: 16))
-                            .foregroundColor(WpayinColors.textSecondary)
+                if isBridgeMode {
+                    BridgeContentView()
+                } else {
+                    ScrollView(showsIndicators: false) {
+                        VStack(spacing: 16) {
+                            balanceAndNetworkRow
+                            swapCard
+                            swapDetailsCard
+                            Spacer(minLength: 16)
+                        }
+                        .padding(.horizontal, 20)
+                        .padding(.bottom, 10)
                     }
-
-                    Spacer()
+                    bottomAction
                 }
-                .padding(.horizontal, 20)
-                .padding(.top, 60)
-                .padding(.bottom, 20)
-
-                // Swap Content
-                ScrollView {
-                    VStack(spacing: 20) {
-                        // Network Selector
-                        if !availableNetworks.isEmpty {
-                            NetworkSelectorButton(
-                                selectedNetwork: $selectedNetwork,
-                                availableNetworks: availableNetworks,
-                                onTap: { showNetworkSelector = true }
-                            )
-                        }
-                        
-                        // Swap Card
-                        VStack(spacing: 0) {
-                            // From Token Section
-                            ModernTokenSelector(
-                                title: L10n.Swap.from.localized,
-                                selectedToken: selectedFromToken,
-                                amount: $fromAmount,
-                                isInput: true,
-                                onTokenSelect: {
-                                    isSelectingFromToken = true
-                                    showTokenPicker = true
-                                }
-                            )
-
-                            // Swap Direction Button
-                            HStack {
-                                Spacer()
-
-                                Button(action: swapTokens) {
-                                    Circle()
-                                        .fill(WpayinColors.primary)
-                                        .frame(width: 44, height: 44)
-                                        .overlay(
-                                            Image(systemName: "arrow.up.arrow.down")
-                                                .font(.system(size: 18, weight: .semibold))
-                                                .foregroundColor(.white)
-                                        )
-                                        .shadow(color: WpayinColors.primary.opacity(0.3), radius: 8, x: 0, y: 4)
-                                }
-
-                                Spacer()
-                            }
-                            .padding(.vertical, -22)
-                            .zIndex(1)
-
-                            // To Token Section
-                            ModernTokenSelector(
-                                title: L10n.Swap.to.localized,
-                                selectedToken: selectedToToken,
-                                amount: .constant(String(format: "%.6f", estimatedToAmount)),
-                                isInput: false,
-                                onTokenSelect: {
-                                    isSelectingFromToken = false
-                                    showTokenPicker = true
-                                }
-                            )
-                        }
-                        .background(
-                            RoundedRectangle(cornerRadius: 20)
-                                .fill(WpayinColors.surface)
-                                .shadow(color: Color.black.opacity(0.1), radius: 10, x: 0, y: 5)
-                        )
-
-                        // Exchange Rate & Details
-                        if let from = selectedFromToken, let to = selectedToToken, swapRate > 0 {
-                            VStack(spacing: 16) {
-                                // Exchange Rate
-                                HStack {
-                                    Text("1 \(from.symbol) = \(String(format: "%.6f", swapRate)) \(to.symbol)")
-                                        .font(.system(size: 14))
-                                        .foregroundColor(WpayinColors.textSecondary)
-
-                                    Spacer()
-
-                                    Button(action: {}) {
-                                        Image(systemName: "arrow.clockwise")
-                                            .font(.system(size: 12))
-                                            .foregroundColor(WpayinColors.primary)
-                                    }
-                                }
-                                .padding(.horizontal, 16)
-                                .padding(.vertical, 12)
-                                .background(WpayinColors.surface.opacity(0.5))
-                                .cornerRadius(12)
-
-                                // Gas Fee with Speed Selection
-                                Button(action: { showGasSettings.toggle() }) {
-                                    HStack {
-                                        VStack(alignment: .leading, spacing: 2) {
-                                            Text(L10n.Swap.networkFee.localized)
-                                                .font(.system(size: 14))
-                                                .foregroundColor(WpayinColors.textSecondary)
-
-                                            HStack(spacing: 4) {
-                                                Image(systemName: selectedGasSpeed.icon)
-                                                    .font(.system(size: 10))
-                                                Text(selectedGasSpeed.displayName)
-                                                    .font(.system(size: 12))
-                                            }
-                                            .foregroundColor(WpayinColors.primary)
-                                        }
-
-                                        Spacer()
-
-                                        VStack(alignment: .trailing, spacing: 2) {
-                                            Text("~\(String(format: "%.4f", estimatedGasFee)) \(from.symbol)")
-                                                .font(.system(size: 14, weight: .medium))
-                                                .foregroundColor(WpayinColors.text)
-
-                                            Text(gasFeeInUSD.formatted(as: settingsManager.selectedCurrency))
-                                                .font(.system(size: 12))
-                                                .foregroundColor(WpayinColors.textTertiary)
-                                        }
-
-                                        Image(systemName: "chevron.right")
-                                            .font(.system(size: 12))
-                                            .foregroundColor(WpayinColors.textTertiary)
-                                    }
-                                    .padding(.horizontal, 16)
-                                    .padding(.vertical, 12)
-                                    .background(WpayinColors.surface.opacity(0.5))
-                                    .cornerRadius(12)
-                                }
-                                .buttonStyle(PlainButtonStyle())
-
-                                // Slippage Settings
-                                HStack {
-                                    Text("\(L10n.Swap.slippage.localized): \(String(format: "%.1f", slippage))%")
-                                        .font(.system(size: 14))
-                                        .foregroundColor(WpayinColors.textSecondary)
-
-                                    Spacer()
-
-                                    Button(L10n.Action.edit.localized) {
-                                        showSlippageSettings = true
-                                    }
-                                    .font(.system(size: 14, weight: .medium))
-                                    .foregroundColor(WpayinColors.primary)
-                                }
-                                .padding(.horizontal, 16)
-                                .padding(.vertical, 12)
-                                .background(WpayinColors.surface.opacity(0.5))
-                                .cornerRadius(12)
-                            }
-                        }
-
-                        Spacer(minLength: 100)
-                    }
-                    .padding(.horizontal, 20)
-                }
-
-                // Bottom Action
-                VStack(spacing: 12) {
-                    if !isValidSwap && !fromAmount.isEmpty {
-                        Text(invalidSwapReason)
-                            .font(.system(size: 14))
-                            .foregroundColor(WpayinColors.error)
-                            .padding(.horizontal, 20)
-                    }
-
-                    Button(action: {
-                        if isValidSwap {
-                            performSwap()
-                        }
-                    }) {
-                        Text(isSwapping ? "Swapping...".localized : L10n.Swap.title.localized)
-                            .font(.system(size: 18, weight: .semibold))
-                            .foregroundColor(.white)
-                            .frame(maxWidth: .infinity)
-                            .padding(.vertical, 16)
-                            .background(
-                                RoundedRectangle(cornerRadius: 16)
-                                    .fill(isValidSwap ? WpayinColors.primary : WpayinColors.textTertiary)
-                            )
-                    }
-                    .disabled(!isValidSwap || isSwapping)
-                    .padding(.horizontal, 20)
-                }
-                .padding(.bottom, 34)
-                .background(
-                    Rectangle()
-                        .fill(WpayinColors.background.opacity(0.95))
-                        .background(.ultraThinMaterial)
-                )
             }
         }
         .sheet(isPresented: $showTokenPicker) {
@@ -385,12 +204,31 @@ struct SwapView: View {
         }
         .sheet(isPresented: $showSlippageSettings) {
             SlippageSettingsSheet(slippage: $slippage)
+                .swapReviewPresentation()
         }
         .sheet(isPresented: $showNetworkSelector) {
             NetworkSelectorSheet(
                 selectedNetwork: $selectedNetwork,
                 availableNetworks: availableNetworks
             )
+        }
+        .sheet(isPresented: $showReviewSwap) {
+            if let fromToken = selectedFromToken,
+               let toToken = selectedToToken,
+               let amount = Double(fromAmount) {
+                SwapReviewSheet(
+                    fromToken: fromToken,
+                    toToken: toToken,
+                    fromAmount: amount,
+                    toAmount: estimatedToAmount,
+                    minimumReceived: minimumReceived,
+                    rate: swapRate,
+                    isSwapping: isSwapping,
+                    onConfirm: performSwap
+                )
+                .environmentObject(settingsManager)
+                .swapReviewPresentation()
+            }
         }
         .onAppear {
             ensureSelectedNetworkIsAvailable()
@@ -420,6 +258,349 @@ struct SwapView: View {
         } message: {
             Text(swapSuccessMessage)
         }
+    }
+
+    private var swapBackground: some View {
+        ZStack {
+            LinearGradient(
+                colors: [
+                    WpayinColors.backgroundGradientStart,
+                    WpayinColors.backgroundGradientEnd
+                ],
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            )
+
+            Circle()
+                .fill(WpayinColors.primary.opacity(0.12))
+                .frame(width: 280, height: 280)
+                .blur(radius: 80)
+                .offset(x: -170, y: -260)
+
+            Circle()
+                .fill(WpayinColors.accent.opacity(0.08))
+                .frame(width: 260, height: 260)
+                .blur(radius: 90)
+                .offset(x: 180, y: 120)
+        }
+        .ignoresSafeArea()
+    }
+
+    private var header: some View {
+        HStack {
+            Color.clear
+                .frame(width: 44, height: 44)
+
+            Spacer()
+
+            Text((isBridgeMode ? L10n.Bridge.title : L10n.Swap.title).localized)
+                .font(.system(size: 22, weight: .bold, design: .rounded))
+                .foregroundColor(WpayinColors.text)
+
+            Spacer()
+
+            Button {
+                showSlippageSettings = true
+            } label: {
+                Image(systemName: "slider.horizontal.3")
+                    .font(.system(size: 17, weight: .semibold))
+                    .foregroundColor(WpayinColors.text)
+                    .frame(width: 44, height: 44)
+                    .background(
+                        RoundedRectangle(cornerRadius: 14, style: .continuous)
+                            .fill(WpayinColors.surfaceLight)
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                                    .stroke(WpayinColors.surfaceBorder, lineWidth: 1)
+                            )
+                    )
+            }
+            .buttonStyle(WpayinPressableStyle())
+            .accessibilityLabel(L10n.Swap.slippageTolerance.localized)
+            .opacity(isBridgeMode ? 0 : 1)
+            .disabled(isBridgeMode)
+        }
+        .padding(.horizontal, 20)
+        .padding(.top, 8)
+        .padding(.bottom, 14)
+    }
+
+    private var modePicker: some View {
+        HStack(spacing: 4) {
+            modeButton(bridge: false, label: L10n.Swap.title.localized, icon: "arrow.up.arrow.down")
+            modeButton(bridge: true, label: L10n.Bridge.title.localized, icon: "link")
+        }
+        .padding(4)
+        .background(
+            Capsule()
+                .fill(WpayinColors.surface)
+                .overlay(
+                    Capsule()
+                        .stroke(WpayinColors.surfaceBorder, lineWidth: 1)
+                )
+        )
+        .padding(.horizontal, 20)
+        .padding(.bottom, 14)
+    }
+
+    private func modeButton(bridge: Bool, label: String, icon: String) -> some View {
+        let isSelected = isBridgeMode == bridge
+        return Button {
+            withAnimation(.easeOut(duration: 0.2)) {
+                isBridgeMode = bridge
+            }
+        } label: {
+            HStack(spacing: 7) {
+                Image(systemName: icon)
+                    .font(.system(size: 13, weight: .semibold))
+
+                Text(label)
+                    .font(.system(size: 14, weight: .semibold, design: .rounded))
+            }
+            .foregroundColor(isSelected ? .white : WpayinColors.textSecondary)
+            .frame(maxWidth: .infinity)
+            .frame(height: 38)
+            .background(
+                Capsule()
+                    .fill(isSelected ? AnyShapeStyle(WpayinColors.accentGradient) : AnyShapeStyle(Color.clear))
+            )
+        }
+        .buttonStyle(WpayinPressableStyle())
+    }
+
+    private var balanceAndNetworkRow: some View {
+        HStack(spacing: 12) {
+            VStack(alignment: .leading, spacing: 3) {
+                Text(L10n.Tokens.balance.localized)
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundColor(WpayinColors.textSecondary)
+
+                Text(portfolioBalance.formatted(as: settingsManager.selectedCurrency))
+                    .font(.system(size: 18, weight: .semibold, design: .rounded))
+                    .foregroundColor(WpayinColors.text)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.75)
+            }
+
+            Spacer(minLength: 8)
+
+            if !availableNetworks.isEmpty {
+                NetworkSelectorButton(
+                    selectedNetwork: $selectedNetwork,
+                    availableNetworks: availableNetworks,
+                    onTap: { showNetworkSelector = true }
+                )
+            }
+        }
+    }
+
+    private var swapCard: some View {
+        ZStack {
+            VStack(spacing: 10) {
+                ModernTokenSelector(
+                    title: L10n.Swap.youPay.localized,
+                    selectedToken: selectedFromToken,
+                    amount: $fromAmount,
+                    isInput: true,
+                    onTokenSelect: {
+                        isSelectingFromToken = true
+                        showTokenPicker = true
+                    }
+                )
+
+                ModernTokenSelector(
+                    title: L10n.Swap.youReceive.localized,
+                    selectedToken: selectedToToken,
+                    amount: .constant(estimatedAmountText),
+                    isInput: false,
+                    onTokenSelect: {
+                        isSelectingFromToken = false
+                        showTokenPicker = true
+                    }
+                )
+            }
+
+            Button(action: swapTokens) {
+                Circle()
+                    .fill(WpayinColors.backgroundGradientStart)
+                    .frame(width: 48, height: 48)
+                    .overlay(
+                        Circle()
+                            .stroke(WpayinColors.primary, lineWidth: 1.5)
+                    )
+                    .overlay(
+                        Image(systemName: "arrow.up.arrow.down")
+                            .font(.system(size: 17, weight: .bold))
+                            .foregroundStyle(WpayinColors.accentGradient)
+                    )
+                    .shadow(color: WpayinColors.primary.opacity(0.32), radius: 12)
+            }
+            .buttonStyle(WpayinPressableStyle())
+        }
+    }
+
+    private var swapDetailsCard: some View {
+        VStack(spacing: 0) {
+            SwapDetailRow(
+                label: L10n.Swap.rate.localized,
+                value: rateDescription
+            )
+
+            detailDivider
+
+            Button {
+                showGasSettings = true
+            } label: {
+                SwapDetailRow(
+                    label: L10n.Swap.networkFee.localized,
+                    value: gasFeeInUSD > 0
+                        ? "≈ \(gasFeeInUSD.formatted(as: settingsManager.selectedCurrency))"
+                        : "—",
+                    showsInfo: true
+                )
+            }
+            .buttonStyle(PlainButtonStyle())
+
+            detailDivider
+
+            Button {
+                showSlippageSettings = true
+            } label: {
+                SwapDetailRow(
+                    label: L10n.Swap.slippageTolerance.localized,
+                    value: "\(String(format: "%.1f", slippage))%",
+                    showsInfo: true,
+                    highlightsValue: true
+                )
+            }
+            .buttonStyle(PlainButtonStyle())
+
+            detailDivider
+
+            SwapDetailRow(
+                label: L10n.Swap.minimumReceived.localized,
+                value: selectedToToken.map {
+                    "\(formattedTokenAmount(minimumReceived)) \($0.symbol)"
+                } ?? "—",
+                showsInfo: true,
+                highlightsValue: minimumReceived > 0
+            )
+        }
+        .background(
+            RoundedRectangle(cornerRadius: WpayinRadius.card, style: .continuous)
+                .fill(WpayinColors.surface)
+                .overlay(
+                    RoundedRectangle(cornerRadius: WpayinRadius.card, style: .continuous)
+                        .stroke(WpayinColors.surfaceBorder, lineWidth: 1)
+                )
+        )
+    }
+
+    private var detailDivider: some View {
+        Rectangle()
+            .fill(WpayinColors.surfaceBorder)
+            .frame(height: 1)
+            .padding(.horizontal, 16)
+    }
+
+    private var bottomAction: some View {
+        VStack(spacing: 8) {
+            if !isValidSwap && !fromAmount.isEmpty {
+                Text(invalidSwapReason)
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundColor(WpayinColors.error)
+                    .lineLimit(2)
+            }
+
+            Button {
+                if isValidSwap {
+                    showReviewSwap = true
+                }
+            } label: {
+                HStack(spacing: 9) {
+                    if isSwapping {
+                        ProgressView()
+                            .tint(.white)
+                    }
+
+                    Text(isSwapping ? "Swapping...".localized : L10n.Swap.review.localized)
+                        .font(.system(size: 17, weight: .bold))
+                }
+                .foregroundColor(isValidSwap ? .white : WpayinColors.textTertiary)
+                .frame(maxWidth: .infinity)
+                .frame(height: 54)
+                .background(
+                    RoundedRectangle(cornerRadius: 17, style: .continuous)
+                        .fill(
+                            LinearGradient(
+                                colors: isValidSwap
+                                    ? [WpayinColors.primary, WpayinColors.accent]
+                                    : [WpayinColors.surfaceLight, WpayinColors.surfaceLight],
+                                startPoint: .leading,
+                                endPoint: .trailing
+                            )
+                        )
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: 17, style: .continuous)
+                        .stroke(
+                            isValidSwap ? WpayinColors.primary.opacity(0.45) : WpayinColors.surfaceBorder,
+                            lineWidth: 1
+                        )
+                )
+                .shadow(
+                    color: isValidSwap ? WpayinColors.primary.opacity(0.24) : .clear,
+                    radius: 14,
+                    y: 7
+                )
+            }
+            .disabled(!isValidSwap || isSwapping)
+            .buttonStyle(WpayinPressableStyle())
+        }
+        .padding(.horizontal, 20)
+        .padding(.top, 10)
+        .padding(.bottom, 8)
+        .background(
+            LinearGradient(
+                colors: [
+                    WpayinColors.background.opacity(0),
+                    WpayinColors.background.opacity(0.96)
+                ],
+                startPoint: .top,
+                endPoint: .center
+            )
+        )
+    }
+
+    private var rateDescription: String {
+        guard let from = selectedFromToken,
+              let to = selectedToToken,
+              swapRate > 0 else {
+            return "—"
+        }
+        return "1 \(from.symbol) = \(formattedTokenAmount(swapRate)) \(to.symbol)"
+    }
+
+    private func formattedTokenAmount(_ value: Double) -> String {
+        guard value.isFinite, value > 0 else { return "0.0" }
+
+        let decimals: Int
+        if value >= 1_000 {
+            decimals = 2
+        } else if value >= 1 {
+            decimals = 4
+        } else {
+            decimals = 6
+        }
+
+        var result = String(format: "%.\(decimals)f", value)
+        while result.contains("."), result.last == "0" {
+            result.removeLast()
+        }
+        if result.last == "." {
+            result.append("0")
+        }
+        return result
     }
 
     private func ensureSelectedNetworkIsAvailable() {
@@ -458,7 +639,7 @@ struct SwapView: View {
         guard let to = selectedToToken else { return "Select a token to swap to".localized }
         guard let amount = Double(fromAmount) else { return "Enter a valid amount".localized }
 
-        if from.id == to.id {
+        if tokenIdentity(from) == tokenIdentity(to) {
             return "Cannot swap the same token".localized
         }
         if amount > from.balance {
@@ -549,130 +730,342 @@ struct ModernTokenSelector: View {
     @EnvironmentObject var settingsManager: SettingsManager
 
     var body: some View {
-        VStack(spacing: 12) {
-            HStack {
-                Text(title.localized)
-                    .font(.system(size: 14, weight: .medium))
-                    .foregroundColor(WpayinColors.textSecondary)
+        VStack(alignment: .leading, spacing: 14) {
+            Text(title.localized)
+                .font(.system(size: 14, weight: .medium))
+                .foregroundColor(WpayinColors.textSecondary)
 
-                Spacer()
-
-                if let token = selectedToken {
-                    HStack(spacing: 8) {
-                        Text("\(L10n.Tokens.balance.localized): \(TokenIconHelper.formattedBalance(token.balance))")
-                            .font(.system(size: 12))
-                            .foregroundColor(WpayinColors.textSecondary)
-
-                        if isInput && token.balance > 0 {
-                            Button(action: {
-                                amount = TokenIconHelper.formattedBalance(token.balance)
-                            }) {
-                                Text("MAX".localized)
-                                    .font(.system(size: 11, weight: .bold))
-                                    .foregroundColor(WpayinColors.primary)
-                                    .padding(.horizontal, 8)
-                                    .padding(.vertical, 4)
-                                    .background(
-                                        RoundedRectangle(cornerRadius: 6)
-                                            .fill(WpayinColors.primary.opacity(0.1))
-                                    )
-                            }
-                        }
-                    }
-                }
-            }
-
-            HStack(spacing: 10) {
-                // Token Selector
-                Button(action: onTokenSelect) {
-                    HStack(spacing: 8) {
-                        if let token = selectedToken {
-                            TokenIconView(token: token, size: 30, showNetworkBadge: true)
-
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text(token.symbol)
-                                    .font(.system(size: 14, weight: .semibold))
-                                    .foregroundColor(WpayinColors.text)
-                                    .lineLimit(1)
-                                    .minimumScaleFactor(0.75)
-                                    .fixedSize(horizontal: true, vertical: false)
-
-                                Text(token.name)
-                                    .font(.system(size: 10))
-                                    .foregroundColor(WpayinColors.textSecondary)
-                                    .lineLimit(1)
-                                    .minimumScaleFactor(0.7)
-                            }
-                        } else {
-                            Text(L10n.Tokens.selectToken.localized)
-                                .font(.system(size: 14, weight: .medium))
-                                .foregroundColor(WpayinColors.textSecondary)
-                                .lineLimit(1)
-                                .minimumScaleFactor(0.75)
-                        }
-
-                        Image(systemName: "chevron.down")
-                            .font(.system(size: 12, weight: .medium))
-                            .foregroundColor(WpayinColors.textTertiary)
-                    }
-                    .frame(width: 132, alignment: .leading)
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 7)
-                    .background(
-                        RoundedRectangle(cornerRadius: 12)
-                            .fill(WpayinColors.background)
-                    )
-                }
-
-                Spacer()
-
-                // Amount Input
-                VStack(alignment: .trailing, spacing: 4) {
+            HStack(spacing: 12) {
+                Group {
                     if isInput {
                         TextField("0.0", text: $amount)
-                            .font(.system(size: 20, weight: .semibold))
-                            .foregroundColor(WpayinColors.text)
                             .keyboardType(.decimalPad)
-                            .multilineTextAlignment(.trailing)
-                            .lineLimit(1)
-                            .minimumScaleFactor(0.7)
+                            .multilineTextAlignment(.leading)
                     } else {
-                        Text(amount.isEmpty || amount == "0.000000" ? "0.0" : amount)
-                            .font(.system(size: 20, weight: .semibold))
-                            .foregroundColor(WpayinColors.textSecondary)
-                            .lineLimit(1)
-                            .minimumScaleFactor(0.7)
+                        Text(amount.isEmpty ? "0.0" : amount)
                     }
+                }
+                .font(.system(size: 34, weight: .semibold, design: .rounded))
+                .foregroundColor(isInput ? WpayinColors.text : WpayinColors.text.opacity(0.92))
+                .lineLimit(1)
+                .minimumScaleFactor(0.55)
+                .frame(maxWidth: .infinity, alignment: .leading)
 
-                    if let token = selectedToken, let amountValue = Double(amount), amountValue > 0 {
-                        Text("~\((amountValue * token.price).formatted(as: settingsManager.selectedCurrency))")
-                            .font(.system(size: 12))
-                            .foregroundColor(WpayinColors.textTertiary)
+                tokenButton
+            }
+
+            HStack(spacing: 8) {
+                Text(secondaryAmountText)
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundColor(WpayinColors.textSecondary)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.75)
+
+                Spacer(minLength: 6)
+
+                if let token = selectedToken {
+                    Text("\(L10n.Tokens.balance.localized): \(TokenIconHelper.formattedBalance(token.balance)) \(token.symbol)")
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundColor(WpayinColors.textSecondary)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.65)
+
+                    if isInput {
+                        Button {
+                            amount = maximumAmount(for: token)
+                        } label: {
+                            Text("MAX".localized)
+                                .font(.system(size: 11, weight: .bold))
+                                .foregroundColor(WpayinColors.primary)
+                                .padding(.horizontal, 9)
+                                .padding(.vertical, 6)
+                                .background(
+                                    RoundedRectangle(cornerRadius: 9, style: .continuous)
+                                        .fill(WpayinColors.primary.opacity(0.11))
+                                        .overlay(
+                                            RoundedRectangle(cornerRadius: 9, style: .continuous)
+                                                .stroke(WpayinColors.primary.opacity(0.65), lineWidth: 1)
+                                        )
+                                )
+                        }
+                        .buttonStyle(WpayinPressableStyle())
+                        .disabled(token.balance <= 0)
+                        .opacity(token.balance > 0 ? 1 : 0.45)
                     }
                 }
             }
         }
-        .padding(16)
+        .padding(18)
+        .background(
+            RoundedRectangle(cornerRadius: WpayinRadius.card, style: .continuous)
+                .fill(
+                    LinearGradient(
+                        colors: [
+                            WpayinColors.primary.opacity(isInput ? 0.11 : 0.075),
+                            WpayinColors.surface,
+                            WpayinColors.surface
+                        ],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    )
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: WpayinRadius.card, style: .continuous)
+                        .stroke(
+                            isInput
+                                ? WpayinColors.primary.opacity(0.32)
+                                : WpayinColors.surfaceBorder,
+                            lineWidth: 1
+                        )
+                )
+        )
     }
 
-    private func tokenGradient(for token: Token) -> LinearGradient {
-        let colors: [Color]
-        switch token.symbol.uppercased() {
-        case "ETH":
-            colors = [Color.blue, Color.cyan]
-        case "BTC":
-            colors = [Color.orange, Color.yellow]
-        case "USDT", "USDC":
-            colors = [Color.green, Color.mint]
-        default:
-            colors = [WpayinColors.primary, WpayinColors.primary.opacity(0.7)]
-        }
+    private var tokenButton: some View {
+        Button(action: onTokenSelect) {
+            HStack(spacing: 8) {
+                if let token = selectedToken {
+                    TokenIconView(token: token, size: 34, showNetworkBadge: true)
 
-        return LinearGradient(
-            gradient: Gradient(colors: colors),
-            startPoint: .topLeading,
-            endPoint: .bottomTrailing
-        )
+                    Text(token.symbol)
+                        .font(.system(size: 17, weight: .bold, design: .rounded))
+                        .foregroundColor(WpayinColors.text)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.75)
+                } else {
+                    Text(L10n.Tokens.selectToken.localized)
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundColor(WpayinColors.text)
+                        .lineLimit(1)
+                }
+
+                Image(systemName: "chevron.down")
+                    .font(.system(size: 11, weight: .bold))
+                    .foregroundColor(WpayinColors.textSecondary)
+            }
+            .padding(.leading, 9)
+            .padding(.trailing, 11)
+            .frame(height: 48)
+            .background(
+                Capsule()
+                    .fill(WpayinColors.surfaceLight)
+                    .overlay(
+                        Capsule()
+                            .stroke(WpayinColors.surfaceBorder, lineWidth: 1)
+                    )
+            )
+        }
+        .buttonStyle(WpayinPressableStyle())
+    }
+
+    private var secondaryAmountText: String {
+        guard isInput,
+              let token = selectedToken,
+              let amountValue = Double(amount),
+              amountValue > 0 else {
+            return isInput ? "≈ \(0.0.formatted(as: settingsManager.selectedCurrency))" : L10n.Swap.estimatedAmount.localized
+        }
+        return "≈ \((amountValue * token.price).formatted(as: settingsManager.selectedCurrency))"
+    }
+
+    private func maximumAmount(for token: Token) -> String {
+        var result = String(format: "%.8f", token.balance)
+        while result.contains("."), result.last == "0" {
+            result.removeLast()
+        }
+        if result.last == "." {
+            result.removeLast()
+        }
+        return result
+    }
+}
+
+struct SwapDetailRow: View {
+    let label: String
+    let value: String
+    var showsInfo = false
+    var highlightsValue = false
+
+    var body: some View {
+        HStack(spacing: 8) {
+            Text(label)
+                .font(.system(size: 13, weight: .medium))
+                .foregroundColor(WpayinColors.textSecondary)
+
+            if showsInfo {
+                Image(systemName: "info.circle")
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundColor(WpayinColors.textTertiary)
+            }
+
+            Spacer(minLength: 12)
+
+            Text(value)
+                .font(.system(size: 13, weight: .medium))
+                .foregroundColor(highlightsValue ? WpayinColors.primary : WpayinColors.text)
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
+        }
+        .padding(.horizontal, 16)
+        .frame(minHeight: 48)
+        .contentShape(Rectangle())
+    }
+}
+
+struct SwapReviewSheet: View {
+    let fromToken: Token
+    let toToken: Token
+    let fromAmount: Double
+    let toAmount: Double
+    let minimumReceived: Double
+    let rate: Double
+    let isSwapping: Bool
+    let onConfirm: () -> Void
+
+    @Environment(\.dismiss) private var dismiss
+    @EnvironmentObject private var settingsManager: SettingsManager
+
+    var body: some View {
+        ZStack {
+            LinearGradient(
+                colors: [
+                    WpayinColors.backgroundGradientStart,
+                    WpayinColors.background
+                ],
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            )
+            .ignoresSafeArea()
+
+            VStack(spacing: 20) {
+                Capsule()
+                    .fill(WpayinColors.textTertiary.opacity(0.7))
+                    .frame(width: 42, height: 5)
+                    .padding(.top, 10)
+
+                Text(L10n.Swap.review.localized)
+                    .font(.system(size: 22, weight: .bold, design: .rounded))
+                    .foregroundColor(WpayinColors.text)
+
+                VStack(spacing: 16) {
+                    HStack(spacing: 10) {
+                        reviewToken(token: fromToken, amount: fromAmount)
+
+                        Image(systemName: "arrow.right")
+                            .font(.system(size: 17, weight: .semibold))
+                            .foregroundColor(WpayinColors.textTertiary)
+
+                        reviewToken(token: toToken, amount: toAmount)
+                    }
+
+                    Rectangle()
+                        .fill(WpayinColors.surfaceBorder)
+                        .frame(height: 1)
+
+                    SwapDetailRow(
+                        label: L10n.Swap.rate.localized,
+                        value: "1 \(fromToken.symbol) = \(formatted(rate)) \(toToken.symbol)"
+                    )
+
+                    SwapDetailRow(
+                        label: L10n.Swap.minimumReceived.localized,
+                        value: "\(formatted(minimumReceived)) \(toToken.symbol)",
+                        highlightsValue: true
+                    )
+                }
+                .padding(.horizontal, 16)
+                .padding(.top, 18)
+                .padding(.bottom, 8)
+                .background(
+                    RoundedRectangle(cornerRadius: WpayinRadius.card, style: .continuous)
+                        .fill(WpayinColors.surface)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: WpayinRadius.card, style: .continuous)
+                                .stroke(WpayinColors.surfaceBorder, lineWidth: 1)
+                        )
+                )
+
+                Button {
+                    dismiss()
+                    onConfirm()
+                } label: {
+                    HStack(spacing: 8) {
+                        if isSwapping {
+                            ProgressView()
+                                .tint(.white)
+                        }
+
+                        Text(L10n.Swap.confirm.localized)
+                            .font(.system(size: 17, weight: .bold))
+                    }
+                    .foregroundColor(.white)
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 54)
+                    .background(WpayinColors.accentGradient)
+                    .clipShape(RoundedRectangle(cornerRadius: 17, style: .continuous))
+                }
+                .disabled(isSwapping)
+                .buttonStyle(WpayinPressableStyle())
+
+                Spacer(minLength: 8)
+            }
+            .padding(.horizontal, 20)
+        }
+    }
+
+    private func reviewToken(token: Token, amount: Double) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 7) {
+                TokenIconView(token: token, size: 30, showNetworkBadge: true)
+
+                Text(token.symbol)
+                    .font(.system(size: 15, weight: .bold))
+                    .foregroundColor(WpayinColors.textSecondary)
+            }
+
+            Text(formatted(amount))
+                .font(.system(size: 20, weight: .bold, design: .rounded))
+                .foregroundColor(WpayinColors.text)
+                .lineLimit(1)
+                .minimumScaleFactor(0.65)
+
+            Text((amount * token.price).formatted(as: settingsManager.selectedCurrency))
+                .font(.system(size: 12))
+                .foregroundColor(WpayinColors.textSecondary)
+                .lineLimit(1)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private func formatted(_ value: Double) -> String {
+        let decimals = value >= 1_000 ? 2 : (value >= 1 ? 4 : 6)
+        var result = String(format: "%.\(decimals)f", value)
+        while result.contains("."), result.last == "0" {
+            result.removeLast()
+        }
+        if result.last == "." {
+            result.append("0")
+        }
+        return result
+    }
+}
+
+extension View {
+    // Internal — BridgeReviewSheet uses the same presentation.
+    @ViewBuilder
+    func swapReviewPresentation() -> some View {
+        if #available(iOS 16.4, *) {
+            self
+                .presentationDetents([.medium, .large])
+                .presentationDragIndicator(.hidden)
+                .presentationCornerRadius(28)
+        } else if #available(iOS 16.0, *) {
+            self
+                .presentationDetents([.medium, .large])
+                .presentationDragIndicator(.hidden)
+        } else {
+            self
+        }
     }
 }
 
@@ -902,72 +1295,150 @@ struct SlippageSettingsSheet: View {
     @Binding var slippage: Double
     @Environment(\.dismiss) private var dismiss
     @State private var customSlippage = ""
+    @FocusState private var customFieldFocused: Bool
 
     private let presetSlippages = [0.1, 0.5, 1.0, 3.0]
 
+    private var customValue: Double? {
+        guard let value = Double(customSlippage.replacingOccurrences(of: ",", with: ".")),
+              value > 0, value <= 50 else { return nil }
+        return value
+    }
+
     var body: some View {
         NavigationView {
-            VStack(spacing: 24) {
-                Text(L10n.Swap.slippageTolerance.localized)
-                    .font(.system(size: 24, weight: .bold))
-                    .foregroundColor(WpayinColors.text)
+            ZStack {
+                WpayinColors.background.ignoresSafeArea()
 
-                Text(L10n.Swap.slippageWarning.localized)
-                    .font(.system(size: 16))
-                    .foregroundColor(WpayinColors.textSecondary)
-                    .multilineTextAlignment(.center)
+                VStack(spacing: 20) {
+                    // Current value
+                    VStack(spacing: 8) {
+                        Text("\(String(format: "%.1f", slippage))%")
+                            .font(.system(size: 44, weight: .bold, design: .rounded))
+                            .foregroundColor(WpayinColors.primary)
 
-                VStack(spacing: 12) {
-                    LazyVGrid(columns: Array(repeating: GridItem(.flexible()), count: 2), spacing: 12) {
+                        Text(L10n.Swap.slippageWarning.localized)
+                            .font(.system(size: 13))
+                            .foregroundColor(WpayinColors.textSecondary)
+                            .multilineTextAlignment(.center)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    .padding(.top, 12)
+
+                    // Presets
+                    HStack(spacing: 10) {
                         ForEach(presetSlippages, id: \.self) { preset in
-                            Button(action: {
+                            let isSelected = slippage == preset
+                            Button {
                                 slippage = preset
-                            }) {
-                                Text("\(String(format: "%.1f", preset))%")
-                                    .font(.system(size: 16, weight: .semibold))
-                                    .foregroundColor(slippage == preset ? .white : WpayinColors.text)
+                                customSlippage = ""
+                                customFieldFocused = false
+                            } label: {
+                                Text("\(String(format: preset < 1 ? "%.1f" : "%.0f", preset))%")
+                                    .font(.system(size: 15, weight: .semibold, design: .rounded))
+                                    .foregroundColor(isSelected ? WpayinColors.primary : WpayinColors.text)
                                     .frame(maxWidth: .infinity)
-                                    .padding(.vertical, 16)
+                                    .frame(height: 46)
                                     .background(
-                                        RoundedRectangle(cornerRadius: 12)
-                                            .fill(slippage == preset ? WpayinColors.primary : WpayinColors.surface)
+                                        RoundedRectangle(cornerRadius: WpayinRadius.medium, style: .continuous)
+                                            .fill(isSelected ? WpayinColors.primary.opacity(0.12) : WpayinColors.surface)
+                                    )
+                                    .overlay(
+                                        RoundedRectangle(cornerRadius: WpayinRadius.medium, style: .continuous)
+                                            .stroke(isSelected ? WpayinColors.primary : WpayinColors.surfaceBorder,
+                                                    lineWidth: isSelected ? 1.5 : 1)
                                     )
                             }
-                            .buttonStyle(PlainButtonStyle())
+                            .buttonStyle(WpayinPressableStyle())
                         }
                     }
 
-                    HStack {
-                        TextField("Custom %".localized, text: $customSlippage)
-                            .font(.system(size: 16))
-                            .keyboardType(.decimalPad)
-                            .textFieldStyle(RoundedBorderTextFieldStyle())
+                    // Custom value
+                    HStack(spacing: 10) {
+                        HStack(spacing: 6) {
+                            TextField("Custom %".localized, text: $customSlippage)
+                                .font(.system(size: 16, weight: .medium))
+                                .foregroundColor(WpayinColors.text)
+                                .keyboardType(.decimalPad)
+                                .focused($customFieldFocused)
 
-                        Button(L10n.Action.set.localized) {
-                            if let value = Double(customSlippage), value > 0, value <= 50 {
+                            Text("%")
+                                .font(.system(size: 16, weight: .medium))
+                                .foregroundColor(WpayinColors.textSecondary)
+                        }
+                        .padding(.horizontal, 14)
+                        .frame(height: 46)
+                        .background(
+                            RoundedRectangle(cornerRadius: WpayinRadius.medium, style: .continuous)
+                                .fill(WpayinColors.surfaceLight)
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: WpayinRadius.medium, style: .continuous)
+                                        .stroke(customFieldFocused ? WpayinColors.primary : WpayinColors.surfaceBorder,
+                                                lineWidth: customFieldFocused ? 1.5 : 1)
+                                )
+                        )
+
+                        Button {
+                            if let value = customValue {
                                 slippage = value
+                                customFieldFocused = false
                             }
+                        } label: {
+                            Text(L10n.Action.set.localized)
+                                .font(.system(size: 15, weight: .semibold))
+                                .foregroundColor(.white)
+                                .padding(.horizontal, 22)
+                                .frame(height: 46)
+                                .background(
+                                    RoundedRectangle(cornerRadius: WpayinRadius.medium, style: .continuous)
+                                        .fill(WpayinColors.accentGradient)
+                                        .opacity(customValue == nil ? 0.4 : 1)
+                                )
                         }
-                        .font(.system(size: 16, weight: .semibold))
-                        .foregroundColor(.white)
-                        .padding(.horizontal, 20)
-                        .padding(.vertical, 8)
-                        .background(WpayinColors.primary)
-                        .cornerRadius(8)
+                        .buttonStyle(WpayinPressableStyle())
+                        .disabled(customValue == nil)
                     }
-                }
 
-                Spacer()
+                    // High slippage caution
+                    if slippage >= 3 {
+                        HStack(spacing: 10) {
+                            Image(systemName: "exclamationmark.triangle.fill")
+                                .font(.system(size: 14))
+                                .foregroundColor(WpayinColors.warning)
+
+                            Text(L10n.Swap.slippageHighWarning.localized)
+                                .font(.system(size: 13, weight: .medium))
+                                .foregroundColor(WpayinColors.warning)
+                                .fixedSize(horizontal: false, vertical: true)
+
+                            Spacer(minLength: 0)
+                        }
+                        .padding(12)
+                        .background(
+                            RoundedRectangle(cornerRadius: WpayinRadius.medium, style: .continuous)
+                                .fill(WpayinColors.warning.opacity(0.1))
+                        )
+                    }
+
+                    Spacer()
+                }
+                .padding(.horizontal, 20)
+                .animation(.easeOut(duration: 0.15), value: slippage >= 3)
             }
-            .padding(20)
-            .background(WpayinColors.background)
-            .navigationBarHidden(true)
+            .navigationTitle(L10n.Swap.slippageTolerance.localized)
+            .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Button(L10n.Action.done.localized) {
                         dismiss()
                     }
+                    .foregroundColor(WpayinColors.primary)
                 }
+            }
+        }
+        .onAppear {
+            if !presetSlippages.contains(slippage) {
+                customSlippage = String(format: "%.1f", slippage)
             }
         }
     }
@@ -979,43 +1450,33 @@ struct NetworkSelectorButton: View {
     let onTap: () -> Void
     
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            // Header
-            Text(L10n.Swap.selectNetwork.localized)
-                .font(.system(size: 14, weight: .medium))
-                .foregroundColor(WpayinColors.textSecondary)
-            
-            // Network Selector (styled like token selector)
-            Button(action: onTap) {
-                HStack(spacing: 12) {
-                    PlatformIconView(platform: selectedNetwork, size: 32)
-                    
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(selectedNetwork.name)
-                            .font(.system(size: 16, weight: .semibold))
-                            .foregroundColor(WpayinColors.text)
-                        
-                        Text(selectedNetwork.symbol)
-                            .font(.system(size: 12))
-                            .foregroundColor(WpayinColors.textSecondary)
-                            .lineLimit(1)
-                    }
-                    
-                    Spacer()
-                    
-                    Image(systemName: "chevron.down")
-                        .font(.system(size: 12, weight: .medium))
-                        .foregroundColor(WpayinColors.textTertiary)
-                }
-                .padding(.horizontal, 12)
-                .padding(.vertical, 8)
-                .background(
-                    RoundedRectangle(cornerRadius: 12)
-                        .fill(WpayinColors.background)
-                )
+        Button(action: onTap) {
+            HStack(spacing: 9) {
+                PlatformIconView(platform: selectedNetwork, size: 25)
+
+                Text(selectedNetwork.name)
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundColor(WpayinColors.text)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.75)
+
+                Image(systemName: "chevron.down")
+                    .font(.system(size: 10, weight: .bold))
+                    .foregroundColor(WpayinColors.textSecondary)
             }
-            .buttonStyle(PlainButtonStyle())
+            .padding(.horizontal, 12)
+            .frame(height: 42)
+            .background(
+                Capsule()
+                    .fill(WpayinColors.surfaceLight)
+                    .overlay(
+                        Capsule()
+                            .stroke(WpayinColors.surfaceBorder, lineWidth: 1)
+                    )
+            )
         }
+        .buttonStyle(WpayinPressableStyle())
+        .accessibilityLabel(L10n.Swap.selectNetwork.localized)
     }
 }
 

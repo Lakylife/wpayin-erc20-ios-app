@@ -163,7 +163,7 @@ struct TokenDetailView: View {
                                     title: "Copy Contract",
                                     action: {
                                         if let contractAddress = token.contractAddress {
-                                            UIPasteboard.general.string = contractAddress
+                                            AppToast.copyToClipboard(contractAddress)
                                         }
                                     }
                                 )
@@ -195,7 +195,7 @@ struct TokenDetailView: View {
                                     Spacer()
 
                                     Button(action: {
-                                        UIPasteboard.general.string = contractAddress
+                                        AppToast.copyToClipboard(contractAddress)
                                     }) {
                                         Image(systemName: "doc.on.doc")
                                             .font(.system(size: 14))
@@ -288,8 +288,12 @@ struct TokenDetailView: View {
     }
     
     private var recentTransactions: [Transaction] {
+        // Scoped to the token's own network — each chain has its own history.
         walletManager.transactions
-            .filter { $0.token.caseInsensitiveCompare(token.symbol) == .orderedSame }
+            .filter {
+                $0.token.caseInsensitiveCompare(token.symbol) == .orderedSame &&
+                $0.resolvedBlockchain == token.blockchain
+            }
             .sorted { $0.timestamp > $1.timestamp }
     }
 

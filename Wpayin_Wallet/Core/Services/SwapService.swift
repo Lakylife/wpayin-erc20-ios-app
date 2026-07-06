@@ -38,19 +38,19 @@ enum SwapError: LocalizedError {
     var errorDescription: String? {
         switch self {
         case .unsupportedBlockchain:
-            return "Blockchain not supported for swapping"
+            return "error.swap.unsupportedBlockchain".localized
         case .invalidTokenPair:
-            return "Invalid token pair for swap"
+            return "error.swap.invalidTokenPair".localized
         case .insufficientLiquidity:
-            return "Insufficient liquidity for this swap"
+            return "error.swap.insufficientLiquidity".localized
         case .slippageTooHigh:
-            return "Price impact too high"
+            return "error.swap.slippageTooHigh".localized
         case .failedToGetQuote:
-            return "Failed to get swap quote"
+            return "error.swap.failedToGetQuote".localized
         case .failedToExecuteSwap:
-            return "Failed to execute swap"
+            return "error.swap.failedToExecuteSwap".localized
         case .noRouterAddress:
-            return "No DEX router address available"
+            return "error.swap.noRouterAddress".localized
         }
     }
 }
@@ -221,7 +221,8 @@ class SwapService {
     }
 
     /// Sign (via WalletCore AnySigner) and broadcast a transaction.
-    private func sendRawTransaction(
+    /// Internal so BridgeService can reuse the same canonical path.
+    func sendRawTransaction(
         from: String,
         to: String,
         value: BigUInt,
@@ -231,9 +232,8 @@ class SwapService {
         privateKey: Data
     ) async throws -> String {
         let chainId = blockchain.chainId ?? 1
-        let rpcUrl = blockchain.rpcUrl
-        let nonce = try await fetchNonce(address: from, rpcUrl: rpcUrl)
-        let gasPrice = try await fetchGasPrice(rpcUrl: rpcUrl)
+        let nonce = try await fetchNonce(address: from, blockchain: blockchain)
+        let gasPrice = try await fetchGasPrice(blockchain: blockchain)
         let gasPriceInWei = BigUInt((gasPrice * swapPow(Decimal(10), 9)).swapRounded().description) ?? BigUInt(20_000_000_000)
 
         let signedTx = try signSwapTransaction(
@@ -247,7 +247,7 @@ class SwapService {
             chainId: chainId,
             privateKey: privateKey
         )
-        return try await broadcastTransaction(signedTx: signedTx, rpcUrl: rpcUrl)
+        return try await broadcastTransaction(signedTx: signedTx, blockchain: blockchain)
     }
 
     // MARK: - Private Helper Methods
@@ -320,7 +320,8 @@ class SwapService {
     }
 
     /// Check ERC-20 allowance and send an approve transaction when insufficient.
-    private func checkAndApproveToken(
+    /// Internal so BridgeService can reuse it with the bridge's approval address.
+    func checkAndApproveToken(
         token: Token,
         owner: String,
         spender: String,
@@ -341,7 +342,7 @@ class SwapService {
 
         let currentAllowance: BigUInt
         do {
-            let result = try await ethCall(to: tokenAddress, data: allowanceCall, rpcUrl: blockchain.rpcUrl)
+            let result = try await ethCall(to: tokenAddress, data: allowanceCall, blockchain: blockchain)
             currentAllowance = BigUInt(result)
         } catch {
             Logger.log("⚠️ Allowance check failed, assuming approval needed: \(error)")
@@ -398,7 +399,7 @@ class SwapService {
             callData.append(abiAddress(address))
         }
 
-        let result = try await ethCall(to: routerAddress, data: callData, rpcUrl: blockchain.rpcUrl)
+        let result = try await ethCall(to: routerAddress, data: callData, blockchain: blockchain)
 
         // Decode uint256[]: [offset][length][amounts...] — take the last amount.
         guard result.count >= 96 else { throw SwapError.failedToGetQuote }
@@ -413,34 +414,77 @@ class SwapService {
         return (Decimal(string: amountOutWei.description) ?? 0) / swapPow(Decimal(10), toDecimals)
     }
 
-    /// Read-only contract call via eth_call.
-    private func ethCall(to: String, data: Data, rpcUrl: String) async throws -> Data {
-        let url = URL(string: rpcUrl)!
-        var request = URLRequest(url: url)
-        request.httpMethod = "POST"
-        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+    /// POST a JSON-RPC request, failing over to the chain's next RPC endpoint
+    /// when a node is unreachable or replies with garbage (HTML error pages,
+    /// rate-limit text, …). A well-formed JSON-RPC error aborts immediately —
+    /// the node understood the request and rejected it for a real reason.
+    func rpcRequest(method: String, params: [Any], blockchain: BlockchainType) async throws -> Any {
+        var lastFailure = "no RPC endpoint configured"
 
-        let body: [String: Any] = [
-            "jsonrpc": "2.0",
-            "method": "eth_call",
-            "params": [["to": to, "data": "0x" + data.hexString], "latest"],
-            "id": 1
-        ]
-        request.httpBody = try JSONSerialization.data(withJSONObject: body)
+        for urlString in blockchain.rpcUrls {
+            guard let url = URL(string: urlString) else { continue }
+            var request = URLRequest(url: url)
+            request.httpMethod = "POST"
+            request.timeoutInterval = 15
+            request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+            request.httpBody = try JSONSerialization.data(withJSONObject: [
+                "jsonrpc": "2.0",
+                "method": method,
+                "params": params,
+                "id": 1
+            ])
 
-        let (responseData, _) = try await URLSession.shared.data(for: request)
-        let json = try JSONSerialization.jsonObject(with: responseData) as? [String: Any]
+            let responseData: Data
+            do {
+                let (data, response) = try await URLSession.shared.data(for: request)
+                if let http = response as? HTTPURLResponse, !(200...299).contains(http.statusCode) {
+                    lastFailure = "HTTP \(http.statusCode) from \(urlString)"
+                    Logger.log("⚠️ RPC \(method): \(lastFailure), trying next endpoint")
+                    continue
+                }
+                responseData = data
+            } catch {
+                lastFailure = "\(urlString): \(error.localizedDescription)"
+                Logger.log("⚠️ RPC \(method): \(lastFailure), trying next endpoint")
+                continue
+            }
 
-        if let error = json?["error"] as? [String: Any],
-           let message = error["message"] as? String {
-            throw TransactionError.networkError(message)
+            guard let json = try? JSONSerialization.jsonObject(with: responseData) as? [String: Any] else {
+                lastFailure = "malformed response from \(urlString)"
+                Logger.log("⚠️ RPC \(method): \(lastFailure), trying next endpoint")
+                continue
+            }
+
+            if let error = json["error"] as? [String: Any],
+               let message = error["message"] as? String {
+                throw TransactionError.fromRPCMessage(message)
+            }
+
+            if let result = json["result"] {
+                return result
+            }
+
+            lastFailure = "no result from \(urlString)"
+            Logger.log("⚠️ RPC \(method): \(lastFailure), trying next endpoint")
         }
 
-        guard let resultHex = json?["result"] as? String,
-              let result = Data(hexString: resultHex) else {
+        Logger.log("🛑 All \(blockchain.rawValue) RPC endpoints failed (\(lastFailure))")
+        throw TransactionError.networkError("error.networkUnavailable".localized)
+    }
+
+    /// Read-only contract call via eth_call (internal — shared with P2PTradeService).
+    func ethCall(to: String, data: Data, blockchain: BlockchainType) async throws -> Data {
+        let result = try await rpcRequest(
+            method: "eth_call",
+            params: [["to": to, "data": "0x" + data.hexString], "latest"],
+            blockchain: blockchain
+        )
+
+        guard let resultHex = result as? String,
+              let resultData = Data(hexString: resultHex) else {
             throw TransactionError.networkError("Invalid eth_call response")
         }
-        return result
+        return resultData
     }
 
     // MARK: - ABI Encoding Helpers
@@ -460,8 +504,8 @@ class SwapService {
         return result
     }
 
-    // Reuse methods from TransactionService
-    private func getPrivateKey(for blockchain: BlockchainType) throws -> Data? {
+    // Reuse methods from TransactionService (internal — also used by BridgeService)
+    func getPrivateKey(for blockchain: BlockchainType) throws -> Data? {
         let keychain = KeychainManager()
         let mnemonicService = MnemonicService()
 
@@ -486,7 +530,7 @@ class SwapService {
         return nil
     }
 
-    private func deriveAddress(from privateKeyData: Data, blockchain: BlockchainType) throws -> String {
+    func deriveAddress(from privateKeyData: Data, blockchain: BlockchainType) throws -> String {
         guard let coinType = blockchain.coinType else {
             throw TransactionError.failedToCreateTransaction
         }
@@ -535,55 +579,33 @@ class SwapService {
         return output.encoded.hexString
     }
 
-    private func fetchNonce(address: String, rpcUrl: String) async throws -> Int {
-        let url = URL(string: rpcUrl)!
-        var request = URLRequest(url: url)
-        request.httpMethod = "POST"
-        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+    private func fetchNonce(address: String, blockchain: BlockchainType) async throws -> Int {
+        let result = try await rpcRequest(
+            method: "eth_getTransactionCount",
+            params: [address, "pending"], // include queued txs (approve + swap)
+            blockchain: blockchain
+        )
 
-        let body: [String: Any] = [
-            "jsonrpc": "2.0",
-            "method": "eth_getTransactionCount",
-            "params": [address, "pending"], // include queued txs (approve + swap)
-            "id": 1
-        ]
-
-        request.httpBody = try JSONSerialization.data(withJSONObject: body)
-
-        let (data, _) = try await URLSession.shared.data(for: request)
-        let json = try JSONSerialization.jsonObject(with: data) as? [String: Any]
-
-        guard let result = json?["result"] as? String else {
+        guard let resultHex = result as? String else {
             throw TransactionError.networkError("Failed to fetch nonce")
         }
 
-        let hexString = result.hasPrefix("0x") ? String(result.dropFirst(2)) : result
+        let hexString = resultHex.hasPrefix("0x") ? String(resultHex.dropFirst(2)) : resultHex
         return Int(hexString, radix: 16) ?? 0
     }
 
-    private func fetchGasPrice(rpcUrl: String) async throws -> Decimal {
-        let url = URL(string: rpcUrl)!
-        var request = URLRequest(url: url)
-        request.httpMethod = "POST"
-        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+    private func fetchGasPrice(blockchain: BlockchainType) async throws -> Decimal {
+        let result = try await rpcRequest(
+            method: "eth_gasPrice",
+            params: [],
+            blockchain: blockchain
+        )
 
-        let body: [String: Any] = [
-            "jsonrpc": "2.0",
-            "method": "eth_gasPrice",
-            "params": [],
-            "id": 1
-        ]
-
-        request.httpBody = try JSONSerialization.data(withJSONObject: body)
-
-        let (data, _) = try await URLSession.shared.data(for: request)
-        let json = try JSONSerialization.jsonObject(with: data) as? [String: Any]
-
-        guard let result = json?["result"] as? String else {
+        guard let resultHex = result as? String else {
             throw TransactionError.networkError("Failed to fetch gas price")
         }
 
-        let hexString = result.hasPrefix("0x") ? String(result.dropFirst(2)) : result
+        let hexString = resultHex.hasPrefix("0x") ? String(resultHex.dropFirst(2)) : resultHex
         guard let weiValue = Int(hexString, radix: 16) else {
             return 20
         }
@@ -591,30 +613,14 @@ class SwapService {
         return Decimal(weiValue) / pow(10, 9)
     }
 
-    private func broadcastTransaction(signedTx: String, rpcUrl: String) async throws -> String {
-        let url = URL(string: rpcUrl)!
-        var request = URLRequest(url: url)
-        request.httpMethod = "POST"
-        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+    private func broadcastTransaction(signedTx: String, blockchain: BlockchainType) async throws -> String {
+        let result = try await rpcRequest(
+            method: "eth_sendRawTransaction",
+            params: ["0x" + signedTx],
+            blockchain: blockchain
+        )
 
-        let body: [String: Any] = [
-            "jsonrpc": "2.0",
-            "method": "eth_sendRawTransaction",
-            "params": ["0x" + signedTx],
-            "id": 1
-        ]
-
-        request.httpBody = try JSONSerialization.data(withJSONObject: body)
-
-        let (data, _) = try await URLSession.shared.data(for: request)
-        let json = try JSONSerialization.jsonObject(with: data) as? [String: Any]
-
-        if let error = json?["error"] as? [String: Any],
-           let message = error["message"] as? String {
-            throw TransactionError.networkError(message)
-        }
-
-        guard let txHash = json?["result"] as? String else {
+        guard let txHash = result as? String else {
             throw TransactionError.failedToSendTransaction
         }
 

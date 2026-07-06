@@ -20,8 +20,12 @@ struct AllTransactionsView: View {
     private let pageSize = 20
 
     private var tokenTransactions: [Transaction] {
+        // Scoped to the token's own network — each chain has its own history.
         walletManager.transactions
-            .filter { $0.token.caseInsensitiveCompare(token.symbol) == .orderedSame }
+            .filter {
+                $0.token.caseInsensitiveCompare(token.symbol) == .orderedSame &&
+                $0.resolvedBlockchain == token.blockchain
+            }
             .sorted { $0.timestamp > $1.timestamp }
     }
 
@@ -106,7 +110,7 @@ struct AllTransactionsView: View {
                 }
             }
         }
-        .navigationTitle("%@ Transactions".localized(token.symbol))
+        .navigationTitle("%@ Transactions".localized("\(token.symbol) · \(token.blockchain.name)"))
         .navigationBarTitleDisplayMode(.inline)
         .sheet(item: $selectedTransaction) { transaction in
             TransactionDetailView(transaction: transaction)

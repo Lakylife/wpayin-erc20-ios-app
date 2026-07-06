@@ -97,27 +97,38 @@ struct WithdrawView: View {
         Double(amount) ?? 0.0
     }
 
+    /// Platform fee charged on top of the sent amount (EVM sends only).
+    private var platformFeeValue: Double {
+        guard let token = selectedToken, token.blockchain != .bitcoin else { return 0 }
+        return (TransactionService.platformFee(for: Decimal(amountValue)) as NSDecimalNumber).doubleValue
+    }
+
+    /// The sender must cover the amount plus the platform fee.
+    private var totalDebit: Double {
+        amountValue + platformFeeValue
+    }
+
     private var isValidTransaction: Bool {
         guard let token = selectedToken else { return false }
-        
+
         // Bitcoin address validation
         if token.blockchain == .bitcoin {
             // Bitcoin addresses can start with 1, 3, or bc1
-            let isBitcoinAddress = recipientAddress.hasPrefix("bc1") || 
-                                  recipientAddress.hasPrefix("1") || 
+            let isBitcoinAddress = recipientAddress.hasPrefix("bc1") ||
+                                  recipientAddress.hasPrefix("1") ||
                                   recipientAddress.hasPrefix("3")
             return !recipientAddress.isEmpty &&
                    isBitcoinAddress &&
                    amountValue > 0 &&
                    amountValue <= token.balance
         }
-        
-        // EVM address validation
+
+        // EVM address validation (balance must cover amount + platform fee)
         return !recipientAddress.isEmpty &&
                recipientAddress.hasPrefix("0x") &&
                recipientAddress.count == 42 &&
                amountValue > 0 &&
-               amountValue <= token.balance
+               totalDebit <= token.balance
     }
     
     private var headerTitle: String {
@@ -762,6 +773,19 @@ struct AmountInputView: View {
         Double(amount) ?? 0.0
     }
 
+    private var platformFeeValue: Double {
+        guard let token = selectedToken, token.blockchain != .bitcoin else { return 0 }
+        return (TransactionService.platformFee(for: Decimal(amountValue)) as NSDecimalNumber).doubleValue
+    }
+
+    /// Max sendable so that amount + platform fee still fits in the balance.
+    private var maxSendable: Double {
+        guard let token = selectedToken else { return 0 }
+        guard token.blockchain != .bitcoin, AppConfig.platformFeeEnabled else { return token.balance }
+        let rate = (AppConfig.platformFeeRate as NSDecimalNumber).doubleValue
+        return token.balance / (1 + rate)
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             Text("Amount".localized)
@@ -802,7 +826,7 @@ struct AmountInputView: View {
                         Spacer()
 
                         Button("Max".localized) {
-                            amount = String(token.balance)
+                            amount = String(maxSendable)
                         }
                         .font(.system(size: 12, weight: .bold))
                         .foregroundColor(WpayinColors.primary)
@@ -811,7 +835,17 @@ struct AmountInputView: View {
                         .background(Capsule().fill(WpayinColors.primary.opacity(0.12)))
                     }
 
-                    if amountValue > token.balance {
+                    if platformFeeValue > 0, amountValue > 0 {
+                        Text("Platform fee %@: %@ %@".localized(
+                            String(format: "(%.2f%%)", Double(AppConfig.platformFeeBps) / 100),
+                            String(format: "%.6f", platformFeeValue),
+                            token.symbol
+                        ))
+                        .font(.wpayinCaption)
+                        .foregroundColor(WpayinColors.textSecondary)
+                    }
+
+                    if amountValue + platformFeeValue > token.balance {
                         Text("Insufficient balance".localized)
                             .font(.wpayinCaption)
                             .foregroundColor(WpayinColors.error)

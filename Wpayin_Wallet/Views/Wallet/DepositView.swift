@@ -470,7 +470,7 @@ struct AddressDisplayView: View {
                     title: copied ? "Copied!".localized : "Copy Address".localized,
                     style: .secondary
                 ) {
-                    UIPasteboard.general.string = address
+                    AppToast.copyToClipboard(address)
                     copied = true
 
                     DispatchQueue.main.asyncAfter(deadline: .now() + 2) {

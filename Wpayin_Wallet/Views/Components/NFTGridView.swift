@@ -285,7 +285,7 @@ struct NFTDetailView: View {
                                 Spacer()
 
                                 Button(action: {
-                                    UIPasteboard.general.string = nft.contractAddress
+                                    AppToast.copyToClipboard(nft.contractAddress)
                                 }) {
                                     Image(systemName: "doc.on.doc")
                                         .font(.system(size: 14))

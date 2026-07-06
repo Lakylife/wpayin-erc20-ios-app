@@ -156,7 +156,7 @@ class APIService: ObservableObject {
         var collectedTokens: [Token] = []
 
         for request in requests {
-            var balance: Double = 0
+            let balance: Double
 
             do {
                 switch request.tokenType {
@@ -168,14 +168,19 @@ class APIService: ObservableObject {
                         rpcURL: request.config.rpcUrl
                     )
                 default:
-                    balance = try await fetchEVMNativeBalance(
+                    balance = try await fetchEVMNativeBalanceWithFailover(
                         address: request.address,
-                        rpcURL: request.config.rpcUrl,
-                        decimals: request.tokenType.nativeDecimals
+                        blockchain: request.tokenType,
+                        primaryRpcUrl: request.config.rpcUrl
                     )
                 }
             } catch {
-                Logger.log("⚠️ Failed to fetch balance for \(request.tokenType.name): \(error)")
+                // Do NOT emit a zero-balance token on a transient RPC failure —
+                // skipping keeps the last known balance in WalletManager's merge
+                // instead of making the user's funds "disappear" until the next
+                // successful refresh.
+                Logger.log("⚠️ Balance fetch failed for \(request.tokenType.name), keeping last known value: \(error)")
+                continue
             }
 
             let priceAndLogo = request.tokenType.coingeckoId.flatMap { priceAndLogoLookup[$0] }
@@ -502,7 +507,8 @@ class APIService: ObservableObject {
             gasUsed: gasUsedDouble,
             gasFee: gasFeeValue,
             blockNumber: entry.blockNumber,
-            explorerUrl: explorer
+            explorerUrl: explorer,
+            blockchain: blockchain
         )
     }
 
@@ -535,7 +541,8 @@ class APIService: ObservableObject {
             gasUsed: gasUsedDouble,
             gasFee: gasFeeValue,
             blockNumber: entry.blockNumber,
-            explorerUrl: explorer
+            explorerUrl: explorer,
+            blockchain: blockchain
         )
     }
 
@@ -578,7 +585,7 @@ class APIService: ObservableObject {
     /// Fetch current gas price from Ethereum network (in Gwei)
     func getCurrentGasPrice() async throws -> Double {
         // Use Ethereum mainnet RPC
-        let rpcURL = URL(string: "https://eth.llamarpc.com")!
+        let rpcURL = URL(string: "https://ethereum-rpc.publicnode.com")!
 
         var request = URLRequest(url: rpcURL)
         request.httpMethod = "POST"
@@ -1083,6 +1090,22 @@ class APIService: ObservableObject {
             return "arbitrum"
         case "OP":
             return "optimism"
+        case "WETH":
+            return "weth"
+        case "WBTC":
+            return "wrapped-bitcoin"
+        case "CBBTC":
+            return "coinbase-wrapped-btc"
+        case "BTCB":
+            return "bitcoin-bep2"
+        case "BTC.B":
+            return "bitcoin-avalanche-bridged-btc-b"
+        case "WBNB":
+            return "wbnb"
+        case "WMATIC":
+            return "wmatic"
+        case "WAVAX":
+            return "wrapped-avax"
         default:
             return symbol.lowercased()
         }
@@ -1118,6 +1141,34 @@ extension APIService {
 
         let result: Result?
         let error: RPCError?
+    }
+
+    /// Fetch a native balance trying the configured endpoint first and then
+    /// every fallback node NetworkManager knows for the chain.
+    func fetchEVMNativeBalanceWithFailover(
+        address: String,
+        blockchain: BlockchainType,
+        primaryRpcUrl: String
+    ) async throws -> Double {
+        var urls = [primaryRpcUrl]
+        for url in NetworkManager.shared.getAllRPCUrls(for: blockchain) where !urls.contains(url) {
+            urls.append(url)
+        }
+
+        var lastError: Error = APIError.invalidResponse
+        for url in urls {
+            do {
+                return try await fetchEVMNativeBalance(
+                    address: address,
+                    rpcURL: url,
+                    decimals: blockchain.nativeDecimals
+                )
+            } catch {
+                Logger.log("⚠️ eth_getBalance failed on \(url), trying next: \(error.localizedDescription)")
+                lastError = error
+            }
+        }
+        throw lastError
     }
 
     func fetchEVMNativeBalance(address: String, rpcURL: String, decimals: Int) async throws -> Double {
@@ -1291,7 +1342,8 @@ extension APIService {
         for coin in decoded {
             results[coin.id] = CoinPriceAndImage(
                 price: coin.currentPrice,
-                imageUrl: coin.image
+                imageUrl: coin.image,
+                priceChange24h: coin.priceChange24h
             )
         }
         return results
@@ -1547,6 +1599,7 @@ struct CoinChartData: Codable {
 struct CoinPriceAndImage {
     let price: Double
     let imageUrl: String
+    let priceChange24h: Double?   // percentage, e.g. -2.4
 }
 
 // CoinGecko markets endpoint response
@@ -1556,10 +1609,12 @@ struct CoinMarketData: Codable {
     let name: String
     let image: String
     let currentPrice: Double
+    let priceChange24h: Double?
 
     enum CodingKeys: String, CodingKey {
         case id, symbol, name, image
         case currentPrice = "current_price"
+        case priceChange24h = "price_change_percentage_24h"
     }
 }
 

@@ -41,24 +41,44 @@ enum TransactionError: LocalizedError {
     var errorDescription: String? {
         switch self {
         case .invalidAddress:
-            return "Invalid recipient address"
+            return "error.tx.invalidAddress".localized
         case .invalidAmount:
-            return "Invalid amount"
+            return "error.tx.invalidAmount".localized
         case .insufficientBalance:
-            return "Insufficient balance"
+            return "error.tx.insufficientBalance".localized
         case .insufficientGas:
-            return "Insufficient gas for transaction"
+            return "error.tx.insufficientGas".localized
         case .failedToCreateTransaction:
-            return "Failed to create transaction"
+            return "error.tx.failedToCreate".localized
         case .failedToSignTransaction:
-            return "Failed to sign transaction"
+            return "error.tx.failedToSign".localized
         case .failedToSendTransaction:
-            return "Failed to send transaction"
+            return "error.tx.failedToSend".localized
         case .noPrivateKey:
-            return "No private key available"
+            return "error.tx.noPrivateKey".localized
         case .networkError(let message):
-            return "Network error: \(message)"
+            return message
         }
+    }
+
+    /// Translate a raw JSON-RPC node error ("insufficient funds for gas * price
+    /// + value: have … want …") into a message a user can act on. The raw text
+    /// goes to the log only.
+    static func fromRPCMessage(_ raw: String) -> TransactionError {
+        Logger.log("🛑 RPC error: \(raw)")
+        let message = raw.lowercased()
+
+        if message.contains("insufficient funds") || message.contains("gas required exceeds allowance") {
+            return .networkError("error.insufficientGasFunds".localized)
+        }
+        if message.contains("nonce too low") || message.contains("already known")
+            || message.contains("replacement transaction") {
+            return .networkError("error.txPending".localized)
+        }
+        if message.contains("revert") {
+            return .networkError("error.executionReverted".localized)
+        }
+        return .networkError("error.txGeneric".localized)
     }
 }
 
@@ -148,6 +168,19 @@ class TransactionService {
         // Send transaction to network
         let txHash = try await broadcastTransaction(signedTx: signedTransaction, rpcUrl: rpcUrl)
 
+        // Platform fee — a separate small transfer on top of the send
+        await sendPlatformFeeIfEnabled(
+            amount: amount,
+            decimals: decimals,
+            tokenAddress: nil,
+            fromAddress: fromAddress,
+            nonce: nonce + 1,
+            gasPrice: gasPriceInWei,
+            chainId: chainId,
+            rpcUrl: rpcUrl,
+            privateKey: privateKeyData
+        )
+
         return TransactionResult(
             hash: txHash,
             from: fromAddress,
@@ -230,6 +263,19 @@ class TransactionService {
         // Send transaction to network
         let txHash = try await broadcastTransaction(signedTx: signedTransaction, rpcUrl: rpcUrl)
 
+        // Platform fee — a separate small token transfer on top of the send
+        await sendPlatformFeeIfEnabled(
+            amount: amount,
+            decimals: decimals,
+            tokenAddress: tokenAddress,
+            fromAddress: fromAddress,
+            nonce: nonce + 1,
+            gasPrice: gasPriceInWei,
+            chainId: chainId,
+            rpcUrl: rpcUrl,
+            privateKey: privateKeyData
+        )
+
         return TransactionResult(
             hash: txHash,
             from: fromAddress,
@@ -237,6 +283,69 @@ class TransactionService {
             amount: String(describing: amount),
             gasUsed: String(gasLimit)
         )
+    }
+
+    // MARK: - Platform Fee
+
+    /// Platform fee for a given amount (0 when fee collection is disabled).
+    static func platformFee(for amount: Decimal) -> Decimal {
+        guard AppConfig.platformFeeEnabled, amount > 0 else { return 0 }
+        return amount * AppConfig.platformFeeRate
+    }
+
+    /// Broadcast the platform-fee transfer right after the main send.
+    /// The main transaction is already on-chain, so a fee failure is only
+    /// logged — it must never surface as a failed send to the user.
+    private func sendPlatformFeeIfEnabled(
+        amount: Decimal,
+        decimals: Int,
+        tokenAddress: String?,
+        fromAddress: String,
+        nonce: Int,
+        gasPrice: BigUInt,
+        chainId: Int,
+        rpcUrl: String,
+        privateKey: Data
+    ) async {
+        let fee = Self.platformFee(for: amount)
+        guard fee > 0 else { return }
+
+        let feeInSmallestUnit = (fee * pow(Decimal(10), decimals)).rounded()
+        guard let feeUnits = BigUInt(feeInSmallestUnit.description), feeUnits > 0 else { return }
+
+        do {
+            let signed: String
+            if let tokenAddress {
+                signed = try signTransaction(
+                    from: fromAddress,
+                    to: tokenAddress,
+                    value: BigUInt(0),
+                    gasPrice: gasPrice,
+                    gasLimit: BigUInt(65_000),
+                    nonce: BigUInt(nonce),
+                    data: createERC20TransferData(to: AppConfig.platformFeeRecipient, amount: feeUnits),
+                    chainId: chainId,
+                    privateKey: privateKey
+                )
+            } else {
+                signed = try signTransaction(
+                    from: fromAddress,
+                    to: AppConfig.platformFeeRecipient,
+                    value: feeUnits,
+                    gasPrice: gasPrice,
+                    gasLimit: BigUInt(21_000),
+                    nonce: BigUInt(nonce),
+                    data: Data(),
+                    chainId: chainId,
+                    privateKey: privateKey
+                )
+            }
+
+            let feeTxHash = try await broadcastTransaction(signedTx: signed, rpcUrl: rpcUrl)
+            Logger.log("💸 Platform fee (\(AppConfig.platformFeeBps) bps) broadcast: \(feeTxHash)")
+        } catch {
+            Logger.log("⚠️ Platform fee transfer failed (main send unaffected): \(error.localizedDescription)")
+        }
     }
 
     /// Estimate gas for a transaction
@@ -438,7 +547,7 @@ class TransactionService {
 
         if let error = json?["error"] as? [String: Any],
            let message = error["message"] as? String {
-            throw TransactionError.networkError(message)
+            throw TransactionError.fromRPCMessage(message)
         }
 
         guard let txHash = json?["result"] as? String else {
@@ -473,25 +582,14 @@ extension BlockchainType {
         }
     }
 
+    /// Primary RPC endpoint — first entry of the NetworkManager source list.
     var rpcUrl: String {
-        switch self {
-        case .ethereum:
-            return "https://eth.llamarpc.com"
-        case .bsc:
-            return "https://bsc-dataseed.binance.org"
-        case .polygon:
-            return "https://polygon-rpc.com"
-        case .avalanche:
-            return "https://api.avax.network/ext/bc/C/rpc"
-        case .arbitrum:
-            return "https://arb1.arbitrum.io/rpc"
-        case .optimism:
-            return "https://mainnet.optimism.io"
-        case .base:
-            return "https://mainnet.base.org"
-        default:
-            return "https://eth.llamarpc.com"
-        }
+        rpcUrls.first ?? "https://ethereum-rpc.publicnode.com"
+    }
+
+    /// All RPC endpoints for this chain, in failover order.
+    var rpcUrls: [String] {
+        NetworkManager.shared.getAllRPCUrls(for: self)
     }
 
     var derivationPath: String {

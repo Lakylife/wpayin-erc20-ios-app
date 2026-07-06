@@ -52,6 +52,10 @@ final class WalletManager: ObservableObject {
     @Published var balanceChangePercentage: Double = 0.0
     @Published var selectedBlockchains: Set<BlockchainPlatform> = [.ethereum]
     @Published var favoriteTokenSymbols: Set<String> = []
+    /// 24h price change in percent, keyed by uppercased token symbol (live-updated).
+    @Published var priceChanges24h: [String: Double] = [:]
+    /// Bumped on every completed live price refresh (drives "updated" pulses).
+    @Published var lastPriceUpdate: Date?
 
     let keychain = KeychainManager()
     private let apiService = APIService.shared
@@ -68,7 +72,7 @@ final class WalletManager: ObservableObject {
     private var chainAccounts: [BlockchainType: ChainAccount] = [:]
     private var cancellables = Set<AnyCancellable>()
     private var priceUpdateTimer: Timer?
-    private let priceUpdateInterval: TimeInterval = 120 // Update prices every 2 minutes
+    private let priceUpdateInterval: TimeInterval = 60 // Live prices — CoinGecko free tier is fine with 1 call/min
     private var savedCustomTokens: [Token] = []
 
     // Public access to chain accounts for deposit address generation
@@ -609,42 +613,49 @@ final class WalletManager: ObservableObject {
             return [
                 ("USDT", "Tether USD", "0xdac17f958d2ee523a2206206994597c13d831ec7", 6),
                 ("USDC", "USD Coin", "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48", 6),
-                ("WETH", "Wrapped Ether", "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2", 18)
+                ("WETH", "Wrapped Ether", "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2", 18),
+                ("WBTC", "Wrapped Bitcoin", "0x2260fac5e5542a773aa44fbcfedf7c193bc2c599", 8)
             ]
         case .arbitrum:
             return [
                 ("USDT", "Tether USD", "0xfd086bc7cd5c481dcc9c85ebe478a1c0b69fcbb9", 6),
                 ("USDC", "USD Coin", "0xaf88d065e77c8cc2239327c5edb3a432268e5831", 6),
-                ("WETH", "Wrapped Ether", "0x82af49447d8a07e3bd95bd0d56f35241523fbab1", 18)
+                ("WETH", "Wrapped Ether", "0x82af49447d8a07e3bd95bd0d56f35241523fbab1", 18),
+                ("WBTC", "Wrapped Bitcoin", "0x2f2a2543b76a4166549f7aab2e75bef0aefc5b0f", 8)
             ]
         case .optimism:
             return [
                 ("USDT", "Tether USD", "0x94b008aa00579c1307b0ef2c499ad98a8ce58e58", 6),
                 ("USDC", "USD Coin", "0x0b2c639c533813f4aa9d7837caf62653d097ff85", 6),
-                ("WETH", "Wrapped Ether", "0x4200000000000000000000000000000000000006", 18)
+                ("WETH", "Wrapped Ether", "0x4200000000000000000000000000000000000006", 18),
+                ("WBTC", "Wrapped Bitcoin", "0x68f180fcce6836688e9084f035309e29bf0a2095", 8)
             ]
         case .base:
             return [
                 ("USDT", "Tether USD", "0xfde4c96c8593536e31f229ea8f37b2ada2699bb2", 6),
                 ("USDC", "USD Coin", "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913", 6),
-                ("WETH", "Wrapped Ether", "0x4200000000000000000000000000000000000006", 18)
+                ("WETH", "Wrapped Ether", "0x4200000000000000000000000000000000000006", 18),
+                ("cbBTC", "Coinbase Wrapped BTC", "0xcbb7c0000ab88b473b1f5afd9ef808440eed33bf", 8)
             ]
         case .polygon:
             return [
                 ("USDT", "Tether USD", "0xc2132d05d31c914a87c6611c10748aeb04b58e8f", 6),
                 ("USDC", "USD Coin", "0x3c499c542cef5e3811e1192ce70d8cc03d5c3359", 6),
-                ("WETH", "Wrapped Ether", "0x7ceb23fd6bc0add59e62ac25578270cff1b9f619", 18)
+                ("WETH", "Wrapped Ether", "0x7ceb23fd6bc0add59e62ac25578270cff1b9f619", 18),
+                ("WBTC", "Wrapped Bitcoin", "0x1bfd67037b42cf73acf2047067bd4f2c47d9bfd6", 8)
             ]
         case .bsc:
             return [
                 ("USDT", "Tether USD", "0x55d398326f99059ff775485246999027b3197955", 18),
-                ("USDC", "USD Coin", "0x8ac76a51cc950d9822d68b83fe1ad97b32cd580d", 18)
+                ("USDC", "USD Coin", "0x8ac76a51cc950d9822d68b83fe1ad97b32cd580d", 18),
+                ("BTCB", "Bitcoin BEP20", "0x7130d2a12b9bcbfae4f2634d864a1ee1ce3ead9c", 18)
             ]
         case .avalanche:
             return [
                 ("USDT", "Tether USD", "0x9702230a8ea53601f5cd2dc00fdbc13d4df4a8c7", 6),
                 ("USDC", "USD Coin", "0xb97ef9ef8734c71904d8002f8b6bc66dd9c48a6e", 6),
-                ("WETH", "Wrapped Ether", "0x49d5c2bdffac6ce2bfdb6640f4f80f226bc10bab", 18)
+                ("WETH", "Wrapped Ether", "0x49d5c2bdffac6ce2bfdb6640f4f80f226bc10bab", 18),
+                ("BTC.b", "Bitcoin (Avalanche)", "0x152b9d0fdc40c096757f570a51e494bd4b943e50", 8)
             ]
         default:
             return []
@@ -1483,6 +1494,11 @@ final class WalletManager: ObservableObject {
             }
         }
 
+        // First refresh right away so 24h changes appear without waiting a full interval
+        Task {
+            await refreshPricesOnly()
+        }
+
         Logger.log("✅ Price auto-refresh started (every \(Int(priceUpdateInterval))s)")
     }
 
@@ -1521,6 +1537,16 @@ final class WalletManager: ObservableObject {
                 )
             }
             saveCachedPrices(from: tokens)
+
+            var changes: [String: Double] = [:]
+            for token in tokens {
+                let coinId = APIService.getCoinId(for: token.symbol)
+                if let change = lookup[coinId]?.priceChange24h {
+                    changes[token.symbol.uppercased()] = change
+                }
+            }
+            priceChanges24h = changes
+            lastPriceUpdate = Date()
 
             balance = visibleTokens.reduce(0) { $0 + $1.totalValue }
             Logger.log("✅ Price/logo refresh completed")

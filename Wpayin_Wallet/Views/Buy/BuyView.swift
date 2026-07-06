@@ -15,6 +15,7 @@ struct BuyView: View {
     @EnvironmentObject var settingsManager: SettingsManager
     @State private var selectedCrypto: String = ""
     @State private var showWidget = false
+    @State private var showP2PTrade = false
     
     private let supportedCryptos = ["BTC", "ETH", "USDT", "USDC", "BNB", "MATIC", "AVAX", "SOL"]
 
@@ -79,7 +80,46 @@ struct BuyView: View {
                                 .padding(.horizontal)
                         }
                         .padding(.top, 20)
-                        
+
+                        // P2P — trade directly with another Wpayin user
+                        Button {
+                            showP2PTrade = true
+                        } label: {
+                            HStack(spacing: 14) {
+                                Image(systemName: "person.2.fill")
+                                    .font(.system(size: 20, weight: .semibold))
+                                    .foregroundColor(.white)
+                                    .frame(width: 46, height: 46)
+                                    .background(Circle().fill(Color.white.opacity(0.14)))
+
+                                VStack(alignment: .leading, spacing: 4) {
+                                    Text("P2P Exchange".localized)
+                                        .font(.system(size: 17, weight: .bold, design: .rounded))
+                                        .foregroundColor(.white)
+
+                                    Text("Trade directly with another Wpayin user".localized)
+                                        .font(.system(size: 12, weight: .medium))
+                                        .foregroundColor(Color.white.opacity(0.75))
+                                        .lineLimit(2)
+                                        .multilineTextAlignment(.leading)
+                                }
+
+                                Spacer()
+
+                                Image(systemName: "chevron.right")
+                                    .font(.system(size: 14, weight: .bold))
+                                    .foregroundColor(Color.white.opacity(0.7))
+                            }
+                            .padding(18)
+                            .background(
+                                RoundedRectangle(cornerRadius: WpayinRadius.card, style: .continuous)
+                                    .fill(WpayinColors.accentGradient)
+                                    .shadow(color: WpayinColors.primary.opacity(0.25), radius: 16, y: 8)
+                            )
+                        }
+                        .buttonStyle(WpayinPressableStyle())
+                        .padding(.horizontal)
+
                         if cryptos.isEmpty {
                             VStack(spacing: 12) {
                                 Image(systemName: "wallet.pass")
@@ -183,6 +223,11 @@ struct BuyView: View {
                 )
                 .environmentObject(settingsManager)
             }
+        }
+        .sheet(isPresented: $showP2PTrade) {
+            P2PTradeView()
+                .environmentObject(walletManager)
+                .environmentObject(settingsManager)
         }
     }
     

@@ -133,6 +133,28 @@ enum AutoLockDuration: String, CaseIterable, Identifiable {
     }
 }
 
+enum AssetListStyle: String, CaseIterable, Identifiable {
+    case cards = "cards"     // default — expandable cards (current design)
+    case compact = "compact" // dense single-card list
+
+    var id: String { rawValue }
+
+    /// Pass through .localized at render time.
+    var displayName: String {
+        switch self {
+        case .cards: return "Cards"
+        case .compact: return "Compact List"
+        }
+    }
+
+    var iconName: String {
+        switch self {
+        case .cards: return "rectangle.stack"
+        case .compact: return "list.bullet"
+        }
+    }
+}
+
 final class SettingsManager: ObservableObject {
 
     // MARK: - Published Properties
@@ -142,6 +164,9 @@ final class SettingsManager: ObservableObject {
     @Published var autoLockDuration: AutoLockDuration = .after5min
     // Off until the user opts in (permission is requested at that moment)
     @Published var notificationsEnabled: Bool = false
+    @Published var assetListStyle: AssetListStyle = .cards
+    @Published var selectedColorTheme: AppColorTheme = .indigo
+    @Published var favoriteTokenSymbols: [String] = []
 
     // State variable to force UI refresh when settings change
     @Published var refreshID = UUID()
@@ -157,6 +182,8 @@ final class SettingsManager: ObservableObject {
         static let biometricAuth = "BiometricAuthEnabled"
         static let autoLock = "AutoLockDuration"
         static let notifications = "NotificationsEnabled"
+        static let assetListStyle = "AssetListStyle"
+        static let favoriteTokens = "FavoriteTokenSymbols"
     }
 
     // MARK: - Initialization
@@ -188,6 +215,16 @@ final class SettingsManager: ObservableObject {
         }
 
         notificationsEnabled = userDefaults.bool(forKey: Keys.notifications)
+
+        if let styleRaw = userDefaults.string(forKey: Keys.assetListStyle),
+           let style = AssetListStyle(rawValue: styleRaw) {
+            assetListStyle = style
+        }
+
+        selectedColorTheme = AppColorTheme.loadSaved()
+        WpayinColors.currentTheme = selectedColorTheme
+
+        favoriteTokenSymbols = userDefaults.stringArray(forKey: Keys.favoriteTokens) ?? []
     }
 
     private func applyLanguagePreference() {
@@ -240,6 +277,46 @@ final class SettingsManager: ObservableObject {
     func updateBiometricAuth(_ enabled: Bool) {
         biometricAuthEnabled = enabled
         userDefaults.set(enabled, forKey: Keys.biometricAuth)
+
+        let biometryName = biometricType == .touchID ? "Touch ID" : "Face ID"
+        AppToast.show(
+            enabled ? "%@ enabled".localized(biometryName) : "%@ disabled".localized(biometryName),
+            icon: enabled ? "faceid" : "lock.slash"
+        )
+    }
+
+    func updateAssetListStyle(_ style: AssetListStyle) {
+        assetListStyle = style
+        userDefaults.set(style.rawValue, forKey: Keys.assetListStyle)
+        refreshID = UUID()
+        objectWillChange.send()
+    }
+
+    func updateColorTheme(_ theme: AppColorTheme) {
+        selectedColorTheme = theme
+        WpayinColors.currentTheme = theme
+        userDefaults.set(theme.rawValue, forKey: AppColorTheme.storageKey)
+
+        // Colors are read via WpayinColors statics — force a full redraw
+        refreshID = UUID()
+        objectWillChange.send()
+    }
+
+    // MARK: - Favorite tokens
+
+    func isFavoriteToken(_ symbol: String) -> Bool {
+        favoriteTokenSymbols.contains(symbol)
+    }
+
+    func toggleFavoriteToken(_ symbol: String) {
+        if let index = favoriteTokenSymbols.firstIndex(of: symbol) {
+            favoriteTokenSymbols.remove(at: index)
+            AppToast.show("Removed from Favorites".localized, icon: "star.slash")
+        } else {
+            favoriteTokenSymbols.append(symbol)
+            AppToast.show("Added to Favorites".localized, icon: "star.fill")
+        }
+        userDefaults.set(favoriteTokenSymbols, forKey: Keys.favoriteTokens)
     }
 
     func updateAutoLock(_ duration: AutoLockDuration) {
@@ -255,6 +332,7 @@ final class SettingsManager: ObservableObject {
     func setNotificationsEnabled(_ enabled: Bool) {
         guard enabled else {
             updateNotifications(false)
+            AppToast.show("Notifications disabled".localized, icon: "bell.slash")
             return
         }
 
@@ -267,6 +345,8 @@ final class SettingsManager: ObservableObject {
                 self?.updateNotifications(granted)
 
                 if granted {
+                    AppToast.show("Notifications enabled".localized, icon: "bell.badge.fill")
+
                     // Immediate visible confirmation that notifications work
                     let content = UNMutableNotificationContent()
                     content.title = "Notifications enabled".localized
