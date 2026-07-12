@@ -35,9 +35,9 @@ struct ActivityView: View {
         case .all:
             break
         case .sent:
-            transactions = transactions.filter { $0.type == .send || $0.type == .withdraw }
+            transactions = transactions.filter { $0.type == .send || $0.type == .withdraw || $0.type == .bridge }
         case .received:
-            transactions = transactions.filter { $0.type == .receive || $0.type == .deposit }
+            transactions = transactions.filter { $0.type == .receive || $0.type == .deposit || $0.type == .bridgeReceive }
         case .swapped:
             transactions = transactions.filter { $0.type == .swap }
         }
@@ -413,11 +413,11 @@ struct ActivityOverviewCard: View {
     let transactions: [Transaction]
 
     private var sentCount: Int {
-        transactions.filter { $0.type == .send || $0.type == .withdraw }.count
+        transactions.filter { $0.type == .send || $0.type == .withdraw || $0.type == .bridge }.count
     }
 
     private var receivedCount: Int {
-        transactions.filter { $0.type == .receive || $0.type == .deposit }.count
+        transactions.filter { $0.type == .receive || $0.type == .deposit || $0.type == .bridgeReceive }.count
     }
 
     private var swappedCount: Int {
@@ -602,6 +602,22 @@ private struct TransactionDayGroup: Identifiable {
 
 struct TransactionRowView: View {
     let transaction: Transaction
+    @EnvironmentObject private var walletManager: WalletManager
+
+    private var usdValueText: String {
+        guard let value = walletManager.currentUSDValue(for: transaction) else {
+            return "— USD"
+        }
+        return "\(value.formatted(as: .usd)) USD"
+    }
+
+    private var gasFeeUSDText: String? {
+        guard transaction.gasFee > 0 else { return nil }
+        guard let value = walletManager.currentGasFeeUSDValue(for: transaction) else {
+            return "Gas: — USD"
+        }
+        return "Gas: \(value.formatted(as: .usd)) USD"
+    }
 
     var body: some View {
         HStack(spacing: 13) {
@@ -632,6 +648,10 @@ struct TransactionRowView: View {
                         .lineLimit(1)
                         .minimumScaleFactor(0.8)
                 }
+
+                Text(transaction.timestamp, style: .time)
+                    .font(.wpayinSmall)
+                    .foregroundColor(WpayinColors.textTertiary)
             }
 
             Spacer(minLength: 8)
@@ -643,9 +663,17 @@ struct TransactionRowView: View {
                     .lineLimit(1)
                     .minimumScaleFactor(0.58)
 
-                Text(transaction.timestamp, style: .time)
+                Text(usdValueText)
                     .font(.wpayinSmall)
                     .foregroundColor(WpayinColors.textSecondary)
+
+                if let gasFeeUSDText {
+                    Text(gasFeeUSDText)
+                        .font(.system(size: 9, weight: .medium, design: .rounded))
+                        .foregroundColor(WpayinColors.textTertiary)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.7)
+                }
             }
         }
         .padding(14)
@@ -826,21 +854,23 @@ extension Transaction {
         case .swap: return "arrow.left.arrow.right"
         case .deposit: return "plus"
         case .withdraw: return "minus"
+        case .bridge: return "arrow.up.right"
+        case .bridgeReceive: return "arrow.down.left"
         }
     }
 
     var activityColor: Color {
         switch type {
-        case .send, .withdraw: return WpayinColors.error
-        case .receive, .deposit: return WpayinColors.success
+        case .send, .withdraw, .bridge: return WpayinColors.error
+        case .receive, .deposit, .bridgeReceive: return WpayinColors.success
         case .swap: return WpayinColors.primary
         }
     }
 
     var activityAmountSign: String {
         switch type {
-        case .receive, .deposit: return "+"
-        case .send, .withdraw: return "-"
+        case .receive, .deposit, .bridgeReceive: return "+"
+        case .send, .withdraw, .bridge: return "-"
         case .swap: return ""
         }
     }
@@ -850,7 +880,7 @@ extension Transaction {
     }
 
     var counterpartyShortAddress: String {
-        let address = type == .send || type == .withdraw ? to : from
+        let address = type == .send || type == .withdraw || type == .bridge ? to : from
         guard address.count > 12 else { return address }
         return "\(address.prefix(6))…\(address.suffix(4))"
     }

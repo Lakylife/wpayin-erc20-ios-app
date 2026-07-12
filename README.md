@@ -1,4 +1,4 @@
-# Wpayin Wallet 1.1.7
+# Wpayin Wallet 1.1.8
 
 Wpayin Wallet is a non-custodial iOS wallet built with SwiftUI and Trust
 Wallet Core. It supports Bitcoin, Ethereum, Solana, EVM-compatible networks,
@@ -10,31 +10,32 @@ bridging, and atomic EVM P2P trading.
 > recovery phrase and private keys.
 
 <p align="center">
-  <img src="./screenshots/20260609_app_update/01_launch.png" width="220" alt="Wpayin Wallet onboarding">
-  <img src="./screenshots/20260609_app_update/02_home.png" width="220" alt="Wpayin Wallet home">
-  <img src="./screenshots/20260609_app_update/03_swap.png" width="220" alt="Wpayin Wallet swap">
+  <img src="./screenshots/20260712_v1.1.8/01_launch.png" width="220" alt="Wpayin Wallet launch">
+  <img src="./screenshots/20260712_v1.1.8/02_welcome.png" width="220" alt="Wpayin Wallet welcome">
+  <img src="./screenshots/20260712_v1.1.8/03_home.png" width="220" alt="Wpayin Wallet home">
+</p>
+<p align="center">
+  <img src="./screenshots/20260712_v1.1.8/04_swap.png" width="220" alt="Wpayin Wallet swap">
+  <img src="./screenshots/20260712_v1.1.8/05_activity.png" width="220" alt="Wpayin Wallet activity">
+  <img src="./screenshots/20260712_v1.1.8/06_settings.png" width="220" alt="Wpayin Wallet settings">
 </p>
 
-## Version 1.1.7
+## Version 1.1.8
 
-- Added cross-chain bridging through LI.FI across Ethereum, Arbitrum, Base,
-  Optimism, Polygon, BNB Chain, and Avalanche.
-- Replaced the Buy flow with signed P2P offers settled atomically through
-  AirSwap contracts, including QR/share import, verification, simulation,
-  cancellation, and offer status tracking.
-- Added reliable PublicNode RPC endpoints and automatic failover for swaps
-  and native balances; failed balance requests no longer overwrite the last
-  known value with zero.
-- Made transaction history network-aware with network filters, icons, scoped
-  token activity, and the correct block explorer for each chain.
-- Added live prices with real 24-hour change indicators refreshed every
-  60 seconds.
-- Added an optional 0.25% platform fee for sends and P2P trades. It remains
-  disabled until a valid `PLATFORM_FEE_RECIPIENT` is configured.
-- Added a redesigned slippage sheet, localized transaction errors in all
-  eight languages, and a new orbital launch animation.
+- Added a branded launch experience and immediate restoration of last-known
+  wallet balances while live chain data refreshes.
+- Reworked Send with live gas prices, Slow/Standard/Fast selection, accurate
+  Max calculations including gas, and preflight transaction simulation.
+- Newly broadcast sends appear in Activity immediately with their hash,
+  explorer link, pending progress, and automatic confirmed/failed updates.
+- Wallet balances update optimistically after Send and reconcile with the
+  blockchain as soon as the receipt is available.
+- Improved swap, bridge, P2P, transaction history, localization, wallet
+  switching, and multi-network reliability.
+- Removed all service configuration values from source; optional integrations
+  are supplied only through runtime environment variables.
 
-See [RELEASE_NOTES_v1.1.7.md](RELEASE_NOTES_v1.1.7.md) for the complete
+See [RELEASE_NOTES_v1.1.8.md](RELEASE_NOTES_v1.1.8.md) for the complete
 release notes.
 
 ## Requirements
@@ -80,22 +81,23 @@ add the required values under **Environment Variables**:
 | `ALCHEMY_API_KEY` | Ethereum NFT discovery |
 | `ETHERSCAN_API_KEY` | Indexed EVM transaction history |
 | `COINGECKO_API_KEY` | Optional authenticated CoinGecko access |
-| `PLATFORM_FEE_RECIPIENT` | Valid EVM address that enables the optional 0.25% platform fee |
+| `P2P_BOARD_URL` | Optional public P2P board endpoint |
+| `P2P_BOARD_ANON_KEY` | Optional public P2P board client key |
+| `PLATFORM_FEE_RECIPIENT` | Optional EVM platform-fee treasury address |
 
 The app still builds and runs when these values are absent. Missing provider
-keys disable only their corresponding optional data; a missing or invalid fee
-recipient disables platform-fee collection. Do not add credentials to source
-files. Any credential shipped in an iOS binary can be extracted, so production
+keys disable only their corresponding optional data. Do not add credentials,
+treasury addresses, or environment files to source control. Any value supplied
+to an iOS application at runtime can still be extracted, so production
 deployments should use restricted keys or a server-side proxy.
 
 ## Optional public P2P offer board
 
-Direct P2P offers shared by QR code or the iOS share sheet work without an
-Apple cloud entitlement. The public CloudKit offer board is implemented but
-disabled by default because iCloud capability requires the paid Apple
-Developer Program. Setup instructions and the feature flag are documented in
-`Wpayin_Wallet/Core/Config/Config.swift`; a prepared entitlement file is
-included at the repository root.
+P2P offers can be public (discoverable by every app user) or private (shared
+only by QR/code). The optional public board uses a separately configured
+Supabase/PostgREST deployment; setup is documented in
+[`docs/P2P_OFFER_BOARD.md`](docs/P2P_OFFER_BOARD.md). Private QR/code trading
+continues to work when the board is not configured.
 
 ## Supported networks
 

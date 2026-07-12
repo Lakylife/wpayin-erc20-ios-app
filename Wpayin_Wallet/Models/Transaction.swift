@@ -32,6 +32,8 @@ struct Transaction: Identifiable, Codable {
         case swap = "swap"
         case deposit = "deposit"
         case withdraw = "withdraw"
+        case bridge = "bridge"                  // outgoing side on the source chain
+        case bridgeReceive = "bridge_receive"   // incoming side on the destination chain
 
         var displayName: String {
             switch self {
@@ -40,6 +42,7 @@ struct Transaction: Identifiable, Codable {
             case .swap: return "Swap".localized
             case .deposit: return "Deposit".localized
             case .withdraw: return "Withdraw".localized
+            case .bridge, .bridgeReceive: return "Bridge".localized
             }
         }
     }

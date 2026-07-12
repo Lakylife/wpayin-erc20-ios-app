@@ -58,10 +58,14 @@ struct SwapView: View {
     @State private var showNetworkSelector = false
     @State private var showSwapError = false
     @State private var swapErrorMessage = ""
-    @State private var showSwapSuccess = false
-    @State private var swapSuccessMessage = ""
     @State private var showReviewSwap = false
+    @State private var swapProgress: SwapProgressState?
+    @State private var showSwapProgress = false
     @State private var isBridgeMode = false
+    @State private var liveQuote: DEXSwapQuote?
+    @State private var liveFeeEstimate: SwapNetworkFeeEstimate?
+    @State private var liveEstimateKey = ""
+    @State private var isEstimatingNetworkFee = false
 
     init(initialFromToken: Token? = nil) {
         self.initialFromToken = initialFromToken
@@ -97,6 +101,9 @@ struct SwapView: View {
     ]
 
     private var swapRate: Double {
+        if let quote = currentLiveQuote, quote.amountIn > 0 {
+            return NSDecimalNumber(decimal: quote.amountOut / quote.amountIn).doubleValue
+        }
         guard let fromToken = selectedFromToken,
               let toToken = selectedToToken,
               fromToken.price > 0, toToken.price > 0 else { return 0.0 }
@@ -104,6 +111,9 @@ struct SwapView: View {
     }
 
     private var estimatedToAmount: Double {
+        if let quote = currentLiveQuote {
+            return NSDecimalNumber(decimal: quote.amountOut).doubleValue
+        }
         guard let amount = Double(fromAmount), amount > 0 else { return 0.0 }
         return amount * swapRate
     }
@@ -113,40 +123,55 @@ struct SwapView: View {
               let to = selectedToToken,
               let amount = Double(fromAmount),
               amount > 0 else { return false }
-        return tokenIdentity(from) != tokenIdentity(to) && amount <= from.balance
+        return tokenIdentity(from) != tokenIdentity(to)
+            && amount <= from.balance
+            && hasSufficientSwapGas
+    }
+
+    private var sourceNativeBalance: Double {
+        guard let from = selectedFromToken else { return 0 }
+        return walletManager.tokens.first {
+            $0.blockchain == from.blockchain && $0.isNative
+        }?.balance ?? 0
+    }
+
+    private var hasSufficientSwapGas: Bool {
+        guard currentLiveQuote != nil,
+              let from = selectedFromToken,
+              let amount = Double(fromAmount),
+              estimatedGasFee > 0 else { return true }
+
+        if from.isNative {
+            return amount + estimatedGasFee <= from.balance
+        }
+        return sourceNativeBalance >= estimatedGasFee
     }
 
     private var estimatedGasFee: Double {
-        guard let token = selectedFromToken else { return 0 }
+        standardGasFee * selectedGasSpeed.multiplier
+    }
 
-        // Base gas fees vary by network
-        let baseGas: Double
-        switch token.blockchain {
-        case .ethereum:
-            baseGas = 0.003  // ~$8-10 typical
-        case .arbitrum:
-            baseGas = 0.0001 // Very cheap L2
-        case .base:
-            baseGas = 0.0001 // Very cheap L2
-        case .optimism:
-            baseGas = 0.0002 // Cheap L2
-        case .polygon:
-            baseGas = 0.01   // MATIC is cheap
-        case .bsc:
-            baseGas = 0.001  // BNB for gas
-        case .avalanche:
-            baseGas = 0.01   // AVAX for gas
-        default:
-            baseGas = 0.001
-        }
-
-        // Apply gas speed multiplier
-        return baseGas * selectedGasSpeed.multiplier
+    private var standardGasFee: Double {
+        guard currentLiveQuote != nil, let estimate = liveFeeEstimate else { return 0 }
+        return NSDecimalNumber(decimal: estimate.standardFeeNative).doubleValue
     }
 
     private var gasFeeInUSD: Double {
-        guard let token = selectedFromToken else { return 0 }
-        return estimatedGasFee * token.price
+        guard let token = selectedFromToken,
+              let nativePrice = walletManager.currentUSDPrice(
+                for: token.blockchain.nativeToken,
+                blockchain: token.blockchain
+              ) else { return 0 }
+        return estimatedGasFee * nativePrice
+    }
+
+    private var standardGasFeeUSD: Double {
+        guard let token = selectedFromToken,
+              let nativePrice = walletManager.currentUSDPrice(
+                for: token.blockchain.nativeToken,
+                blockchain: token.blockchain
+              ) else { return 0 }
+        return standardGasFee * nativePrice
     }
 
     private var portfolioBalance: Double {
@@ -154,7 +179,20 @@ struct SwapView: View {
     }
 
     private var minimumReceived: Double {
-        estimatedToAmount * max(0, 1 - (slippage / 100))
+        if let quote = currentLiveQuote {
+            return NSDecimalNumber(decimal: quote.amountOutMin).doubleValue
+        }
+        return estimatedToAmount * max(0, 1 - (slippage / 100))
+    }
+
+    private var swapEstimateKey: String {
+        let from = selectedFromToken.map(tokenIdentity) ?? "none"
+        let to = selectedToToken.map(tokenIdentity) ?? "none"
+        return "\(from)|\(to)|\(fromAmount)|\(String(format: "%.4f", slippage))"
+    }
+
+    private var currentLiveQuote: DEXSwapQuote? {
+        liveEstimateKey == swapEstimateKey ? liveQuote : nil
     }
 
     private var estimatedAmountText: String {
@@ -200,7 +238,12 @@ struct SwapView: View {
         }
 
         .sheet(isPresented: $showGasSettings) {
-            GasSettingsSheet(selectedSpeed: $selectedGasSpeed, estimatedGas: estimatedGasFee, gasInUSD: gasFeeInUSD, tokenSymbol: selectedFromToken?.symbol ?? "ETH")
+            GasSettingsSheet(
+                selectedSpeed: $selectedGasSpeed,
+                estimatedGas: standardGasFee,
+                gasInUSD: standardGasFeeUSD,
+                tokenSymbol: selectedFromToken?.blockchain.nativeToken ?? "ETH"
+            )
         }
         .sheet(isPresented: $showSlippageSettings) {
             SlippageSettingsSheet(slippage: $slippage)
@@ -223,6 +266,10 @@ struct SwapView: View {
                     toAmount: estimatedToAmount,
                     minimumReceived: minimumReceived,
                     rate: swapRate,
+                    networkFeeNative: estimatedGasFee,
+                    networkFeeUSD: gasFeeInUSD,
+                    nativeTokenSymbol: fromToken.blockchain.nativeToken,
+                    approvalRequired: liveFeeEstimate?.approvalRequired ?? false,
                     isSwapping: isSwapping,
                     onConfirm: performSwap
                 )
@@ -248,15 +295,30 @@ struct SwapView: View {
         .onChange(of: walletManager.selectedBlockchains) { _ in
             ensureSelectedNetworkIsAvailable()
         }
+        .task(id: swapEstimateKey) {
+            liveQuote = nil
+            liveFeeEstimate = nil
+            liveEstimateKey = ""
+            guard isValidSwap else { return }
+
+            // Debounce typing, then refresh periodically while the same swap
+            // remains on screen so the displayed network fee stays current.
+            try? await Task.sleep(nanoseconds: 250_000_000)
+            while !Task.isCancelled {
+                await refreshLiveSwapEstimate(showError: false)
+                try? await Task.sleep(nanoseconds: 15_000_000_000)
+            }
+        }
         .alert("Swap Failed".localized, isPresented: $showSwapError) {
             Button("OK".localized) { }
         } message: {
             Text(swapErrorMessage)
         }
-        .alert("Swap Submitted".localized, isPresented: $showSwapSuccess) {
-            Button("OK".localized) { }
-        } message: {
-            Text(swapSuccessMessage)
+        .sheet(isPresented: $showSwapProgress) {
+            if let progress = swapProgress {
+                SwapProgressSheet(state: progress)
+                    .swapReviewPresentation()
+            }
         }
     }
 
@@ -405,7 +467,8 @@ struct SwapView: View {
                     onTokenSelect: {
                         isSelectingFromToken = true
                         showTokenPicker = true
-                    }
+                    },
+                    onMax: setMaximumSwapAmount
                 )
 
                 ModernTokenSelector(
@@ -514,11 +577,11 @@ struct SwapView: View {
 
             Button {
                 if isValidSwap {
-                    showReviewSwap = true
+                    Task { await prepareReviewSwap() }
                 }
             } label: {
                 HStack(spacing: 9) {
-                    if isSwapping {
+                    if isSwapping || isEstimatingNetworkFee {
                         ProgressView()
                             .tint(.white)
                     }
@@ -554,7 +617,7 @@ struct SwapView: View {
                     y: 7
                 )
             }
-            .disabled(!isValidSwap || isSwapping)
+            .disabled(!isValidSwap || isSwapping || isEstimatingNetworkFee)
             .buttonStyle(WpayinPressableStyle())
         }
         .padding(.horizontal, 20)
@@ -645,6 +708,9 @@ struct SwapView: View {
         if amount > from.balance {
             return L10n.Swap.insufficient.localized(from.symbol)
         }
+        if !hasSufficientSwapGas {
+            return "Insufficient %@ balance for the amount and network fee".localized(from.blockchain.nativeToken)
+        }
         return "Enter an amount to swap".localized
     }
 
@@ -657,10 +723,104 @@ struct SwapView: View {
         }
     }
 
+    private func setMaximumSwapAmount() {
+        guard let token = selectedFromToken, token.balance > 0 else { return }
+
+        Task {
+            isEstimatingNetworkFee = true
+            if token.isNative {
+                // Start below the full balance so the RPC can simulate where
+                // possible. If it still cannot, SwapService returns the route's
+                // conservative limit specifically for this MAX calculation.
+                fromAmount = editableAmount(token.balance * 0.995)
+            } else {
+                fromAmount = editableAmount(token.balance)
+            }
+
+            await refreshLiveSwapEstimate(showError: false)
+
+            if token.isNative, estimatedGasFee > 0 {
+                let reserve = max(estimatedGasFee * 0.05, 0.00000001)
+                let spendable = max(0, token.balance - estimatedGasFee - reserve)
+                fromAmount = editableAmount(spendable)
+                await refreshLiveSwapEstimate(showError: false)
+            }
+            isEstimatingNetworkFee = false
+
+            if !hasSufficientSwapGas {
+                swapErrorMessage = "Insufficient %@ balance for the amount and network fee".localized(token.blockchain.nativeToken)
+                showSwapError = true
+            }
+        }
+    }
+
+    private func editableAmount(_ value: Double) -> String {
+        var result = String(format: "%.12f", max(0, value))
+        while result.last == "0" { result.removeLast() }
+        if result.last == "." { result.removeLast() }
+        return result
+    }
+
+    private func refreshLiveSwapEstimate(showError: Bool) async {
+        guard let fromToken = selectedFromToken,
+              let toToken = selectedToToken,
+              let amount = Decimal(string: fromAmount.replacingOccurrences(of: ",", with: ".")),
+              amount > 0 else { return }
+
+        let requestedKey = swapEstimateKey
+        do {
+            let quote = try await SwapService.shared.getQuote(
+                fromToken: fromToken,
+                toToken: toToken,
+                amountIn: amount,
+                slippage: slippage
+            )
+            let fee = try await SwapService.shared.estimateNetworkFee(
+                quote: quote,
+                fromToken: fromToken,
+                toToken: toToken
+            )
+
+            guard requestedKey == swapEstimateKey else { return }
+            liveQuote = quote
+            liveFeeEstimate = fee
+            liveEstimateKey = requestedKey
+        } catch {
+            guard requestedKey == swapEstimateKey else { return }
+            liveQuote = nil
+            liveFeeEstimate = nil
+            liveEstimateKey = ""
+            if showError {
+                swapErrorMessage = error.localizedDescription
+                showSwapError = true
+            }
+        }
+    }
+
+    private func prepareReviewSwap() async {
+        guard isValidSwap else { return }
+        isEstimatingNetworkFee = true
+        await refreshLiveSwapEstimate(showError: true)
+        isEstimatingNetworkFee = false
+
+        guard currentLiveQuote != nil, liveFeeEstimate != nil else { return }
+        guard hasSufficientSwapGas else {
+            let symbol = selectedFromToken?.blockchain.nativeToken ?? "ETH"
+            swapErrorMessage = "Insufficient %@ balance for the amount and network fee".localized(symbol)
+            showSwapError = true
+            return
+        }
+        showReviewSwap = true
+    }
+
     private func performSwap() {
         isSwapping = true
 
         Task {
+            guard await settingsManager.authorizeSpending(reason: "auth.confirmPayment".localized) else {
+                await MainActor.run { isSwapping = false }
+                return
+            }
             do {
                 guard let fromToken = selectedFromToken,
                       let toToken = selectedToToken,
@@ -669,52 +829,551 @@ struct SwapView: View {
                     throw SwapError.invalidTokenPair
                 }
 
-                // Get swap quote
-                Logger.log("📊 Getting swap quote...")
-                let quote = try await SwapService.shared.getQuote(
-                    fromToken: fromToken,
-                    toToken: toToken,
-                    amountIn: Decimal(amount),
-                    slippage: slippage
-                )
+                // Reuse the quote and live gas simulation accepted on Review.
+                // If the inputs changed unexpectedly, refresh both first.
+                let quote: DEXSwapQuote
+                let feeEstimate: SwapNetworkFeeEstimate
+                if let reviewedQuote = currentLiveQuote,
+                   let reviewedFee = liveFeeEstimate {
+                    quote = reviewedQuote
+                    feeEstimate = reviewedFee
+                } else {
+                    Logger.log("📊 Refreshing swap quote and network fee...")
+                    quote = try await SwapService.shared.getQuote(
+                        fromToken: fromToken,
+                        toToken: toToken,
+                        amountIn: Decimal(amount),
+                        slippage: slippage
+                    )
+                    feeEstimate = try await SwapService.shared.estimateNetworkFee(
+                        quote: quote,
+                        fromToken: fromToken,
+                        toToken: toToken
+                    )
+                }
 
                 Logger.log("✅ Quote received: \(quote.amountOut) \(toToken.symbol)")
-                Logger.log("💰 Minimum amount out: \(quote.amountOutMin)")
-                Logger.log("⛽ Estimated gas: \(quote.gasEstimate)")
 
-                // Execute swap
+                // Hand the rest of the flow to the live progress sheet.
+                let estimatedOut = NSDecimalNumber(decimal: quote.amountOut).doubleValue
+                await MainActor.run {
+                    swapProgress = SwapProgressState(
+                        fromSymbol: fromToken.symbol,
+                        toSymbol: toToken.symbol,
+                        amountIn: amount,
+                        amountOut: estimatedOut,
+                        includesApproval: feeEstimate.approvalRequired,
+                        blockchain: fromToken.blockchain,
+                        phase: feeEstimate.approvalRequired ? .approving : .submitting
+                    )
+                    showReviewSwap = false
+                }
+                // Let the review sheet finish dismissing before presenting.
+                try? await Task.sleep(nanoseconds: 250_000_000)
+                await MainActor.run { showSwapProgress = true }
+
                 Logger.log("🔄 Executing swap...")
                 let result = try await SwapService.shared.executeSwap(
                     quote: quote,
                     fromToken: fromToken,
-                    toToken: toToken
+                    toToken: toToken,
+                    gasLimit: feeEstimate.swapGasLimit,
+                    approvalGasLimit: feeEstimate.approvalGasLimit,
+                    gasPriceMultiplier: selectedGasSpeed.multiplier,
+                    onPhase: { phase in
+                        switch phase {
+                        case .approving: swapProgress?.phase = .approving
+                        case .submitting: swapProgress?.phase = .submitting
+                        }
+                    }
                 )
 
-                Logger.log("✅ Swap successful! TX: \(result.transactionHash)")
+                Logger.log("✅ Swap broadcast! TX: \(result.transactionHash)")
+
+                let explorerUrl = URL(
+                    string: NetworkManager.shared.getExplorerUrl(
+                        for: fromToken.blockchain,
+                        txHash: result.transactionHash
+                    )
+                )
 
                 await MainActor.run {
                     isSwapping = false
                     fromAmount = ""
-                    swapSuccessMessage = "Transaction: %@".localized(result.transactionHash)
-                    showSwapSuccess = true
-                    NotificationManager.shared.notifySwapCompleted(
-                        from: fromToken.symbol,
-                        to: toToken.symbol
-                    )
+                    swapProgress?.txHash = result.transactionHash
+                    swapProgress?.explorerUrl = explorerUrl
+                    swapProgress?.phase = .confirming
 
-                    // Refresh wallet data to show updated balances
-                    Task {
-                        await walletManager.refreshWalletData()
-                    }
+                    // Show the swap in Activity right away, as pending.
+                    walletManager.registerLocalTransaction(
+                        Transaction(
+                            hash: result.transactionHash,
+                            from: walletManager.walletAddress,
+                            to: walletManager.walletAddress,
+                            amount: amount,
+                            token: fromToken.symbol,
+                            type: .swap,
+                            status: .pending,
+                            timestamp: Date(),
+                            gasUsed: 0,
+                            gasFee: 0,
+                            explorerUrl: explorerUrl,
+                            blockchain: fromToken.blockchain
+                        )
+                    )
                 }
+
+                await trackSwapConfirmation(
+                    hash: result.transactionHash,
+                    fromToken: fromToken,
+                    toToken: toToken
+                )
             } catch {
                 Logger.log("❌ Swap failed: \(error.localizedDescription)")
                 await MainActor.run {
                     isSwapping = false
-                    swapErrorMessage = error.localizedDescription
-                    showSwapError = true
+                    if swapProgress != nil, showSwapProgress {
+                        swapProgress?.phase = .failed(error.localizedDescription)
+                    } else {
+                        swapErrorMessage = error.localizedDescription
+                        showSwapError = true
+                    }
                 }
             }
+        }
+    }
+
+    /// Poll the transaction receipt until the swap is mined, updating both
+    /// the progress sheet and the pending entry in Activity.
+    private func trackSwapConfirmation(hash: String, fromToken: Token, toToken: Token) async {
+        // Matches the router's 20-minute swap deadline — a transaction not
+        // mined by then reverts as EXPIRED on-chain anyway.
+        let deadline = Date().addingTimeInterval(21 * 60)
+
+        // L2 chains confirm in a couple of seconds — check early, then settle
+        // into a steady cadence.
+        var pollInterval: UInt64 = 2_000_000_000
+
+        while Date() < deadline {
+            try? await Task.sleep(nanoseconds: pollInterval)
+            pollInterval = 3_000_000_000
+
+            guard let state = try? await SwapService.shared.fetchTransactionState(
+                hash: hash,
+                blockchain: fromToken.blockchain
+            ) else { continue }
+
+            switch state {
+            case .notFound:
+                // Public RPCs may not expose a future-nonce transaction until
+                // its predecessor confirms. Keep tracking through the router
+                // deadline; absence alone is not proof that it was dropped.
+                continue
+
+            case .pending:
+                continue
+
+            case .confirmed(let blockNumber, let gasUsed, let gasFeeNative):
+                await MainActor.run {
+                    swapProgress?.phase = .confirmed
+                    walletManager.updateLocalTransactionStatus(
+                        hash: hash,
+                        status: .confirmed,
+                        gasUsed: gasUsed,
+                        gasFee: gasFeeNative,
+                        blockNumber: blockNumber
+                    )
+                    NotificationManager.shared.notifySwapCompleted(
+                        from: fromToken.symbol,
+                        to: toToken.symbol
+                    )
+                }
+                await walletManager.refreshWalletData()
+                return
+
+            case .failed(let blockNumber, let gasUsed, let gasFeeNative):
+                await MainActor.run {
+                    swapProgress?.phase = .failed("The transaction was reverted on-chain".localized)
+                    walletManager.updateLocalTransactionStatus(
+                        hash: hash,
+                        status: .failed,
+                        gasUsed: gasUsed,
+                        gasFee: gasFeeNative,
+                        blockNumber: blockNumber
+                    )
+                }
+                return
+            }
+        }
+
+        // Deadline passed with no receipt — the swap's on-chain deadline has
+        // expired, so tell the user instead of spinning forever. Activity
+        // keeps the entry pending until an explorer reports the final state.
+        await MainActor.run {
+            swapProgress?.phase = .failed("error.swap.confirmationTimeout".localized)
+        }
+    }
+}
+
+// MARK: - Swap Progress
+
+struct SwapProgressState {
+    enum Phase: Equatable {
+        case approving
+        case submitting
+        case confirming
+        case confirmed
+        case failed(String)
+    }
+
+    let fromSymbol: String
+    let toSymbol: String
+    let amountIn: Double
+    let amountOut: Double
+    let includesApproval: Bool
+    let blockchain: BlockchainType
+    var phase: Phase
+    var txHash: String?
+    var explorerUrl: URL?
+}
+
+/// Live view of a running swap: step timeline from token approval through
+/// broadcast to on-chain confirmation, with hash + explorer link.
+struct SwapProgressSheet: View {
+    let state: SwapProgressState
+    @Environment(\.dismiss) private var dismiss
+
+    private var isFinished: Bool {
+        switch state.phase {
+        case .confirmed, .failed: return true
+        default: return false
+        }
+    }
+
+    private var failureMessage: String? {
+        if case .failed(let message) = state.phase { return message }
+        return nil
+    }
+
+    private var headline: String {
+        switch state.phase {
+        case .approving: return "Approving token".localized
+        case .submitting: return "Submitting transaction".localized
+        case .confirming: return "Waiting for network confirmation".localized
+        case .confirmed: return "Swap completed".localized
+        case .failed: return "Swap Failed".localized
+        }
+    }
+
+    var body: some View {
+        ZStack {
+            WpayinColors.background.ignoresSafeArea()
+
+            ScrollView(showsIndicators: false) {
+                VStack(spacing: 22) {
+                    statusHeader
+
+                    VStack(spacing: 0) {
+                        if state.includesApproval {
+                            SwapProgressStepRow(
+                                title: "Token approval".localized,
+                                state: stepState(for: .approving),
+                                isFirst: true,
+                                isLast: false
+                            )
+                        }
+
+                        SwapProgressStepRow(
+                            title: "Transaction submitted".localized,
+                            state: stepState(for: .submitting),
+                            isFirst: !state.includesApproval,
+                            isLast: false
+                        )
+
+                        SwapProgressStepRow(
+                            title: "Network confirmation".localized,
+                            state: stepState(for: .confirming),
+                            isFirst: false,
+                            isLast: false
+                        )
+
+                        SwapProgressStepRow(
+                            title: "Completed".localized,
+                            state: finalStepState,
+                            isFirst: false,
+                            isLast: true
+                        )
+                    }
+                    .padding(.vertical, 6)
+                    .background(
+                        RoundedRectangle(cornerRadius: 20, style: .continuous)
+                            .fill(WpayinColors.surface)
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 20, style: .continuous)
+                                    .stroke(WpayinColors.surfaceBorder, lineWidth: 1)
+                            )
+                    )
+
+                    if let failureMessage {
+                        Text(failureMessage)
+                            .font(.wpayinCaption)
+                            .foregroundColor(WpayinColors.error)
+                            .multilineTextAlignment(.center)
+                            .padding(.horizontal, 6)
+                    } else if !isFinished {
+                        Text("This usually takes under a minute, but can take longer when the network is busy.".localized)
+                            .font(.wpayinCaption)
+                            .foregroundColor(WpayinColors.textTertiary)
+                            .multilineTextAlignment(.center)
+                            .padding(.horizontal, 6)
+                    }
+
+                    if let txHash = state.txHash {
+                        hashCard(txHash)
+                    }
+
+                    if let explorerUrl = state.explorerUrl {
+                        Link(destination: explorerUrl) {
+                            HStack(spacing: 8) {
+                                Image(systemName: "safari")
+                                    .font(.system(size: 14, weight: .semibold))
+                                Text(L10n.Activity.viewExplorer.localized)
+                                    .font(.system(size: 15, weight: .semibold, design: .rounded))
+                            }
+                            .foregroundColor(WpayinColors.primary)
+                            .frame(maxWidth: .infinity)
+                            .frame(height: 50)
+                            .background(
+                                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                                    .fill(WpayinColors.primary.opacity(0.12))
+                            )
+                        }
+                        .buttonStyle(PlainButtonStyle())
+                    }
+
+                    if !isFinished {
+                        Text("You can close this window — track the status anytime in Activity.".localized)
+                            .font(.wpayinSmall)
+                            .foregroundColor(WpayinColors.textTertiary)
+                            .multilineTextAlignment(.center)
+                            .padding(.horizontal, 6)
+                    }
+
+                    Button {
+                        dismiss()
+                    } label: {
+                        Text((isFinished ? "Done" : "Close").localized)
+                            .font(.system(size: 16, weight: .semibold, design: .rounded))
+                            .foregroundColor(.white)
+                            .frame(maxWidth: .infinity)
+                            .frame(height: 54)
+                            .background(
+                                RoundedRectangle(cornerRadius: 17, style: .continuous)
+                                    .fill(WpayinColors.accentGradient)
+                            )
+                    }
+                    .buttonStyle(WpayinPressableStyle())
+                }
+                .padding(.horizontal, 22)
+                .padding(.top, 26)
+                .padding(.bottom, 30)
+            }
+        }
+    }
+
+    private var statusHeader: some View {
+        VStack(spacing: 14) {
+            ZStack {
+                Circle()
+                    .fill(headerColor.opacity(0.14))
+                    .frame(width: 74, height: 74)
+
+                if isFinished {
+                    Image(systemName: failureMessage == nil ? "checkmark" : "xmark")
+                        .font(.system(size: 28, weight: .bold))
+                        .foregroundColor(headerColor)
+                } else {
+                    ProgressView()
+                        .scaleEffect(1.3)
+                        .tint(WpayinColors.primary)
+                }
+            }
+
+            Text(headline)
+                .font(.system(size: 20, weight: .bold, design: .rounded))
+                .foregroundColor(WpayinColors.text)
+                .multilineTextAlignment(.center)
+
+            Text("\(formattedAmount(state.amountIn)) \(state.fromSymbol) → \(formattedAmount(state.amountOut)) \(state.toSymbol)")
+                .font(.system(size: 15, weight: .semibold, design: .rounded))
+                .foregroundColor(WpayinColors.textSecondary)
+        }
+    }
+
+    private var headerColor: Color {
+        switch state.phase {
+        case .confirmed: return WpayinColors.success
+        case .failed: return WpayinColors.error
+        default: return WpayinColors.primary
+        }
+    }
+
+    private func hashCard(_ hash: String) -> some View {
+        HStack(spacing: 10) {
+            VStack(alignment: .leading, spacing: 5) {
+                Text("Transaction Hash".localized)
+                    .font(.wpayinSmall)
+                    .foregroundColor(WpayinColors.textSecondary)
+
+                Text(hash)
+                    .font(.system(size: 12, weight: .medium, design: .monospaced))
+                    .foregroundColor(WpayinColors.text)
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+            }
+
+            Spacer()
+
+            Button {
+                AppToast.copyToClipboard(hash)
+            } label: {
+                Image(systemName: "doc.on.doc")
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundColor(WpayinColors.primary)
+                    .frame(width: 34, height: 34)
+                    .background(Circle().fill(WpayinColors.surfaceLight))
+            }
+            .buttonStyle(PlainButtonStyle())
+        }
+        .padding(14)
+        .background(
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .fill(WpayinColors.surface)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 16, style: .continuous)
+                        .stroke(WpayinColors.surfaceBorder, lineWidth: 1)
+                )
+        )
+    }
+
+    private func formattedAmount(_ value: Double) -> String {
+        if value >= 1 {
+            return String(format: "%.4f", value)
+        }
+        return String(format: "%.6f", value)
+    }
+
+    /// Ordering of phases along the timeline for step-state comparison.
+    private func phaseIndex(_ phase: SwapProgressState.Phase) -> Int {
+        switch phase {
+        case .approving: return 0
+        case .submitting: return 1
+        case .confirming: return 2
+        case .confirmed, .failed: return 3
+        }
+    }
+
+    private func stepState(for step: SwapProgressState.Phase) -> SwapProgressStepRow.StepState {
+        let current = phaseIndex(state.phase)
+        let target = phaseIndex(step)
+
+        if current > target { return .done }
+        if current == target {
+            if case .failed = state.phase { return .failed }
+            return .active
+        }
+        return .upcoming
+    }
+
+    private var finalStepState: SwapProgressStepRow.StepState {
+        switch state.phase {
+        case .confirmed: return .done
+        case .failed: return .failed
+        default: return .upcoming
+        }
+    }
+}
+
+struct SwapProgressStepRow: View {
+    enum StepState {
+        case done
+        case active
+        case upcoming
+        case failed
+    }
+
+    let title: String
+    let state: StepState
+    let isFirst: Bool
+    let isLast: Bool
+
+    var body: some View {
+        HStack(spacing: 14) {
+            VStack(spacing: 0) {
+                Rectangle()
+                    .fill(isFirst ? Color.clear : connectorColor)
+                    .frame(width: 2, height: 12)
+
+                indicator
+
+                Rectangle()
+                    .fill(isLast ? Color.clear : connectorColor)
+                    .frame(width: 2, height: 12)
+            }
+            .frame(width: 28)
+
+            Text(title)
+                .font(.system(size: 15, weight: state == .active ? .semibold : .medium, design: .rounded))
+                .foregroundColor(titleColor)
+
+            Spacer()
+        }
+        .padding(.horizontal, 16)
+    }
+
+    @ViewBuilder
+    private var indicator: some View {
+        switch state {
+        case .done:
+            Circle()
+                .fill(WpayinColors.success)
+                .frame(width: 24, height: 24)
+                .overlay(
+                    Image(systemName: "checkmark")
+                        .font(.system(size: 11, weight: .bold))
+                        .foregroundColor(.white)
+                )
+        case .active:
+            ProgressView()
+                .scaleEffect(0.8)
+                .tint(WpayinColors.primary)
+                .frame(width: 24, height: 24)
+                .background(Circle().fill(WpayinColors.primary.opacity(0.14)))
+        case .upcoming:
+            Circle()
+                .stroke(WpayinColors.surfaceBorder, lineWidth: 2)
+                .frame(width: 24, height: 24)
+        case .failed:
+            Circle()
+                .fill(WpayinColors.error)
+                .frame(width: 24, height: 24)
+                .overlay(
+                    Image(systemName: "xmark")
+                        .font(.system(size: 11, weight: .bold))
+                        .foregroundColor(.white)
+                )
+        }
+    }
+
+    private var connectorColor: Color {
+        state == .done ? WpayinColors.success.opacity(0.55) : WpayinColors.surfaceBorder
+    }
+
+    private var titleColor: Color {
+        switch state {
+        case .done, .active: return WpayinColors.text
+        case .upcoming: return WpayinColors.textTertiary
+        case .failed: return WpayinColors.error
         }
     }
 }
@@ -727,6 +1386,8 @@ struct ModernTokenSelector: View {
     @Binding var amount: String
     let isInput: Bool
     let onTokenSelect: () -> Void
+    var onMax: (() -> Void)? = nil
+    var showsMax: Bool = true
     @EnvironmentObject var settingsManager: SettingsManager
 
     var body: some View {
@@ -737,7 +1398,7 @@ struct ModernTokenSelector: View {
 
             HStack(spacing: 12) {
                 Group {
-                    if isInput {
+                    if isInput && showsMax {
                         TextField("0.0", text: $amount)
                             .keyboardType(.decimalPad)
                             .multilineTextAlignment(.leading)
@@ -772,7 +1433,11 @@ struct ModernTokenSelector: View {
 
                     if isInput {
                         Button {
-                            amount = maximumAmount(for: token)
+                            if let onMax {
+                                onMax()
+                            } else {
+                                amount = fullBalanceAmount(for: token)
+                            }
                         } label: {
                             Text("MAX".localized)
                                 .font(.system(size: 11, weight: .bold))
@@ -868,7 +1533,7 @@ struct ModernTokenSelector: View {
         return "≈ \((amountValue * token.price).formatted(as: settingsManager.selectedCurrency))"
     }
 
-    private func maximumAmount(for token: Token) -> String {
+    private func fullBalanceAmount(for token: Token) -> String {
         var result = String(format: "%.8f", token.balance)
         while result.contains("."), result.last == "0" {
             result.removeLast()
@@ -919,6 +1584,10 @@ struct SwapReviewSheet: View {
     let toAmount: Double
     let minimumReceived: Double
     let rate: Double
+    let networkFeeNative: Double
+    let networkFeeUSD: Double
+    let nativeTokenSymbol: String
+    let approvalRequired: Bool
     let isSwapping: Bool
     let onConfirm: () -> Void
 
@@ -972,6 +1641,21 @@ struct SwapReviewSheet: View {
                         value: "\(formatted(minimumReceived)) \(toToken.symbol)",
                         highlightsValue: true
                     )
+
+                    SwapDetailRow(
+                        label: L10n.Swap.networkFee.localized,
+                        value: "≈ \(formattedFee(networkFeeNative)) \(nativeTokenSymbol) · \(networkFeeUSD.formatted(as: settingsManager.selectedCurrency))",
+                        showsInfo: true,
+                        highlightsValue: true
+                    )
+
+                    if approvalRequired {
+                        Text("Includes the ERC-20 approval network fee".localized)
+                            .font(.system(size: 11, weight: .medium))
+                            .foregroundColor(WpayinColors.textSecondary)
+                            .frame(maxWidth: .infinity, alignment: .trailing)
+                            .padding(.horizontal, 16)
+                    }
                 }
                 .padding(.horizontal, 16)
                 .padding(.top, 18)
@@ -1047,6 +1731,11 @@ struct SwapReviewSheet: View {
             result.append("0")
         }
         return result
+    }
+
+    private func formattedFee(_ value: Double) -> String {
+        guard value > 0 else { return "0" }
+        return String(format: value < 0.0001 ? "%.8f" : "%.6f", value)
     }
 }
 

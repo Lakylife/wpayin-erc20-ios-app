@@ -383,7 +383,14 @@ struct BiometricSettingsRow: View {
 
             Toggle("", isOn: Binding(
                 get: { settingsManager.biometricAuthEnabled },
-                set: { settingsManager.updateBiometricAuth($0) }
+                set: { newValue in
+                    if newValue {
+                        settingsManager.updateBiometricAuth(true)
+                    } else {
+                        // Switching the lock off must pass the lock first.
+                        Task { await settingsManager.disableBiometricAuthAfterVerification() }
+                    }
+                }
             ))
                 .labelsHidden()
                 .disabled(!settingsManager.isBiometricAvailable)

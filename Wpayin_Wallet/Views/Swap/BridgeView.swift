@@ -10,6 +10,30 @@
 
 import SwiftUI
 
+private struct BridgeSubmission: Identifiable {
+    enum Status {
+        case submitted
+        case completed
+        case failed
+    }
+
+    let id: String
+    let sourceHash: String
+    var destinationHash: String?
+    let fromNetwork: BlockchainPlatform
+    let toNetwork: BlockchainPlatform
+    let sentAmount: Decimal
+    let expectedAmount: Decimal
+    let minimumAmount: Decimal
+    let symbol: String
+    let destinationSymbol: String
+    let provider: String
+    let estimatedDuration: TimeInterval
+    let networkFeeNative: Double
+    let networkFeeUSD: Double
+    var status: Status
+}
+
 struct BridgeContentView: View {
     @EnvironmentObject var walletManager: WalletManager
     @EnvironmentObject var settingsManager: SettingsManager
@@ -24,14 +48,15 @@ struct BridgeContentView: View {
     @State private var showToNetworkSelector = false
 
     @State private var quote: BridgeQuote?
+    @State private var feeEstimate: BridgeNetworkFeeEstimate?
+    @State private var quoteEstimateKey = ""
     @State private var isQuoting = false
     @State private var showReview = false
     @State private var isBridging = false
 
     @State private var showError = false
     @State private var errorMessage = ""
-    @State private var showSuccess = false
-    @State private var successMessage = ""
+    @State private var bridgeSubmission: BridgeSubmission?
 
     private var availableNetworks: [BlockchainPlatform] {
         walletManager.availableBlockchains
@@ -63,7 +88,41 @@ struct BridgeContentView: View {
         guard let token = selectedToken,
               let value = Double(amount),
               value > 0 else { return false }
-        return fromNetwork != toNetwork && value <= token.balance
+        return fromNetwork != toNetwork && value <= token.balance && hasSufficientBridgeGas
+    }
+
+    private var sourceNativeBalance: Double {
+        guard let token = selectedToken else { return 0 }
+        return walletManager.tokens.first {
+            $0.blockchain == token.blockchain && $0.isNative
+        }?.balance ?? 0
+    }
+
+    private var networkFeeNative: Double {
+        guard quoteEstimateKey == bridgeEstimateKey, let feeEstimate else { return 0 }
+        return NSDecimalNumber(decimal: feeEstimate.feeNative).doubleValue
+    }
+
+    private var networkFeeUSD: Double {
+        guard let token = selectedToken,
+              let price = walletManager.currentUSDPrice(
+                for: token.blockchain.nativeToken,
+                blockchain: token.blockchain
+              ) else { return 0 }
+        return networkFeeNative * price
+    }
+
+    private var hasSufficientBridgeGas: Bool {
+        guard let token = selectedToken,
+              let value = Double(amount),
+              networkFeeNative > 0 else { return true }
+        return token.isNative
+            ? value + networkFeeNative <= token.balance
+            : sourceNativeBalance >= networkFeeNative
+    }
+
+    private var bridgeEstimateKey: String {
+        "\(selectedToken?.id.uuidString ?? "none")|\(fromNetwork.rawValue)|\(toNetwork.rawValue)|\(amount)"
     }
 
     private var invalidReason: String {
@@ -71,6 +130,9 @@ struct BridgeContentView: View {
         if fromNetwork == toNetwork { return L10n.Bridge.sameNetwork.localized }
         guard let value = Double(amount) else { return "Enter a valid amount".localized }
         if value > token.balance { return L10n.Swap.insufficient.localized(token.symbol) }
+        if !hasSufficientBridgeGas {
+            return "Insufficient %@ balance for the amount and network fee".localized(token.blockchain.nativeToken)
+        }
         return "Enter a valid amount".localized
     }
 
@@ -114,21 +176,23 @@ struct BridgeContentView: View {
                     fromToken: token,
                     fromNetwork: fromNetwork,
                     toNetwork: toNetwork,
+                    networkFeeNative: networkFeeNative,
+                    networkFeeUSD: networkFeeUSD,
+                    approvalRequired: feeEstimate?.approvalRequired ?? false,
                     isBridging: isBridging,
                     onConfirm: performBridge
                 )
                 .environmentObject(settingsManager)
             }
         }
+        .sheet(item: $bridgeSubmission) { submission in
+            BridgeStatusSheet(submission: submission)
+                .environmentObject(settingsManager)
+        }
         .alert(L10n.Bridge.failed.localized, isPresented: $showError) {
             Button("OK".localized) { }
         } message: {
             Text(errorMessage)
-        }
-        .alert(L10n.Bridge.submitted.localized, isPresented: $showSuccess) {
-            Button("OK".localized) { }
-        } message: {
-            Text(successMessage)
         }
         .onAppear {
             ensureNetworksAreAvailable()
@@ -142,13 +206,21 @@ struct BridgeContentView: View {
             }
             selectedToken = availableTokens.first
             amount = ""
-            quote = nil
+            clearQuote()
         }
-        .onChange(of: toNetwork) { _ in quote = nil }
-        .onChange(of: amount) { _ in quote = nil }
-        .onChange(of: selectedToken?.id) { _ in quote = nil }
+        .onChange(of: toNetwork) { _ in clearQuote() }
+        .onChange(of: amount) { _ in clearQuote() }
+        .onChange(of: selectedToken?.id) { _ in clearQuote() }
         .onChange(of: walletManager.selectedBlockchains) { _ in
             ensureNetworksAreAvailable()
+        }
+        .task(id: bridgeEstimateKey) {
+            guard isValidBridge else { return }
+            try? await Task.sleep(nanoseconds: 280_000_000)
+            while !Task.isCancelled {
+                await refreshBridgeQuote(showError: false)
+                try? await Task.sleep(nanoseconds: 20_000_000_000)
+            }
         }
     }
 
@@ -202,7 +274,8 @@ struct BridgeContentView: View {
                     selectedToken: selectedToken,
                     amount: $amount,
                     isInput: true,
-                    onTokenSelect: { showTokenPicker = true }
+                    onTokenSelect: { showTokenPicker = true },
+                    onMax: setMaximumBridgeAmount
                 )
 
                 receiveCard
@@ -294,6 +367,14 @@ struct BridgeContentView: View {
             SwapDetailRow(
                 label: L10n.Bridge.provider.localized,
                 value: quote.toolName
+            )
+
+            divider
+
+            SwapDetailRow(
+                label: L10n.Swap.networkFee.localized,
+                value: "≈ \(formattedFee(networkFeeNative)) \(selectedToken?.blockchain.nativeToken ?? "ETH") · \(networkFeeUSD.formatted(as: settingsManager.selectedCurrency))",
+                showsInfo: true
             )
 
             divider
@@ -427,6 +508,11 @@ struct BridgeContentView: View {
         return result
     }
 
+    private func formattedFee(_ value: Double) -> String {
+        guard value > 0 else { return "0" }
+        return String(format: value < 0.0001 ? "%.8f" : "%.6f", value)
+    }
+
     private func formattedDuration(_ seconds: TimeInterval) -> String {
         if seconds < 60 {
             return "< 1 min"
@@ -445,60 +531,227 @@ struct BridgeContentView: View {
     }
 
     private func requestQuoteAndReview() {
-        guard isValidBridge,
-              let token = selectedToken,
-              let value = Double(amount),
+        Task {
+            guard isValidBridge else { return }
+            isQuoting = true
+            await refreshBridgeQuote(showError: true)
+            isQuoting = false
+
+            guard quote != nil, feeEstimate != nil else { return }
+            guard hasSufficientBridgeGas else {
+                let symbol = selectedToken?.blockchain.nativeToken ?? "ETH"
+                errorMessage = "Insufficient %@ balance for the amount and network fee".localized(symbol)
+                self.showError = true
+                return
+            }
+            showReview = true
+        }
+    }
+
+    private func refreshBridgeQuote(showError: Bool) async {
+        guard let token = selectedToken,
+              let value = Decimal(string: amount.replacingOccurrences(of: ",", with: ".")),
+              value > 0,
               let toBlockchain = toNetwork.blockchainType else { return }
 
-        isQuoting = true
+        let requestedKey = bridgeEstimateKey
+        do {
+            let destinationAddress = destinationToken.flatMap {
+                $0.isNative ? "0x0000000000000000000000000000000000000000" : $0.contractAddress
+            }
+            let newQuote = try await BridgeService.shared.getQuote(
+                fromToken: token,
+                toBlockchain: toBlockchain,
+                toTokenAddress: destinationAddress,
+                amount: value
+            )
+            let newFee = try await BridgeService.shared.estimateNetworkFee(
+                quote: newQuote,
+                fromToken: token
+            )
 
-        Task {
-            do {
-                let destinationAddress = destinationToken.flatMap {
-                    $0.isNative ? "0x0000000000000000000000000000000000000000" : $0.contractAddress
-                }
-
-                let newQuote = try await BridgeService.shared.getQuote(
-                    fromToken: token,
-                    toBlockchain: toBlockchain,
-                    toTokenAddress: destinationAddress,
-                    amount: Decimal(value)
-                )
-
-                await MainActor.run {
-                    isQuoting = false
-                    quote = newQuote
-                    showReview = true
-                }
-            } catch {
+            guard requestedKey == bridgeEstimateKey else { return }
+            quote = newQuote
+            feeEstimate = newFee
+            quoteEstimateKey = requestedKey
+        } catch {
+            guard requestedKey == bridgeEstimateKey else { return }
+            clearQuote()
+            if showError {
                 Logger.log("❌ Bridge quote failed: \(error.localizedDescription)")
-                await MainActor.run {
-                    isQuoting = false
-                    errorMessage = error.localizedDescription
-                    showError = true
-                }
+                errorMessage = error.localizedDescription
+                self.showError = true
             }
         }
     }
 
+    private func setMaximumBridgeAmount() {
+        guard let token = selectedToken, token.balance > 0 else { return }
+        Task {
+            isQuoting = true
+            amount = editableBridgeAmount(token.isNative ? token.balance * 0.99 : token.balance)
+            await refreshBridgeQuote(showError: false)
+
+            if token.isNative, networkFeeNative > 0 {
+                let reserve = max(networkFeeNative * 0.05, 0.00000001)
+                amount = editableBridgeAmount(max(0, token.balance - networkFeeNative - reserve))
+                await refreshBridgeQuote(showError: true)
+            }
+            isQuoting = false
+
+            if !hasSufficientBridgeGas {
+                errorMessage = "Insufficient %@ balance for the amount and network fee".localized(token.blockchain.nativeToken)
+                showError = true
+            }
+        }
+    }
+
+    private func editableBridgeAmount(_ value: Double) -> String {
+        var result = String(format: "%.12f", max(0, value))
+        while result.last == "0" { result.removeLast() }
+        if result.last == "." { result.removeLast() }
+        return result
+    }
+
+    private func clearQuote() {
+        quote = nil
+        feeEstimate = nil
+        quoteEstimateKey = ""
+    }
+
     private func performBridge() {
         guard let quote, let token = selectedToken else { return }
+        let submittedFeeNative = networkFeeNative
+        let submittedFeeUSD = networkFeeUSD
         isBridging = true
 
         Task {
+            guard await settingsManager.authorizeSpending(reason: "auth.confirmPayment".localized) else {
+                await MainActor.run { isBridging = false }
+                return
+            }
             do {
-                let txHash = try await BridgeService.shared.executeBridge(quote: quote, fromToken: token)
+                let txHash = try await BridgeService.shared.executeBridge(
+                    quote: quote,
+                    fromToken: token,
+                    feeEstimate: feeEstimate
+                )
                 Logger.log("✅ Bridge submitted! TX: \(txHash)")
+
+                let sourceNetwork = token.blockchain
+                let destinationNetwork = toNetwork.blockchainType ?? sourceNetwork
+                let sentAmount = (quote.fromAmount as NSDecimalNumber).doubleValue
+                let expectedAmount = (quote.toAmount as NSDecimalNumber).doubleValue
+                let explorerUrl = URL(
+                    string: NetworkManager.shared.getExplorerUrl(for: sourceNetwork, txHash: txHash)
+                )
+                // The arrival hash is unknown until the bridge settles — track
+                // it under a placeholder and swap in the real hash later.
+                let arrivalPlaceholder = "bridge-arrival-\(txHash)"
 
                 await MainActor.run {
                     isBridging = false
                     amount = ""
-                    self.quote = nil
-                    successMessage = "Transaction: %@".localized(txHash)
-                    showSuccess = true
+                    clearQuote()
+                    bridgeSubmission = BridgeSubmission(
+                        id: txHash,
+                        sourceHash: txHash,
+                        destinationHash: nil,
+                        fromNetwork: fromNetwork,
+                        toNetwork: toNetwork,
+                        sentAmount: quote.fromAmount,
+                        expectedAmount: quote.toAmount,
+                        minimumAmount: quote.toAmountMin,
+                        symbol: token.symbol,
+                        destinationSymbol: quote.toSymbol,
+                        provider: quote.toolName,
+                        estimatedDuration: quote.executionDuration,
+                        networkFeeNative: submittedFeeNative,
+                        networkFeeUSD: submittedFeeUSD,
+                        status: .submitted
+                    )
+
+                    // Both sides of the bridge appear in Activity right away:
+                    // the source-chain send and the pending destination arrival.
+                    walletManager.registerLocalTransaction(
+                        Transaction(
+                            hash: txHash,
+                            from: walletManager.walletAddress,
+                            to: quote.txTo,
+                            amount: sentAmount,
+                            token: token.symbol,
+                            type: .bridge,
+                            status: .pending,
+                            timestamp: Date(),
+                            gasUsed: 0,
+                            gasFee: 0,
+                            explorerUrl: explorerUrl,
+                            blockchain: sourceNetwork
+                        )
+                    )
+                    walletManager.registerLocalTransaction(
+                        Transaction(
+                            hash: arrivalPlaceholder,
+                            from: quote.txTo,
+                            to: walletManager.walletAddress,
+                            amount: expectedAmount,
+                            token: quote.toSymbol,
+                            type: .bridgeReceive,
+                            status: .pending,
+                            timestamp: Date(),
+                            gasUsed: 0,
+                            gasFee: 0,
+                            blockchain: destinationNetwork
+                        )
+                    )
 
                     Task {
                         await walletManager.refreshWalletData()
+                    }
+                }
+
+                // Follow the bridge until the funds land on the destination
+                // chain, then flip both Activity entries to their final state.
+                if let fromChain = sourceNetwork.chainId, let toChain = destinationNetwork.chainId {
+                    let arrival = await BridgeService.shared.waitForArrival(
+                        sourceTxHash: txHash,
+                        fromChain: fromChain,
+                        toChain: toChain
+                    )
+                    await MainActor.run {
+                        guard let arrival else { return }
+                        walletManager.updateLocalTransactionStatus(hash: txHash, status: .confirmed)
+                        if arrival.succeeded {
+                            if bridgeSubmission?.id == txHash {
+                                bridgeSubmission?.destinationHash = arrival.txHash
+                                bridgeSubmission?.status = .completed
+                            }
+                            walletManager.updateLocalTransactionStatus(
+                                hash: arrivalPlaceholder,
+                                status: .confirmed,
+                                newHash: arrival.txHash,
+                                newAmount: arrival.amount.map { ($0 as NSDecimalNumber).doubleValue },
+                                newExplorerUrl: URL(
+                                    string: NetworkManager.shared.getExplorerUrl(
+                                        for: destinationNetwork,
+                                        txHash: arrival.txHash
+                                    )
+                                )
+                            )
+                            AppToast.show(
+                                "Bridge completed — %@ arrived on %@".localized(
+                                    "\(String(format: "%.4f", arrival.amount.map { ($0 as NSDecimalNumber).doubleValue } ?? expectedAmount)) \(quote.toSymbol)",
+                                    destinationNetwork.name
+                                ),
+                                icon: "checkmark.seal.fill"
+                            )
+                            Task { await walletManager.refreshWalletData() }
+                        } else {
+                            if bridgeSubmission?.id == txHash {
+                                bridgeSubmission?.status = .failed
+                            }
+                            walletManager.updateLocalTransactionStatus(hash: arrivalPlaceholder, status: .failed)
+                        }
                     }
                 }
             } catch {
@@ -513,6 +766,281 @@ struct BridgeContentView: View {
     }
 }
 
+// MARK: - Submitted bridge status
+
+private struct BridgeStatusSheet: View {
+    let submission: BridgeSubmission
+
+    @Environment(\.dismiss) private var dismiss
+    @EnvironmentObject private var settingsManager: SettingsManager
+
+    var body: some View {
+        NavigationView {
+            ScrollView {
+                VStack(spacing: 18) {
+                    statusHeader
+                    routeCard
+                    detailsCard
+                    transactionCard
+
+                    Button("Done".localized) { dismiss() }
+                        .font(.system(size: 17, weight: .bold))
+                        .foregroundColor(.white)
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 54)
+                        .background(WpayinColors.accentGradient)
+                        .clipShape(RoundedRectangle(cornerRadius: 17, style: .continuous))
+                        .buttonStyle(WpayinPressableStyle())
+                }
+                .padding(20)
+            }
+            .background(
+                LinearGradient(
+                    colors: [WpayinColors.backgroundGradientStart, WpayinColors.background],
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
+                )
+                .ignoresSafeArea()
+            )
+            .navigationTitle("Bridge details".localized)
+            .navigationBarTitleDisplayMode(.inline)
+        }
+    }
+
+    private var statusHeader: some View {
+        VStack(spacing: 10) {
+            ZStack {
+                Circle()
+                    .fill(statusColor.opacity(0.14))
+                    .frame(width: 76, height: 76)
+
+                if submission.status == .submitted {
+                    ProgressView()
+                        .tint(statusColor)
+                        .scaleEffect(1.25)
+                } else {
+                    Image(systemName: submission.status == .completed ? "checkmark.seal.fill" : "exclamationmark.triangle.fill")
+                        .font(.system(size: 38))
+                        .foregroundColor(statusColor)
+                }
+            }
+
+            Text(statusTitle)
+                .font(.system(size: 24, weight: .bold, design: .rounded))
+                .foregroundColor(WpayinColors.text)
+
+            Text(statusDescription)
+                .font(.system(size: 14))
+                .foregroundColor(WpayinColors.textSecondary)
+                .multilineTextAlignment(.center)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 8)
+    }
+
+    private var routeCard: some View {
+        HStack(spacing: 10) {
+            endpoint(
+                network: submission.fromNetwork,
+                amount: submission.sentAmount,
+                symbol: submission.symbol
+            )
+
+            Image(systemName: "arrow.right")
+                .font(.system(size: 17, weight: .bold))
+                .foregroundColor(WpayinColors.primary)
+
+            endpoint(
+                network: submission.toNetwork,
+                amount: submission.expectedAmount,
+                symbol: submission.destinationSymbol
+            )
+        }
+        .padding(18)
+        .bridgeStatusCard()
+    }
+
+    private var detailsCard: some View {
+        VStack(spacing: 0) {
+            detailRow("Status".localized, statusTitle)
+            divider
+            detailRow(L10n.Bridge.provider.localized, submission.provider)
+            divider
+            detailRow(L10n.Bridge.estimatedTime.localized, estimatedTime)
+            divider
+            detailRow(
+                L10n.Swap.minimumReceived.localized,
+                "\(formatted(submission.minimumAmount)) \(submission.destinationSymbol)"
+            )
+            divider
+            detailRow(
+                L10n.Swap.networkFee.localized,
+                "≈ \(formattedFee(submission.networkFeeNative)) \(submission.fromNetwork.blockchainType?.nativeToken ?? "ETH") · \(submission.networkFeeUSD.formatted(as: settingsManager.selectedCurrency))"
+            )
+        }
+        .padding(.horizontal, 16)
+        .bridgeStatusCard()
+    }
+
+    private var transactionCard: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            Text("Transactions".localized)
+                .font(.system(size: 16, weight: .bold))
+                .foregroundColor(WpayinColors.text)
+
+            transactionLink(
+                title: "Source transaction".localized,
+                hash: submission.sourceHash,
+                network: submission.fromNetwork
+            )
+
+            if let destinationHash = submission.destinationHash {
+                transactionLink(
+                    title: "Destination transaction".localized,
+                    hash: destinationHash,
+                    network: submission.toNetwork
+                )
+            } else {
+                HStack {
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text("Destination transaction".localized)
+                            .font(.system(size: 13, weight: .semibold))
+                            .foregroundColor(WpayinColors.textSecondary)
+                        Text("Waiting for arrival".localized)
+                            .font(.system(size: 14, weight: .medium))
+                            .foregroundColor(WpayinColors.text)
+                    }
+                    Spacer()
+                    ProgressView().tint(WpayinColors.primary)
+                }
+            }
+        }
+        .padding(18)
+        .bridgeStatusCard()
+    }
+
+    private func endpoint(network: BlockchainPlatform, amount: Decimal, symbol: String) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 7) {
+                PlatformIconView(platform: network, size: 28)
+                Text(network.name)
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundColor(WpayinColors.textSecondary)
+                    .lineLimit(1)
+            }
+            Text("\(formatted(amount)) \(symbol)")
+                .font(.system(size: 17, weight: .bold, design: .rounded))
+                .foregroundColor(WpayinColors.text)
+                .lineLimit(1)
+                .minimumScaleFactor(0.6)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private func detailRow(_ title: String, _ value: String) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: 12) {
+            Text(title)
+                .foregroundColor(WpayinColors.textSecondary)
+            Spacer()
+            Text(value)
+                .foregroundColor(WpayinColors.text)
+                .multilineTextAlignment(.trailing)
+        }
+        .font(.system(size: 14, weight: .medium))
+        .padding(.vertical, 13)
+    }
+
+    private func transactionLink(title: String, hash: String, network: BlockchainPlatform) -> some View {
+        let blockchain = network.blockchainType ?? .ethereum
+        let url = URL(string: NetworkManager.shared.getExplorerUrl(for: blockchain, txHash: hash))
+        return HStack(spacing: 12) {
+            VStack(alignment: .leading, spacing: 3) {
+                Text(title)
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundColor(WpayinColors.textSecondary)
+                Text(shortHash(hash))
+                    .font(.system(size: 14, weight: .medium, design: .monospaced))
+                    .foregroundColor(WpayinColors.text)
+            }
+            Spacer()
+            if let url {
+                Link(destination: url) {
+                    Image(systemName: "arrow.up.right.square")
+                        .font(.system(size: 19, weight: .semibold))
+                        .foregroundColor(WpayinColors.primary)
+                }
+            }
+        }
+    }
+
+    private var divider: some View {
+        Rectangle().fill(WpayinColors.surfaceBorder).frame(height: 1)
+    }
+
+    private var statusTitle: String {
+        switch submission.status {
+        case .submitted: return "Bridge in progress".localized
+        case .completed: return "Bridge completed".localized
+        case .failed: return "Bridge failed".localized
+        }
+    }
+
+    private var statusDescription: String {
+        switch submission.status {
+        case .submitted:
+            return "Your source transaction was submitted. Funds will appear after the destination chain confirms the bridge.".localized
+        case .completed:
+            return "Funds arrived on %@.".localized(submission.toNetwork.name)
+        case .failed:
+            return "The bridge provider reported a failure. Open the source transaction for details.".localized
+        }
+    }
+
+    private var statusColor: Color {
+        switch submission.status {
+        case .submitted: return WpayinColors.primary
+        case .completed: return WpayinColors.success
+        case .failed: return WpayinColors.error
+        }
+    }
+
+    private var estimatedTime: String {
+        submission.estimatedDuration < 60
+            ? "< 1 min"
+            : "~\(Int((submission.estimatedDuration / 60).rounded(.up))) min"
+    }
+
+    private func formatted(_ value: Decimal) -> String {
+        let doubleValue = (value as NSDecimalNumber).doubleValue
+        var result = String(format: doubleValue >= 1 ? "%.4f" : "%.6f", doubleValue)
+        while result.contains("."), result.last == "0" { result.removeLast() }
+        if result.last == "." { result.append("0") }
+        return result
+    }
+
+    private func formattedFee(_ value: Double) -> String {
+        String(format: value < 0.0001 ? "%.8f" : "%.6f", value)
+    }
+
+    private func shortHash(_ hash: String) -> String {
+        guard hash.count > 16 else { return hash }
+        return "\(hash.prefix(10))…\(hash.suffix(8))"
+    }
+}
+
+private extension View {
+    func bridgeStatusCard() -> some View {
+        background(
+            RoundedRectangle(cornerRadius: WpayinRadius.card, style: .continuous)
+                .fill(WpayinColors.surface)
+                .overlay(
+                    RoundedRectangle(cornerRadius: WpayinRadius.card, style: .continuous)
+                        .stroke(WpayinColors.surfaceBorder, lineWidth: 1)
+                )
+        )
+    }
+}
+
 // MARK: - Review sheet
 
 struct BridgeReviewSheet: View {
@@ -520,6 +1048,9 @@ struct BridgeReviewSheet: View {
     let fromToken: Token
     let fromNetwork: BlockchainPlatform
     let toNetwork: BlockchainPlatform
+    let networkFeeNative: Double
+    let networkFeeUSD: Double
+    let approvalRequired: Bool
     let isBridging: Bool
     let onConfirm: () -> Void
 
@@ -588,6 +1119,21 @@ struct BridgeReviewSheet: View {
                         value: "\(formatted(quote.toAmountMin)) \(quote.toSymbol)",
                         highlightsValue: true
                     )
+
+                    SwapDetailRow(
+                        label: L10n.Swap.networkFee.localized,
+                        value: "≈ \(formattedFee(networkFeeNative)) \(fromToken.blockchain.nativeToken) · \(networkFeeUSD.formatted(as: settingsManager.selectedCurrency))",
+                        showsInfo: true,
+                        highlightsValue: true
+                    )
+
+                    if approvalRequired {
+                        Text("Includes the ERC-20 approval network fee".localized)
+                            .font(.system(size: 11, weight: .medium))
+                            .foregroundColor(WpayinColors.textSecondary)
+                            .frame(maxWidth: .infinity, alignment: .trailing)
+                            .padding(.horizontal, 16)
+                    }
                 }
                 .padding(.horizontal, 16)
                 .padding(.top, 18)
@@ -662,5 +1208,10 @@ struct BridgeReviewSheet: View {
             result.append("0")
         }
         return result
+    }
+
+    private func formattedFee(_ value: Double) -> String {
+        guard value > 0 else { return "0" }
+        return String(format: value < 0.0001 ? "%.8f" : "%.6f", value)
     }
 }

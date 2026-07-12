@@ -35,9 +35,9 @@ struct AppConfig {
 
     // MARK: - Platform Fee
 
-    /// Address that receives the platform fee (EVM chains). An empty or
-    /// invalid address disables fee collection entirely — fill in your
-    /// treasury address to turn the fee on.
+    /// Treasury address must be configured by the release environment. Never
+    /// fall back to a user/test wallet: that silently charges a second gas fee
+    /// while sending the platform fee back to the sender.
     static let platformFeeRecipient = environment["PLATFORM_FEE_RECIPIENT"]?
         .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
 
@@ -65,17 +65,18 @@ struct AppConfig {
     /// Enable or disable swap functionality
     static let swapEnabled = true
 
-    /// Public P2P offer board (CloudKit). Requires a PAID Apple Developer
-    /// Program membership — free personal teams don't support the iCloud
-    /// capability at all. To enable:
-    ///  1. join the Apple Developer Program,
-    ///  2. in Xcode → Signing & Capabilities add iCloud → CloudKit with
-    ///     container iCloud.io.noriskservis.standart.Wpayin-Wallet
-    ///     (rename Wpayin_Wallet.entitlements.prepared to
-    ///     Wpayin_Wallet.entitlements when enabling the capability),
-    ///  3. flip this flag to true.
-    /// Direct P2P trading via QR/share works regardless of this flag.
-    static let p2pOfferBoardEnabled = false
+    /// Optional public P2P board. Values are supplied by the local/release
+    /// environment and are intentionally never committed to this repository.
+    static let p2pBoardURL = environment["P2P_BOARD_URL"]?
+        .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+    static let p2pBoardAnonKey = environment["P2P_BOARD_ANON_KEY"]?
+        .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+
+    /// Public P2P offer board is available once the Supabase project is set.
+    /// Private QR/code trading remains available either way.
+    static var p2pOfferBoardEnabled: Bool {
+        !p2pBoardURL.isEmpty && !p2pBoardAnonKey.isEmpty
+    }
 
     // MARK: - Validation
 

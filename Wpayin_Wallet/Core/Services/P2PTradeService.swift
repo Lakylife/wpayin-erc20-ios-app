@@ -26,6 +26,7 @@ enum P2PTradeError: LocalizedError {
     case signatureMismatch
     case makerCannotCover
     case takerCannotCover
+    case ownOffer
     case notEnoughGas
     case signingFailed
     case fillWouldFail
@@ -40,6 +41,7 @@ enum P2PTradeError: LocalizedError {
         case .signatureMismatch: return "error.p2p.signatureMismatch".localized
         case .makerCannotCover: return "error.p2p.makerCannotCover".localized
         case .takerCannotCover: return "error.p2p.takerCannotCover".localized
+        case .ownOffer: return "error.p2p.ownOffer".localized
         case .notEnoughGas: return "error.p2p.notEnoughGas".localized
         case .signingFailed: return "error.tx.failedToSign".localized
         case .fillWouldFail: return "error.p2p.fillWouldFail".localized
@@ -95,6 +97,13 @@ struct P2POfferCheck {
     let takerPlatformFee: Decimal   // our platform fee, in sender-token units
 }
 
+enum P2POfferCreationPhase {
+    case checking
+    case wrapping
+    case approving
+    case signing
+}
+
 final class P2PTradeService {
     static let shared = P2PTradeService()
     private init() {}
@@ -143,8 +152,10 @@ final class P2PTradeService {
         sellAmount: Decimal,
         receiveToken: Token,
         receiveAmount: Decimal,
-        validFor: TimeInterval
+        validFor: TimeInterval,
+        onPhase: (@MainActor (P2POfferCreationPhase) -> Void)? = nil
     ) async throws -> P2POffer {
+        onPhase?(.checking)
         let blockchain = sellToken.blockchain
         guard let contract = Self.swapContracts[blockchain],
               let chainId = blockchain.chainId,
@@ -208,6 +219,7 @@ final class P2PTradeService {
         // selling the native coin.
         let requiredUnits = signerUnits + signerUnits * BigUInt(protocolFeeBps) / BigUInt(10_000)
         if sellToken.isNative {
+            onPhase?(.wrapping)
             try await wrapNativeShortfall(
                 requiredUnits: requiredUnits,
                 wrappedAddress: sellAddress,
@@ -220,6 +232,7 @@ final class P2PTradeService {
         guard sellerBalance >= requiredUnits else { throw P2PTradeError.makerCannotCover }
 
         // Allowance for amount + fee (approve when missing)
+        onPhase?(.approving)
         let requiredDecimal = sellAmount * (1 + Decimal(protocolFeeBps) / 10_000)
         try await SwapService.shared.checkAndApproveToken(
             token: effectiveSellToken,
@@ -230,6 +243,7 @@ final class P2PTradeService {
             privateKey: privateKey
         )
 
+        onPhase?(.signing)
         let nonce = BigUInt(UInt64.random(in: 1...UInt64.max))
         let expiry = Date().timeIntervalSince1970 + validFor
 
@@ -294,15 +308,19 @@ final class P2PTradeService {
         }
         guard !offer.isExpired else { throw P2PTradeError.offerExpired }
 
-        // Protocol fee in the order hash must match the live contract value
-        let liveFee = try await fetchProtocolFeeBps(blockchain: blockchain)
-        guard liveFee == offer.protocolFeeBps else { throw P2PTradeError.invalidOffer }
-
-        // Nonce must be unused — nonceUsed(address,uint256) 0x1647795e
+        // Protocol fee and nonce are independent contract reads.
         var nonceCall = Data(hexString: "1647795e")!
         nonceCall.append(abiAddress(offer.signerWallet))
         nonceCall.append(abiUInt(nonce))
-        let nonceResult = try await SwapService.shared.ethCall(to: contract, data: nonceCall, blockchain: blockchain)
+        let nonceCallData = nonceCall
+        async let liveFeeTask = fetchProtocolFeeBps(blockchain: blockchain)
+        async let nonceTask = SwapService.shared.ethCall(
+            to: contract,
+            data: nonceCallData,
+            blockchain: blockchain
+        )
+        let (liveFee, nonceResult) = try await (liveFeeTask, nonceTask)
+        guard liveFee == offer.protocolFeeBps else { throw P2PTradeError.invalidOffer }
         guard BigUInt(nonceResult) == 0 else { throw P2PTradeError.offerAlreadyUsed }
 
         // Signature must recover to the seller's wallet
@@ -336,11 +354,16 @@ final class P2PTradeService {
 
         // Seller must still hold and approve amount + protocol fee
         let requiredMaker = signerUnits + signerUnits * BigUInt(offer.protocolFeeBps) / BigUInt(10_000)
-        let makerBalance = try await erc20Balance(of: offer.signerWallet, token: offer.signerToken, blockchain: blockchain)
-        let makerAllowance = try await erc20Allowance(
+        async let makerBalanceTask = erc20Balance(
+            of: offer.signerWallet,
+            token: offer.signerToken,
+            blockchain: blockchain
+        )
+        async let makerAllowanceTask = erc20Allowance(
             owner: offer.signerWallet, spender: contract,
             token: offer.signerToken, blockchain: blockchain
         )
+        let (makerBalance, makerAllowance) = try await (makerBalanceTask, makerAllowanceTask)
         guard makerBalance >= requiredMaker, makerAllowance >= requiredMaker else {
             throw P2PTradeError.makerCannotCover
         }
@@ -351,7 +374,7 @@ final class P2PTradeService {
         }
         let takerWallet = try SwapService.shared.deriveAddress(from: takerKey, blockchain: blockchain)
         guard takerWallet.lowercased() != offer.signerWallet.lowercased() else {
-            throw P2PTradeError.invalidOffer
+            throw P2PTradeError.ownOffer
         }
 
         let platformFee = TransactionService.platformFee(for: offer.senderAmountDecimal)
@@ -374,8 +397,13 @@ final class P2PTradeService {
         guard takerBalance >= requiredTaker else { throw P2PTradeError.takerCannotCover }
 
         // Rough gas check: approve + swap ≈ 400k units of the native coin
-        let gasPriceHex = try await SwapService.shared.rpcRequest(method: "eth_gasPrice", params: [], blockchain: blockchain)
-        let balanceHex = try await SwapService.shared.rpcRequest(method: "eth_getBalance", params: [takerWallet, "latest"], blockchain: blockchain)
+        async let gasPriceTask = SwapService.shared.rpcRequest(
+            method: "eth_gasPrice", params: [], blockchain: blockchain
+        )
+        async let nativeBalanceTask = SwapService.shared.rpcRequest(
+            method: "eth_getBalance", params: [takerWallet, "latest"], blockchain: blockchain
+        )
+        let (gasPriceHex, balanceHex) = try await (gasPriceTask, nativeBalanceTask)
         if let gasPrice = hexQuantity(gasPriceHex), let nativeBalance = hexQuantity(balanceHex) {
             guard nativeBalance >= gasPrice * BigUInt(400_000) else { throw P2PTradeError.notEnoughGas }
         }
@@ -674,13 +702,32 @@ final class P2PTradeService {
 
     func encode(_ offer: P2POffer) -> String? {
         guard let data = try? JSONEncoder().encode(offer) else { return nil }
-        return payloadPrefix + data.base64EncodedString()
+        // URL-safe Base64 survives Messages, Mail, QR scanners and text fields
+        // without '+' being converted to a space or '/' being escaped.
+        let encoded = data.base64EncodedString()
+            .replacingOccurrences(of: "+", with: "-")
+            .replacingOccurrences(of: "/", with: "_")
+            .replacingOccurrences(of: "=", with: "")
+        return payloadPrefix + encoded
     }
 
     func decode(_ payload: String) -> P2POffer? {
-        let trimmed = payload.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard trimmed.hasPrefix(payloadPrefix),
-              let data = Data(base64Encoded: String(trimmed.dropFirst(payloadPrefix.count))),
+        let decodedURLText = payload.removingPercentEncoding ?? payload
+        guard let prefixRange = decodedURLText.range(of: payloadPrefix, options: .caseInsensitive) else {
+            return nil
+        }
+
+        // Accept the raw code as well as codes embedded in a share message.
+        let tail = decodedURLText[prefixRange.upperBound...]
+        let allowed = CharacterSet.alphanumerics.union(CharacterSet(charactersIn: "-_/+="))
+        var encoded = String(tail.unicodeScalars.prefix { allowed.contains($0) })
+            .replacingOccurrences(of: "-", with: "+")
+            .replacingOccurrences(of: "_", with: "/")
+        let remainder = encoded.count % 4
+        if remainder != 0 { encoded += String(repeating: "=", count: 4 - remainder) }
+
+        guard !encoded.isEmpty,
+              let data = Data(base64Encoded: encoded),
               let offer = try? JSONDecoder().decode(P2POffer.self, from: data) else {
             return nil
         }

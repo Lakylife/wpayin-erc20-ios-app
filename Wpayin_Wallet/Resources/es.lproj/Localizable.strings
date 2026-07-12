@@ -780,5 +780,57 @@
 "Be the first — create an offer and publish it to the board." = "Be the first — create an offer and publish it to the board.";
 "Publish to Offer Board" = "Publish to Offer Board";
 "Published to the board" = "Published to the board";
-"error.p2p.iCloudUnavailable" = "The offer board needs iCloud. Sign in to iCloud in iOS Settings and try again.";
+"error.p2p.boardUnavailable" = "El tablón de ofertas no está disponible temporalmente. Comprueba tu conexión a internet e inténtalo de nuevo.";
 "error.p2p.publishFailed" = "Could not publish the offer. Please try again.";
+"Your offer" = "Tu oferta";
+"error.p2p.ownOffer" = "Esta es tu propia oferta. No se puede aceptar con la misma billetera que la creó.";
+"Bridge" = "Bridge";
+"Bridge completed — %@ arrived on %@" = "Bridge completado: %@ llegó a %@";
+"auth.confirmPayment" = "Confirma el pago";
+"Verify to turn off app lock" = "Verifícate para desactivar el bloqueo de la app";
+"Markets" = "Mercados";
+"From %@" = "Desde %@";
+"Offers: %@" = "Ofertas: %@";
+"How much %@ do you want to buy?" = "¿Cuánto %@ quieres comprar?";
+"Offers are filled in full — you always buy the seller's whole amount." = "Las ofertas se ejecutan completas: siempre compras la cantidad total del vendedor.";
+"No offer covers this amount right now. Lower it or check back later." = "Ninguna oferta cubre esta cantidad ahora mismo. Redúcela o vuelve más tarde.";
+"Best price" = "Mejor precio";
+"Includes the ERC-20 approval network fee" = "Incluye la comisión de red por la aprobación ERC-20";
+"Insufficient %@ balance for the amount and network fee" = "Saldo de %@ insuficiente para el importe y la comisión de red";
+
+// MARK: - Swap Progress (v1.1.8)
+"Approving token" = "Aprobando token";
+"Submitting transaction" = "Enviando transacción";
+"Waiting for network confirmation" = "Esperando confirmación de la red";
+"Swap completed" = "Swap completado";
+"Token approval" = "Aprobación del token";
+"Transaction submitted" = "Transacción enviada";
+"Network confirmation" = "Confirmación de la red";
+"Completed" = "Completado";
+"This usually takes under a minute, but can take longer when the network is busy." = "Normalmente tarda menos de un minuto, pero puede tardar más si la red está congestionada.";
+"You can close this window — track the status anytime in Activity." = "Puedes cerrar esta ventana — consulta el estado en Actividad en cualquier momento.";
+"The transaction was reverted on-chain" = "La transacción fue revertida en la cadena";
+"Progress" = "Progreso";
+
+// MARK: - P2P-only Buy (v1.1.8)
+"P2P" = "P2P";
+"Start P2P Trade" = "Iniciar intercambio P2P";
+"Trade tokens directly with another Wpayin user. Both sides settle wallet-to-wallet in a single on-chain transaction — no intermediary ever holds your funds." = "Intercambia tokens directamente con otro usuario de Wpayin. Ambas partes liquidan de cartera a cartera en una sola transacción on-chain — ningún intermediario retiene tus fondos.";
+"How it works" = "Cómo funciona";
+"Create or accept an offer" = "Crea o acepta una oferta";
+"Agree with your counterparty on the tokens and amounts to exchange." = "Acuerda con tu contraparte los tokens y las cantidades a intercambiar.";
+"Review and sign" = "Revisa y firma";
+"Each side authorizes the trade from their own wallet — keys never leave the device." = "Cada parte autoriza el intercambio desde su propia cartera — las claves nunca salen del dispositivo.";
+"Atomic on-chain settlement" = "Liquidación atómica on-chain";
+"A smart contract exchanges both tokens in one transaction — either both transfer or neither does." = "Un contrato inteligente intercambia ambos tokens en una transacción — o se transfieren los dos o ninguno.";
+"Wpayin never holds your funds and does not process fiat payments." = "Wpayin nunca retiene tus fondos ni procesa pagos fiat.";
+
+// MARK: - P2P marketplace + approval errors (v1.1.8)
+"Available offers" = "Ofertas disponibles";
+"Buy %@ for %@" = "Comprar %@ por %@";
+"Posted %@" = "Publicado %@";
+"The offer is re-verified and simulated on-chain right before you confirm — if the seller can no longer cover it, the trade stops and you pay nothing." = "La oferta se vuelve a verificar y simular on-chain justo antes de confirmar — si el vendedor ya no puede cubrirla, el intercambio se detiene y no pagas nada.";
+"error.swap.approvalFailed" = "La aprobación del token falló en la cadena. Inténtalo de nuevo.";
+"error.swap.approvalTimeout" = "La aprobación del token está tardando más de lo esperado. Revisa Actividad y vuelve a intentarlo cuando se confirme.";
+"Paste from Clipboard" = "Pegar del portapapeles";
+"error.swap.confirmationTimeout" = "La red no confirmó la transacción antes de que expirara el plazo del swap. Comprueba el resultado en el explorador — si expiró, no se intercambió nada.";

@@ -284,6 +284,7 @@ struct AllAssetsRowView: View {
                         .font(.system(size: 12))
                         .foregroundColor(WpayinColors.textSecondary)
                         .lineLimit(1)
+                        .minimumScaleFactor(0.7)
 
                     PriceChangeLabel(change: walletManager.priceChanges24h[token.symbol.uppercased()])
                 }

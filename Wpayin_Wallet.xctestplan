@@ -1,0 +1,38 @@
+{
+  "configurations" : [
+    {
+      "id" : "34A0E341-5D37-46F3-BBD4-566768802E44",
+      "name" : "Test Scheme Action",
+      "options" : {
+
+      }
+    }
+  ],
+  "defaultOptions" : {
+    "performanceAntipatternCheckerEnabled" : true,
+    "targetForVariableExpansion" : {
+      "containerPath" : "container:Wpayin_Wallet.xcodeproj",
+      "identifier" : "EEE1E4912E85004200737D17",
+      "name" : "Wpayin_Wallet"
+    }
+  },
+  "testTargets" : [
+    {
+      "parallelizable" : true,
+      "target" : {
+        "containerPath" : "container:Wpayin_Wallet.xcodeproj",
+        "identifier" : "EEE1E4A02E85004500737D17",
+        "name" : "Wpayin_WalletTests"
+      }
+    },
+    {
+      "parallelizable" : true,
+      "target" : {
+        "containerPath" : "container:Wpayin_Wallet.xcodeproj",
+        "identifier" : "EEE1E4AA2E85004500737D17",
+        "name" : "Wpayin_WalletUITests"
+      }
+    }
+  ],
+  "version" : 1
+}

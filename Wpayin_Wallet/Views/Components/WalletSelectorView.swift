@@ -141,6 +141,9 @@ struct WalletSelectorView: View {
                 }
             })
         }
+        .task {
+            await walletManager.refreshWalletPortfolioValues()
+        }
     }
 
     private func selectWallet(_ wallet: MultiChainWallet) {
@@ -154,6 +157,7 @@ struct WalletCard: View {
     let isActive: Bool
     let onSelect: () -> Void
     @EnvironmentObject var settingsManager: SettingsManager
+    @EnvironmentObject var walletManager: WalletManager
 
     var body: some View {
         Button(action: onSelect) {
@@ -193,7 +197,7 @@ struct WalletCard: View {
                             .foregroundColor(WpayinColors.textSecondary)
                     }
 
-                    Text(0.0.formatted(as: settingsManager.selectedCurrency)) // TODO: Calculate wallet balance
+                    Text(walletManager.portfolioValue(for: wallet).formatted(as: settingsManager.selectedCurrency))
                         .font(.system(size: 16, weight: .semibold))
                         .foregroundColor(WpayinColors.text)
                 }

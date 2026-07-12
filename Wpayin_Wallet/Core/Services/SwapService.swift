@@ -70,8 +70,42 @@ struct SwapResult {
     let amountOut: Decimal
 }
 
+/// Phase reported while a swap is being executed, so the UI can show
+/// live progress instead of a single opaque spinner.
+enum SwapExecutionPhase {
+    case approving
+    case submitting
+}
+
+/// State of a broadcast transaction as reported by the chain's receipt.
+enum OnChainTransactionState {
+    /// Neither a receipt nor the transaction itself is known to the RPC node.
+    /// This is distinct from a real pending transaction in the mempool.
+    case notFound
+    /// No receipt yet — still in the mempool / waiting to be mined.
+    case pending
+    case confirmed(blockNumber: String, gasUsed: Double, gasFeeNative: Double)
+    case failed(blockNumber: String, gasUsed: Double, gasFeeNative: Double)
+}
+
+struct SwapNetworkFeeEstimate {
+    let swapGasLimit: Int
+    let approvalGasLimit: Int
+    /// Gas limit including a safety margin and a possible ERC-20 approval.
+    let totalGasLimit: Int
+    let approvalRequired: Bool
+    let gasPriceGwei: Decimal
+    /// Maximum network fee at the node's current standard gas price.
+    let standardFeeNative: Decimal
+}
+
 class SwapService {
     static let shared = SwapService()
+
+    enum NativeWrapDirection: Equatable {
+        case wrap
+        case unwrap
+    }
 
     private let transactionService = TransactionService.shared
 
@@ -112,6 +146,20 @@ class SwapService {
         }
 
         let blockchain = fromToken.blockchain
+
+        // Native coins and their canonical wrapped token are the same asset.
+        // Quoting them through a V2 router would create an invalid WETH -> WETH
+        // path and the submitted transaction would revert on-chain.
+        if nativeWrapDirection(fromToken: fromToken, toToken: toToken) != nil {
+            return DEXSwapQuote(
+                amountIn: amountIn,
+                amountOut: amountIn,
+                amountOutMin: amountIn,
+                path: [],
+                priceImpact: 0,
+                gasEstimate: 60_000
+            )
+        }
 
         // Get token addresses
         let fromAddress = getTokenAddress(for: fromToken, blockchain: blockchain)
@@ -163,13 +211,13 @@ class SwapService {
         quote: DEXSwapQuote,
         fromToken: Token,
         toToken: Token,
-        deadline: Int = 1200 // 20 minutes
+        deadline: Int = 1200, // 20 minutes
+        gasLimit: Int? = nil,
+        approvalGasLimit: Int? = nil,
+        gasPriceMultiplier: Double = 1,
+        onPhase: (@MainActor (SwapExecutionPhase) -> Void)? = nil
     ) async throws -> SwapResult {
         let blockchain = fromToken.blockchain
-
-        guard let routerAddress = routerAddresses[blockchain] else {
-            throw SwapError.noRouterAddress
-        }
 
         guard let privateKeyData = try getPrivateKey(for: blockchain) else {
             throw TransactionError.noPrivateKey
@@ -177,15 +225,66 @@ class SwapService {
 
         let fromAddress = try deriveAddress(from: privateKeyData, blockchain: blockchain)
 
+        // ETH <-> WETH (and the equivalent pair on supported EVM chains) is
+        // wrapping, not a DEX trade. Call the wrapped-native contract directly:
+        // deposit() for wrapping and withdraw(uint256) for unwrapping.
+        if let direction = nativeWrapDirection(fromToken: fromToken, toToken: toToken),
+           let wrappedAddress = wrappedNativeAddresses[blockchain] {
+            let amountUnits = BigUInt(
+                (quote.amountIn * swapPow(Decimal(10), fromToken.decimals)).swapRounded().description
+            ) ?? BigUInt(0)
+
+            let value: BigUInt
+            let data: Data
+            switch direction {
+            case .wrap:
+                value = amountUnits
+                data = Data(hexString: "d0e30db0")! // deposit()
+            case .unwrap:
+                value = BigUInt(0)
+                var withdrawData = Data(hexString: "2e1a7d4d")! // withdraw(uint256)
+                withdrawData.append(abiUInt(amountUnits))
+                data = withdrawData
+            }
+
+            onPhase?(.submitting)
+            let txHash = try await sendRawTransaction(
+                from: fromAddress,
+                to: wrappedAddress,
+                value: value,
+                data: data,
+                gasLimit: BigUInt(gasLimit ?? 60_000),
+                blockchain: blockchain,
+                privateKey: privateKeyData,
+                gasPriceMultiplier: Decimal(gasPriceMultiplier)
+            )
+
+            return SwapResult(
+                transactionHash: txHash,
+                amountIn: quote.amountIn,
+                amountOut: quote.amountIn
+            )
+        }
+
+        guard let routerAddress = routerAddresses[blockchain] else {
+            throw SwapError.noRouterAddress
+        }
+
         // Check if approval needed for ERC-20 tokens
         if !fromToken.isNative {
+            onPhase?(.approving)
+            // A zero estimate means the review simulation saw no approval
+            // needed — fall back to a sane limit if one turns out required.
+            let effectiveApprovalGas = (approvalGasLimit ?? 0) > 0 ? approvalGasLimit! : 60_000
             try await checkAndApproveToken(
                 token: fromToken,
                 owner: fromAddress,
                 spender: routerAddress,
                 amount: quote.amountIn,
                 blockchain: blockchain,
-                privateKey: privateKeyData
+                privateKey: privateKeyData,
+                gasLimit: effectiveApprovalGas,
+                gasPriceMultiplier: Decimal(gasPriceMultiplier)
             )
         }
 
@@ -203,14 +302,16 @@ class SwapService {
             ? BigUInt((quote.amountIn * swapPow(Decimal(10), fromToken.decimals)).swapRounded().description) ?? BigUInt(0)
             : BigUInt(0) // 0 for ERC-20
 
+        onPhase?(.submitting)
         let txHash = try await sendRawTransaction(
             from: fromAddress,
             to: routerAddress,
             value: value,
             data: swapData,
-            gasLimit: BigUInt(quote.gasEstimate),
+            gasLimit: BigUInt(gasLimit ?? quote.gasEstimate),
             blockchain: blockchain,
-            privateKey: privateKeyData
+            privateKey: privateKeyData,
+            gasPriceMultiplier: Decimal(gasPriceMultiplier)
         )
 
         return SwapResult(
@@ -229,12 +330,16 @@ class SwapService {
         data: Data,
         gasLimit: BigUInt,
         blockchain: BlockchainType,
-        privateKey: Data
+        privateKey: Data,
+        gasPriceMultiplier: Decimal = 1
     ) async throws -> String {
         let chainId = blockchain.chainId ?? 1
-        let nonce = try await fetchNonce(address: from, blockchain: blockchain)
-        let gasPrice = try await fetchGasPrice(blockchain: blockchain)
-        let gasPriceInWei = BigUInt((gasPrice * swapPow(Decimal(10), 9)).swapRounded().description) ?? BigUInt(20_000_000_000)
+        async let nonceFetch = fetchNonce(address: from, blockchain: blockchain)
+        async let gasPriceFetch = fetchGasPrice(blockchain: blockchain)
+        let nonce = try await nonceFetch
+        let gasPrice = try await gasPriceFetch
+        let adjustedGasPrice = gasPrice * max(gasPriceMultiplier, Decimal(string: "0.1") ?? 0.1)
+        let gasPriceInWei = BigUInt((adjustedGasPrice * swapPow(Decimal(10), 9)).swapRounded().description) ?? BigUInt(20_000_000_000)
 
         let signedTx = try signSwapTransaction(
             from: from,
@@ -250,6 +355,175 @@ class SwapService {
         return try await broadcastTransaction(signedTx: signedTx, blockchain: blockchain)
     }
 
+    /// Read the receipt of a broadcast transaction. `.pending` means no
+    /// receipt exists yet; confirmed/failed include the real gas cost.
+    func fetchTransactionState(hash: String, blockchain: BlockchainType) async throws -> OnChainTransactionState {
+        let result = try await rpcRequest(
+            method: "eth_getTransactionReceipt",
+            params: [hash],
+            blockchain: blockchain
+        )
+
+        guard let receipt = result as? [String: Any],
+              let statusHex = receipt["status"] as? String else {
+            let transaction = try await rpcRequest(
+                method: "eth_getTransactionByHash",
+                params: [hash],
+                blockchain: blockchain
+            )
+            return transaction is [String: Any] ? .pending : .notFound
+        }
+
+        func hexValue(_ key: String) -> BigUInt {
+            guard let hex = receipt[key] as? String else { return BigUInt(0) }
+            let stripped = hex.hasPrefix("0x") ? String(hex.dropFirst(2)) : hex
+            return BigUInt(stripped, radix: 16) ?? BigUInt(0)
+        }
+
+        let blockNumber = hexValue("blockNumber").description
+        let gasUsed = hexValue("gasUsed")
+        let effectiveGasPrice = hexValue("effectiveGasPrice")
+        let feeWei = Decimal(string: (gasUsed * effectiveGasPrice).description) ?? 0
+        let gasFeeNative = NSDecimalNumber(decimal: feeWei / swapPow(Decimal(10), 18)).doubleValue
+        let gasUsedDouble = NSDecimalNumber(decimal: Decimal(string: gasUsed.description) ?? 0).doubleValue
+
+        if statusHex.lowercased() == "0x1" {
+            return .confirmed(blockNumber: blockNumber, gasUsed: gasUsedDouble, gasFeeNative: gasFeeNative)
+        }
+        return .failed(blockNumber: blockNumber, gasUsed: gasUsedDouble, gasFeeNative: gasFeeNative)
+    }
+
+    /// Reads the current node gas price and simulates the exact swap calldata.
+    /// If the input ERC-20 needs approval, its simulated gas is included too.
+    func estimateNetworkFee(
+        quote: DEXSwapQuote,
+        fromToken: Token,
+        toToken: Token
+    ) async throws -> SwapNetworkFeeEstimate {
+        let blockchain = fromToken.blockchain
+        guard blockchain == toToken.blockchain,
+              let privateKey = try getPrivateKey(for: blockchain) else {
+            throw TransactionError.noPrivateKey
+        }
+        let owner = try deriveAddress(from: privateKey, blockchain: blockchain)
+        let amountUnits = BigUInt(
+            (quote.amountIn * swapPow(Decimal(10), fromToken.decimals)).swapRounded().description
+        ) ?? BigUInt(0)
+
+        let target: String
+        let value: BigUInt
+        let data: Data
+
+        if let direction = nativeWrapDirection(fromToken: fromToken, toToken: toToken),
+           let wrappedAddress = wrappedNativeAddresses[blockchain] {
+            target = wrappedAddress
+            switch direction {
+            case .wrap:
+                value = amountUnits
+                data = Data(hexString: "d0e30db0")!
+            case .unwrap:
+                value = BigUInt(0)
+                var withdrawData = Data(hexString: "2e1a7d4d")!
+                withdrawData.append(abiUInt(amountUnits))
+                data = withdrawData
+            }
+        } else {
+            guard let router = routerAddresses[blockchain] else {
+                throw SwapError.noRouterAddress
+            }
+            target = router
+            value = fromToken.isNative ? amountUnits : BigUInt(0)
+            data = try createSwapTransactionData(
+                quote: quote,
+                fromToken: fromToken,
+                toToken: toToken,
+                recipient: owner,
+                deadline: 1200
+            )
+        }
+
+        // The three lookups are independent — run them concurrently so the
+        // review screen appears in one round-trip instead of three.
+        let gasPriceTask = Task { try await self.fetchGasPrice(blockchain: blockchain) }
+        let swapGasTask = Task {
+            try await self.estimateGas(
+                from: owner,
+                to: target,
+                value: value,
+                data: data,
+                blockchain: blockchain
+            )
+        }
+
+        var approvalGas = 0
+        var approvalRequired = false
+        if !fromToken.isNative,
+           nativeWrapDirection(fromToken: fromToken, toToken: toToken) == nil,
+           let tokenAddress = fromToken.contractAddress,
+           let router = routerAddresses[blockchain] {
+            var allowanceData = Data(hexString: "dd62ed3e")!
+            allowanceData.append(abiAddress(owner))
+            allowanceData.append(abiAddress(router))
+            let allowance = try await ethCall(to: tokenAddress, data: allowanceData, blockchain: blockchain)
+
+            let currentAllowance = BigUInt(allowance)
+            if currentAllowance < amountUnits {
+                approvalRequired = true
+                // USDT-style tokens revert when simulating a non-zero →
+                // non-zero approve, so estimate approve(0) — always valid —
+                // and double it when a reset transaction will be needed.
+                let simulatedAmount = currentAllowance > 0 ? BigUInt(0) : amountUnits
+                var approveData = Data(hexString: "095ea7b3")!
+                approveData.append(abiAddress(router))
+                approveData.append(abiUInt(simulatedAmount))
+                approvalGas = try await estimateGas(
+                    from: owner,
+                    to: tokenAddress,
+                    value: BigUInt(0),
+                    data: approveData,
+                    blockchain: blockchain
+                )
+                if currentAllowance > 0 {
+                    approvalGas *= 2
+                }
+            }
+        }
+
+        let swapGas: Int
+        do {
+            swapGas = try await swapGasTask.value
+        } catch {
+            // A first ERC-20 swap cannot be simulated before its approval is
+            // mined. In that one case use the route's conservative gas limit;
+            // the approval itself was still estimated live above. A native
+            // MAX attempt can also fail simulation because the provisional
+            // value leaves no gas; its route limit lets the UI calculate the
+            // actually spendable maximum before simulating again.
+            guard approvalRequired || fromToken.isNative else {
+                gasPriceTask.cancel()
+                throw error
+            }
+            swapGas = quote.gasEstimate
+        }
+
+        // The estimate is the likely gas used. A 15% margin is the maximum
+        // signed limit; unused gas is not charged by the EVM.
+        let swapGasLimit = max(swapGas + swapGas * 15 / 100, 21_000)
+        let approvalGasLimit = approvalGas > 0 ? approvalGas + approvalGas * 15 / 100 : 0
+        let totalGasLimit = swapGasLimit + approvalGasLimit
+        let gasPriceGwei = try await gasPriceTask.value
+        let standardFee = Decimal(totalGasLimit) * gasPriceGwei / swapPow(Decimal(10), 9)
+
+        return SwapNetworkFeeEstimate(
+            swapGasLimit: swapGasLimit,
+            approvalGasLimit: approvalGasLimit,
+            totalGasLimit: totalGasLimit,
+            approvalRequired: approvalRequired,
+            gasPriceGwei: gasPriceGwei,
+            standardFeeNative: standardFee
+        )
+    }
+
     // MARK: - Private Helper Methods
 
     private func getTokenAddress(for token: Token, blockchain: BlockchainType) -> String {
@@ -258,6 +532,24 @@ class SwapService {
         } else {
             return token.contractAddress ?? ""
         }
+    }
+
+    /// Identifies a native coin <-> canonical wrapped-native pair without
+    /// relying on the display symbol, which can be supplied by custom tokens.
+    func nativeWrapDirection(fromToken: Token, toToken: Token) -> NativeWrapDirection? {
+        guard fromToken.blockchain == toToken.blockchain,
+              let wrappedAddress = wrappedNativeAddresses[fromToken.blockchain] else {
+            return nil
+        }
+
+        let fromIsWrapped = !fromToken.isNative
+            && fromToken.contractAddress?.caseInsensitiveCompare(wrappedAddress) == .orderedSame
+        let toIsWrapped = !toToken.isNative
+            && toToken.contractAddress?.caseInsensitiveCompare(wrappedAddress) == .orderedSame
+
+        if fromToken.isNative && toIsWrapped { return .wrap }
+        if fromIsWrapped && toToken.isNative { return .unwrap }
+        return nil
     }
 
     private func buildSwapPath(from: String, to: String, blockchain: BlockchainType) -> [String] {
@@ -327,7 +619,9 @@ class SwapService {
         spender: String,
         amount: Decimal,
         blockchain: BlockchainType,
-        privateKey: Data
+        privateKey: Data,
+        gasLimit: Int = 60_000,
+        gasPriceMultiplier: Decimal = 1
     ) async throws {
         guard let tokenAddress = token.contractAddress else {
             throw SwapError.invalidTokenPair
@@ -354,23 +648,99 @@ class SwapService {
             return
         }
 
-        Logger.log("🔏 Sending approve for \(token.symbol)...")
+        // USDT-style tokens revert on a non-zero → non-zero approve; the
+        // allowance must be reset to 0 first.
+        if currentAllowance > 0 {
+            Logger.log("🔏 Resetting non-zero allowance for \(token.symbol)...")
+            try await sendApproval(
+                spender: spender,
+                amount: BigUInt(0),
+                tokenAddress: tokenAddress,
+                tokenSymbol: token.symbol,
+                owner: owner,
+                blockchain: blockchain,
+                privateKey: privateKey,
+                gasLimit: gasLimit,
+                gasPriceMultiplier: gasPriceMultiplier
+            )
+        }
 
+        Logger.log("🔏 Sending approve for \(token.symbol)...")
+        try await sendApproval(
+            spender: spender,
+            amount: requiredAmount,
+            tokenAddress: tokenAddress,
+            tokenSymbol: token.symbol,
+            owner: owner,
+            blockchain: blockchain,
+            privateKey: privateKey,
+            gasLimit: gasLimit,
+            gasPriceMultiplier: gasPriceMultiplier
+        )
+    }
+
+    /// Broadcast an approve and wait until it is mined. Broadcasting the swap
+    /// while the approve is still propagating makes load-balanced public RPC
+    /// nodes hand out the same nonce twice — the second transaction then
+    /// replaces the first and the swap reverts. ETH → token swaps need no
+    /// approval, which is why only token → ETH swaps used to fail.
+    private func sendApproval(
+        spender: String,
+        amount: BigUInt,
+        tokenAddress: String,
+        tokenSymbol: String,
+        owner: String,
+        blockchain: BlockchainType,
+        privateKey: Data,
+        gasLimit: Int,
+        gasPriceMultiplier: Decimal
+    ) async throws {
         // approve(address spender, uint256 amount) — 0x095ea7b3
         var approveData = Data(hexString: "095ea7b3")!
         approveData.append(abiAddress(spender))
-        approveData.append(abiUInt(requiredAmount))
+        approveData.append(abiUInt(amount))
 
         let approveTxHash = try await sendRawTransaction(
             from: owner,
             to: tokenAddress,
             value: BigUInt(0),
             data: approveData,
-            gasLimit: BigUInt(60_000),
+            gasLimit: BigUInt(gasLimit),
             blockchain: blockchain,
-            privateKey: privateKey
+            privateKey: privateKey,
+            gasPriceMultiplier: gasPriceMultiplier
         )
-        Logger.log("✅ Approve broadcast: \(approveTxHash)")
+        Logger.log("✅ Approve broadcast: \(approveTxHash), waiting for confirmation...")
+
+        // Mainnet transactions can remain queued behind an earlier account
+        // nonce for several minutes. Keep this aligned with the swap deadline
+        // so a slow-but-valid approval is not reported as failed prematurely.
+        let deadline = Date().addingTimeInterval(20 * 60)
+        while Date() < deadline {
+            try? await Task.sleep(nanoseconds: 2_000_000_000)
+
+            guard let state = try? await fetchTransactionState(
+                hash: approveTxHash,
+                blockchain: blockchain
+            ) else { continue }
+
+            switch state {
+            case .notFound:
+                // A future-nonce transaction may stay local to the accepting
+                // RPC until the preceding nonce is mined, then propagate and
+                // confirm normally. Treat temporary absence as queued.
+                continue
+            case .pending:
+                continue
+            case .confirmed:
+                Logger.log("✅ Approve for \(tokenSymbol) confirmed")
+                return
+            case .failed:
+                Logger.log("❌ Approve for \(tokenSymbol) reverted")
+                throw TransactionError.networkError("error.swap.approvalFailed".localized)
+            }
+        }
+        throw TransactionError.networkError("error.swap.approvalTimeout".localized)
     }
 
     /// Query the router's getAmountsOut for a real quote.
@@ -425,7 +795,9 @@ class SwapService {
             guard let url = URL(string: urlString) else { continue }
             var request = URLRequest(url: url)
             request.httpMethod = "POST"
-            request.timeoutInterval = 15
+            // Short timeout — a dead node must fail over quickly, the healthy
+            // public nodes answer well under a second.
+            request.timeoutInterval = 6
             request.setValue("application/json", forHTTPHeaderField: "Content-Type")
             request.httpBody = try JSONSerialization.data(withJSONObject: [
                 "jsonrpc": "2.0",
@@ -485,6 +857,34 @@ class SwapService {
             throw TransactionError.networkError("Invalid eth_call response")
         }
         return resultData
+    }
+
+    private func estimateGas(
+        from: String,
+        to: String,
+        value: BigUInt,
+        data: Data,
+        blockchain: BlockchainType
+    ) async throws -> Int {
+        let result = try await rpcRequest(
+            method: "eth_estimateGas",
+            params: [[
+                "from": from,
+                "to": to,
+                "value": "0x" + String(value, radix: 16),
+                "data": "0x" + data.hexString
+            ]],
+            blockchain: blockchain
+        )
+
+        guard let resultHex = result as? String else {
+            throw TransactionError.networkError("Invalid eth_estimateGas response")
+        }
+        let stripped = resultHex.hasPrefix("0x") ? String(resultHex.dropFirst(2)) : resultHex
+        guard let gas = Int(stripped, radix: 16), gas > 0 else {
+            throw TransactionError.networkError("Invalid eth_estimateGas value")
+        }
+        return gas
     }
 
     // MARK: - ABI Encoding Helpers

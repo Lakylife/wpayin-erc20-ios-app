@@ -38,16 +38,20 @@ struct MultiChainWallet: Identifiable, Codable, Sendable {
     let type: WalletType
     let createdAt: Date
     var seedPhraseId: String? // Reference to keychain stored seed
+    var privateKeyId: String? // Reference to keychain stored imported key
     var accounts: [WalletAccount]
     var isActive: Bool
+    var portfolioValueUSD: Double? // Last refreshed total shown in wallet selector
 
-    init(name: String, type: WalletType, seedPhraseId: String? = nil) {
+    init(name: String, type: WalletType, seedPhraseId: String? = nil, privateKeyId: String? = nil) {
         self.name = name
         self.type = type
         self.createdAt = Date()
         self.seedPhraseId = seedPhraseId
+        self.privateKeyId = privateKeyId
         self.accounts = []
         self.isActive = true
+        self.portfolioValueUSD = nil
     }
 }
 
