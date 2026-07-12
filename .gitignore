@@ -100,6 +100,8 @@ iOSInjectionProject/
 
 # Local assistant/work artifacts
 backups/
+.backups/
+.claude/
 .agents/
 .codex/
 AGENTS.md
@@ -111,10 +113,13 @@ CODEX.md
 
 # Public app screenshots used in README
 screenshots/*
-!screenshots/20260609_app_update/
-!screenshots/20260609_app_update/01_launch.png
-!screenshots/20260609_app_update/02_home.png
-!screenshots/20260609_app_update/03_swap.png
+!screenshots/20260712_v1.1.8/
+!screenshots/20260712_v1.1.8/01_launch.png
+!screenshots/20260712_v1.1.8/02_welcome.png
+!screenshots/20260712_v1.1.8/03_home.png
+!screenshots/20260712_v1.1.8/04_swap.png
+!screenshots/20260712_v1.1.8/05_activity.png
+!screenshots/20260712_v1.1.8/06_settings.png
 
 # macOS
 .DS_Store

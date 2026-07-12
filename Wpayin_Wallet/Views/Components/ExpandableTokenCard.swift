@@ -47,6 +47,8 @@ struct ExpandableTokenCard: View {
                             Text(token.price.formatted(as: settingsManager.selectedCurrency))
                                 .font(.system(size: 13))
                                 .foregroundColor(WpayinColors.textSecondary)
+                                .lineLimit(1)
+                                .minimumScaleFactor(0.7)
 
                             PriceChangeLabel(change: walletManager.priceChanges24h[token.symbol.uppercased()])
 

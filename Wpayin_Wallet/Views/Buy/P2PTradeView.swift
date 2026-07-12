@@ -19,31 +19,26 @@ struct P2PTradeView: View {
     @Environment(\.dismiss) private var dismiss
 
     private enum P2PMode: CaseIterable {
-        case browse, sell, buy
+        case buy, sell
 
         var label: String {
             switch self {
-            case .browse: return "Offers".localized
-            case .sell: return "Sell".localized
             case .buy: return "Buy".localized
+            case .sell: return "Sell".localized
             }
         }
 
         var icon: String {
             switch self {
-            case .browse: return "list.bullet.rectangle"
-            case .sell: return "arrow.up.circle"
             case .buy: return "arrow.down.circle"
+            case .sell: return "arrow.up.circle"
             }
         }
     }
 
-    @State private var mode: P2PMode = AppConfig.p2pOfferBoardEnabled ? .browse : .sell
-    @State private var buyPayload: String?
+    @State private var mode: P2PMode = .buy
 
-    private var availableModes: [P2PMode] {
-        AppConfig.p2pOfferBoardEnabled ? P2PMode.allCases : [.sell, .buy]
-    }
+    private var availableModes: [P2PMode] { P2PMode.allCases }
 
     var body: some View {
         NavigationView {
@@ -57,16 +52,10 @@ struct P2PTradeView: View {
                         .padding(.bottom, 14)
 
                     switch mode {
-                    case .browse:
-                        P2PMarketContent { payload in
-                            buyPayload = payload
-                            withAnimation(.easeOut(duration: 0.2)) { mode = .buy }
-                        }
+                    case .buy:
+                        P2PBuyContent()
                     case .sell:
                         P2PSellContent()
-                    case .buy:
-                        P2PBuyContent(initialPayload: buyPayload)
-                            .id(buyPayload)   // re-validate when a new listing is opened
                     }
                 }
             }
@@ -122,101 +111,188 @@ struct P2PTradeView: View {
 
 // MARK: - Public offer board (discovery — trust comes from on-chain validation)
 
-private struct P2PMarketContent: View {
+/// Marketplace section shown at the top of the Buy tab: what other users are
+/// selling right now, with unit price, fiat estimate and posting time.
+/// Tapping a listing runs the exact same on-chain verification as a pasted
+/// offer — the board is discovery only and can never be trusted by itself.
+private struct P2POfferBoardSection: View {
     let onSelect: (String) -> Void
+
+    @EnvironmentObject var walletManager: WalletManager
+    @EnvironmentObject var settingsManager: SettingsManager
 
     @State private var listings: [P2PListing] = []
     @State private var isLoading = false
     @State private var loadFailed = false
+    @State private var ownListing: P2PListing?
+    @State private var selectedPair: MarketPair?
+    @State private var buyAmountText = ""
+
+    /// One tradable pair on one network, exchange style: what you get / what
+    /// you pay with.
+    private struct MarketPair: Identifiable, Equatable {
+        let blockchain: BlockchainType
+        let buySymbol: String
+        let paySymbol: String
+        var id: String { "\(blockchain.rawValue)|\(buySymbol)|\(paySymbol)" }
+        var title: String { "\(buySymbol) / \(paySymbol)" }
+    }
+
+    private struct PairGroup: Identifiable {
+        let pair: MarketPair
+        let offers: [P2PListing]
+        var id: String { pair.id }
+    }
+
+    private func unitPrice(_ listing: P2PListing) -> Double {
+        let sell = (listing.offer.signerAmountDecimal as NSDecimalNumber).doubleValue
+        let pay = (listing.offer.senderAmountDecimal as NSDecimalNumber).doubleValue
+        guard sell > 0 else { return .infinity }
+        return pay / sell
+    }
+
+    /// Live listings grouped into pairs, cheapest offer deciding the order.
+    private var pairGroups: [PairGroup] {
+        var groups: [String: PairGroup] = [:]
+        for listing in listings {
+            guard let chain = listing.offer.blockchain else { continue }
+            let pair = MarketPair(
+                blockchain: chain,
+                buySymbol: listing.offer.signerSymbol,
+                paySymbol: listing.offer.senderSymbol
+            )
+            let existing = groups[pair.id]?.offers ?? []
+            groups[pair.id] = PairGroup(pair: pair, offers: existing + [listing])
+        }
+        return groups.values
+            .map { PairGroup(pair: $0.pair, offers: $0.offers.sorted { unitPrice($0) < unitPrice($1) }) }
+            .sorted { $0.offers.count > $1.offers.count }
+    }
+
+    private var requestedAmount: Double {
+        Double(buyAmountText.replacingOccurrences(of: ",", with: ".")) ?? 0
+    }
+
+    /// Offers of the selected pair that can cover the requested amount,
+    /// best price first. Offers fill in full, so an offer matches when the
+    /// seller's amount is at least what the user asked for.
+    private func matchingOffers(for pair: MarketPair) -> [P2PListing] {
+        guard let group = pairGroups.first(where: { $0.pair == pair }) else { return [] }
+        guard requestedAmount > 0 else { return group.offers }
+        return group.offers.filter {
+            ($0.offer.signerAmountDecimal as NSDecimalNumber).doubleValue >= requestedAmount
+        }
+    }
 
     var body: some View {
-        ScrollView(showsIndicators: false) {
-            VStack(spacing: 12) {
-                if isLoading && listings.isEmpty {
+        VStack(alignment: .leading, spacing: 12) {
+            header
+
+            if isLoading && listings.isEmpty {
+                HStack {
+                    Spacer()
                     ProgressView()
                         .tint(WpayinColors.primary)
-                        .padding(.top, 60)
-                } else if listings.isEmpty {
-                    emptyState
-                } else {
-                    ForEach(listings) { listing in
-                        listingRow(listing)
-                    }
+                    Spacer()
                 }
-
-                Spacer(minLength: 24)
+                .padding(.vertical, 24)
+            } else if listings.isEmpty {
+                emptyState
+            } else if let pair = selectedPair {
+                pairDetail(pair)
+            } else {
+                ForEach(pairGroups) { group in
+                    pairRow(group)
+                }
             }
-            .padding(.horizontal, 20)
         }
-        .refreshable { await load() }
         .task { await load() }
-    }
-
-    private var emptyState: some View {
-        VStack(spacing: 16) {
-            Image(systemName: loadFailed ? "icloud.slash" : "tray")
-                .font(.system(size: 30, weight: .medium))
-                .foregroundColor(WpayinColors.primary)
-                .frame(width: 72, height: 72)
-                .background(Circle().fill(WpayinColors.primary.opacity(0.12)))
-
-            Text(loadFailed ? "Offer board unavailable".localized : "No public offers right now".localized)
-                .font(.wpayinHeadline)
-                .foregroundColor(WpayinColors.text)
-
-            Text(loadFailed
-                 ? "error.p2p.iCloudUnavailable".localized
-                 : "Be the first — create an offer and publish it to the board.".localized)
-                .font(.wpayinBody)
-                .foregroundColor(WpayinColors.textSecondary)
-                .multilineTextAlignment(.center)
-                .lineSpacing(3)
+        // Tapping your own listing opens its share screen instead of the
+        // buy flow — the same wallet can never accept its own offer.
+        .sheet(item: $ownListing) { listing in
+            P2POfferShareView(offer: listing.offer) {
+                ownListing = nil
+                Task { await load() }
+            }
         }
-        .frame(maxWidth: .infinity)
-        .padding(.horizontal, 24)
-        .padding(.vertical, 40)
-        .background(
-            RoundedRectangle(cornerRadius: WpayinRadius.card, style: .continuous)
-                .fill(WpayinColors.surface)
-                .overlay(
-                    RoundedRectangle(cornerRadius: WpayinRadius.card, style: .continuous)
-                        .stroke(WpayinColors.surfaceBorder, lineWidth: 1)
-                )
-        )
-        .padding(.top, 8)
     }
 
-    private func listingRow(_ listing: P2PListing) -> some View {
-        let offer = listing.offer
-        return Button {
-            onSelect(listing.payload)
+    private var header: some View {
+        HStack {
+            if let pair = selectedPair {
+                Button {
+                    withAnimation(.easeOut(duration: 0.2)) {
+                        selectedPair = nil
+                        buyAmountText = ""
+                    }
+                } label: {
+                    HStack(spacing: 6) {
+                        Image(systemName: "chevron.left")
+                            .font(.system(size: 12, weight: .bold))
+                        Text(pair.title)
+                            .font(.system(size: 15, weight: .bold, design: .rounded))
+                    }
+                    .foregroundColor(WpayinColors.text)
+                }
+                .buttonStyle(PlainButtonStyle())
+
+                NetworkIconView(blockchain: pair.blockchain, size: 16)
+            } else {
+                Text("Markets".localized)
+                    .font(.system(size: 15, weight: .bold, design: .rounded))
+                    .foregroundColor(WpayinColors.text)
+            }
+
+            Spacer()
+
+            Button {
+                Task { await load() }
+            } label: {
+                if isLoading {
+                    ProgressView()
+                        .scaleEffect(0.7)
+                        .tint(WpayinColors.primary)
+                } else {
+                    Image(systemName: "arrow.clockwise")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundColor(WpayinColors.primary)
+                }
+            }
+            .disabled(isLoading)
+            .buttonStyle(PlainButtonStyle())
+        }
+    }
+
+    /// One market row: pair, network, best price and market depth.
+    private func pairRow(_ group: PairGroup) -> some View {
+        Button {
+            withAnimation(.easeOut(duration: 0.2)) { selectedPair = group.pair }
         } label: {
             HStack(spacing: 12) {
-                if let network = offer.blockchain {
-                    NetworkIconView(blockchain: network, size: 34)
-                }
+                NetworkIconView(blockchain: group.pair.blockchain, size: 34)
 
-                VStack(alignment: .leading, spacing: 5) {
-                    Text("\(formatAmount(offer.signerAmountDecimal)) \(offer.signerSymbol) → \(formatAmount(offer.senderAmountDecimal)) \(offer.senderSymbol)")
-                        .font(.system(size: 15, weight: .semibold, design: .rounded))
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(group.pair.title)
+                        .font(.system(size: 15, weight: .bold, design: .rounded))
                         .foregroundColor(WpayinColors.text)
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.7)
 
-                    HStack(spacing: 6) {
-                        Text("\(offer.signerWallet.prefix(6))…\(offer.signerWallet.suffix(4))")
-                            .font(.system(size: 11, design: .monospaced))
+                    if let best = group.offers.first {
+                        Text("From %@".localized("\(formatBoardAmount(Decimal(unitPrice(best)))) \(group.pair.paySymbol)"))
+                            .font(.system(size: 11, weight: .medium, design: .rounded))
                             .foregroundColor(WpayinColors.textSecondary)
-
-                        Text("· \("Expires".localized) \(Date(timeIntervalSince1970: offer.expiry).formatted(date: .abbreviated, time: .shortened))")
-                            .font(.system(size: 11, weight: .medium))
-                            .foregroundColor(WpayinColors.textTertiary)
                             .lineLimit(1)
                             .minimumScaleFactor(0.75)
                     }
                 }
 
                 Spacer(minLength: 8)
+
+                Text("Offers: %@".localized("\(group.offers.count)"))
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundColor(WpayinColors.textSecondary)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 4)
+                    .background(Capsule().fill(WpayinColors.surfaceLight))
 
                 Image(systemName: "chevron.right")
                     .font(.system(size: 12, weight: .bold))
@@ -235,12 +311,129 @@ private struct P2PMarketContent: View {
         .buttonStyle(WpayinPressableStyle())
     }
 
+    /// Pair detail: how much the user wants to buy + offers that cover it,
+    /// cheapest first, ready to tap-buy.
+    @ViewBuilder
+    private func pairDetail(_ pair: MarketPair) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("How much %@ do you want to buy?".localized(pair.buySymbol))
+                .font(.system(size: 13, weight: .medium))
+                .foregroundColor(WpayinColors.textSecondary)
+
+            HStack(spacing: 10) {
+                TextField("0.0", text: $buyAmountText)
+                    .keyboardType(.decimalPad)
+                    .font(.system(size: 22, weight: .semibold, design: .rounded))
+                    .foregroundColor(WpayinColors.text)
+
+                Text(pair.buySymbol)
+                    .font(.system(size: 15, weight: .bold, design: .rounded))
+                    .foregroundColor(WpayinColors.textSecondary)
+            }
+            .padding(14)
+            .background(
+                RoundedRectangle(cornerRadius: WpayinRadius.medium, style: .continuous)
+                    .fill(WpayinColors.surface)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: WpayinRadius.medium, style: .continuous)
+                            .stroke(WpayinColors.primary.opacity(0.32), lineWidth: 1)
+                    )
+            )
+
+            Text("Offers are filled in full — you always buy the seller's whole amount.".localized)
+                .font(.system(size: 11, weight: .medium))
+                .foregroundColor(WpayinColors.textTertiary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+
+        let offers = matchingOffers(for: pair)
+        if offers.isEmpty {
+            Text("No offer covers this amount right now. Lower it or check back later.".localized)
+                .font(.system(size: 12, weight: .medium))
+                .foregroundColor(WpayinColors.textSecondary)
+                .frame(maxWidth: .infinity)
+                .multilineTextAlignment(.center)
+                .padding(.vertical, 20)
+                .padding(.horizontal, 16)
+                .background(
+                    RoundedRectangle(cornerRadius: WpayinRadius.medium, style: .continuous)
+                        .fill(WpayinColors.surface)
+                )
+        } else {
+            ForEach(offers) { listing in
+                listingRow(listing, isBestPrice: listing.id == offers.first?.id && offers.count > 1)
+            }
+        }
+    }
+
+    private func listingRow(_ listing: P2PListing, isBestPrice: Bool) -> some View {
+        P2PListingRow(
+            listing: listing,
+            isBestPrice: isBestPrice,
+            onTap: { onSelect(listing.payload) },
+            onOwnOffer: { ownListing = listing },
+            onReport: {
+                Task {
+                    try? await P2PMarketService.shared.report(listing)
+                    await MainActor.run {
+                        AppToast.show("Offer reported".localized, icon: "exclamationmark.shield")
+                    }
+                }
+            },
+            onBlock: {
+                P2PMarketService.shared.block(wallet: listing.offer.signerWallet)
+                listings.removeAll { $0.offer.signerWallet.caseInsensitiveCompare(listing.offer.signerWallet) == .orderedSame }
+                AppToast.show("Seller blocked".localized, icon: "hand.raised.fill")
+            }
+        )
+    }
+
+    private func formatBoardAmount(_ value: Decimal) -> String {
+        let doubleValue = (value as NSDecimalNumber).doubleValue
+        return String(format: doubleValue >= 1 ? "%.2f" : "%.4f", doubleValue)
+    }
+
+    private var emptyState: some View {
+        VStack(spacing: 10) {
+            Image(systemName: loadFailed ? "wifi.slash" : "tray")
+                .font(.system(size: 22, weight: .medium))
+                .foregroundColor(WpayinColors.textSecondary)
+
+            Text(loadFailed ? "Offer board unavailable".localized : "No public offers right now".localized)
+                .font(.system(size: 14, weight: .semibold, design: .rounded))
+                .foregroundColor(WpayinColors.text)
+
+            Text(loadFailed
+                 ? "error.p2p.boardUnavailable".localized
+                 : "Be the first — create an offer and publish it to the board.".localized)
+                .font(.wpayinCaption)
+                .foregroundColor(WpayinColors.textSecondary)
+                .multilineTextAlignment(.center)
+                .lineSpacing(2)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.horizontal, 20)
+        .padding(.vertical, 22)
+        .background(
+            RoundedRectangle(cornerRadius: WpayinRadius.medium, style: .continuous)
+                .fill(WpayinColors.surface)
+                .overlay(
+                    RoundedRectangle(cornerRadius: WpayinRadius.medium, style: .continuous)
+                        .stroke(WpayinColors.surfaceBorder, lineWidth: 1)
+                )
+        )
+    }
+
     private func load() async {
+        if listings.isEmpty {
+            listings = P2PMarketService.shared.cachedListings()
+        }
         isLoading = true
         do {
             let fetched = try await P2PMarketService.shared.fetchListings()
             await MainActor.run {
-                listings = fetched
+                // Newest first — freshest prices at the top.
+                listings = fetched.sorted { $0.createdAt > $1.createdAt }
                 loadFailed = false
                 isLoading = false
             }
@@ -249,6 +442,166 @@ private struct P2PMarketContent: View {
             await MainActor.run {
                 loadFailed = true
                 isLoading = false
+            }
+        }
+    }
+}
+
+/// One marketplace listing from the buyer's perspective: what you get, what
+/// you pay, the unit price with a fiat estimate, and when it was posted.
+private struct P2PListingRow: View {
+    let listing: P2PListing
+    var isBestPrice: Bool = false
+    let onTap: () -> Void
+    let onOwnOffer: () -> Void
+    let onReport: () -> Void
+    let onBlock: () -> Void
+
+    @EnvironmentObject var walletManager: WalletManager
+    @EnvironmentObject var settingsManager: SettingsManager
+
+    private var offer: P2POffer { listing.offer }
+
+    /// The user's own listing — it can't be accepted from the same wallet.
+    private var isOwnOffer: Bool {
+        guard let blockchain = offer.blockchain,
+              let myAddress = walletManager.availableChainAccounts[blockchain]?.address else {
+            return false
+        }
+        return myAddress.caseInsensitiveCompare(offer.signerWallet) == .orderedSame
+    }
+
+    /// Price of 1 unit of the sold token, in the payment token.
+    private var unitPrice: Double? {
+        let sellAmount = (offer.signerAmountDecimal as NSDecimalNumber).doubleValue
+        let payAmount = (offer.senderAmountDecimal as NSDecimalNumber).doubleValue
+        guard sellAmount > 0, payAmount > 0 else { return nil }
+        return payAmount / sellAmount
+    }
+
+    /// Fiat estimate of the full payment side, from live market prices.
+    private var paymentFiatValue: Double? {
+        guard let blockchain = offer.blockchain,
+              let price = walletManager.currentUSDPrice(for: offer.senderSymbol, blockchain: blockchain),
+              price > 0 else { return nil }
+        return (offer.senderAmountDecimal as NSDecimalNumber).doubleValue * price
+    }
+
+    private var postedText: String {
+        let formatter = RelativeDateTimeFormatter()
+        formatter.locale = Locale(identifier: settingsManager.selectedLanguage.rawValue)
+        formatter.unitsStyle = .short
+        return formatter.localizedString(for: listing.createdAt, relativeTo: Date())
+    }
+
+    var body: some View {
+        Button {
+            if isOwnOffer {
+                onOwnOffer()
+            } else {
+                onTap()
+            }
+        } label: {
+            VStack(spacing: 10) {
+                HStack(spacing: 12) {
+                    if let network = offer.blockchain {
+                        NetworkIconView(blockchain: network, size: 34)
+                    }
+
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Buy %@ for %@".localized(
+                            "\(formatAmount(offer.signerAmountDecimal)) \(offer.signerSymbol)",
+                            "\(formatAmount(offer.senderAmountDecimal)) \(offer.senderSymbol)"
+                        ))
+                        .font(.system(size: 15, weight: .semibold, design: .rounded))
+                        .foregroundColor(WpayinColors.text)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.65)
+
+                        HStack(spacing: 6) {
+                            if let unitPrice {
+                                Text("1 \(offer.signerSymbol) ≈ \(formatAmount(Decimal(unitPrice))) \(offer.senderSymbol)")
+                                    .font(.system(size: 11, weight: .medium, design: .rounded))
+                                    .foregroundColor(WpayinColors.textSecondary)
+                                    .lineLimit(1)
+                                    .minimumScaleFactor(0.75)
+                            }
+
+                            if let paymentFiatValue {
+                                Text("(≈ \(paymentFiatValue.formatted(as: settingsManager.selectedCurrency)))")
+                                    .font(.system(size: 11, weight: .medium))
+                                    .foregroundColor(WpayinColors.textTertiary)
+                                    .lineLimit(1)
+                            }
+                        }
+                    }
+
+                    Spacer(minLength: 8)
+
+                    if isOwnOffer {
+                        Text("Your offer".localized)
+                            .font(.system(size: 10, weight: .bold))
+                            .foregroundColor(WpayinColors.primary)
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 4)
+                            .background(Capsule().fill(WpayinColors.primary.opacity(0.12)))
+                    } else {
+                        if isBestPrice {
+                            Text("Best price".localized)
+                                .font(.system(size: 10, weight: .bold))
+                                .foregroundColor(WpayinColors.success)
+                                .padding(.horizontal, 8)
+                                .padding(.vertical, 4)
+                                .background(Capsule().fill(WpayinColors.success.opacity(0.12)))
+                        }
+
+                        Image(systemName: "chevron.right")
+                            .font(.system(size: 12, weight: .bold))
+                            .foregroundColor(WpayinColors.textTertiary)
+                    }
+                }
+
+                HStack(spacing: 6) {
+                    Image(systemName: "clock")
+                        .font(.system(size: 9, weight: .semibold))
+                        .foregroundColor(WpayinColors.textTertiary)
+
+                    Text("Posted %@".localized(postedText))
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundColor(WpayinColors.textTertiary)
+
+                    Text("· \("Expires".localized) \(Date(timeIntervalSince1970: offer.expiry).formatted(date: .abbreviated, time: .shortened))")
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundColor(WpayinColors.textTertiary)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.75)
+
+                    Spacer()
+
+                    Text("\(offer.signerWallet.prefix(6))…\(offer.signerWallet.suffix(4))")
+                        .font(.system(size: 10, design: .monospaced))
+                        .foregroundColor(WpayinColors.textTertiary)
+                }
+            }
+            .padding(14)
+            .background(
+                RoundedRectangle(cornerRadius: WpayinRadius.medium, style: .continuous)
+                    .fill(WpayinColors.surface)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: WpayinRadius.medium, style: .continuous)
+                            .stroke(WpayinColors.surfaceBorder, lineWidth: 1)
+                    )
+            )
+        }
+        .buttonStyle(WpayinPressableStyle())
+        .contextMenu {
+            if !isOwnOffer {
+                Button(action: onReport) {
+                    Label("Report Offer".localized, systemImage: "exclamationmark.shield")
+                }
+                Button(role: .destructive, action: onBlock) {
+                    Label("Block Seller".localized, systemImage: "hand.raised.fill")
+                }
             }
         }
     }
@@ -270,10 +623,13 @@ private struct P2PSellContent: View {
     @State private var sellAmount = ""
     @State private var receiveAmount = ""
     @State private var validHours: Double = 24
+    @State private var usesMarketPrice = true
+    @State private var suggestedReceiveAmount = ""
 
     @State private var showSellPicker = false
     @State private var showReceivePicker = false
     @State private var isCreating = false
+    @State private var creationPhase: P2POfferCreationPhase = .checking
     @State private var createdOffer: P2POffer?
     @State private var protocolFeeBps: Int?
 
@@ -345,7 +701,9 @@ private struct P2PSellContent: View {
     var body: some View {
         Group {
             if let offer = createdOffer {
-                P2POfferShareView(offer: offer) {
+                P2POfferShareView(
+                    offer: offer
+                ) {
                     createdOffer = nil
                     sellAmount = ""
                     receiveAmount = ""
@@ -377,13 +735,19 @@ private struct P2PSellContent: View {
         .sheet(isPresented: $showSellPicker) {
             TokenPickerView(tokens: sellableTokens, selectedToken: sellToken) { token in
                 sellToken = token
-                if receiveToken?.blockchain != token.blockchain { receiveToken = nil }
+                if receiveToken?.blockchain != token.blockchain
+                    || receiveToken.flatMap(effectiveAddress) == effectiveAddress(token) {
+                    selectDefaultReceiveToken()
+                }
                 loadProtocolFee(for: token.blockchain)
+                applyMarketPrice()
             }
         }
         .sheet(isPresented: $showReceivePicker) {
             TokenPickerView(tokens: receivableTokens, selectedToken: receiveToken) { token in
                 receiveToken = token
+                usesMarketPrice = true
+                applyMarketPrice()
             }
         }
         .alert("P2P Trade Failed".localized, isPresented: $showError) {
@@ -396,7 +760,15 @@ private struct P2PSellContent: View {
                 sellToken = sellableTokens.first
                 if let token = sellToken { loadProtocolFee(for: token.blockchain) }
             }
+            if receiveToken == nil { selectDefaultReceiveToken() }
             reloadOffers()
+            applyMarketPrice()
+        }
+        .onChange(of: sellAmount) { _ in applyMarketPrice() }
+        .onChange(of: sellToken?.id) { _ in applyMarketPrice() }
+        .onChange(of: receiveToken?.id) { _ in applyMarketPrice() }
+        .onChange(of: receiveAmount) { newValue in
+            if newValue != suggestedReceiveAmount { usesMarketPrice = false }
         }
     }
 
@@ -441,7 +813,8 @@ private struct P2PSellContent: View {
             selectedToken: sellToken,
             amount: $sellAmount,
             isInput: true,
-            onTokenSelect: { showSellPicker = true }
+            onTokenSelect: { showSellPicker = true },
+            onMax: { applyMaxSellAmount() }
         )
 
         ModernTokenSelector(
@@ -449,8 +822,11 @@ private struct P2PSellContent: View {
             selectedToken: receiveToken,
             amount: $receiveAmount,
             isInput: true,
-            onTokenSelect: { showReceivePicker = true }
+            onTokenSelect: { showReceivePicker = true },
+            showsMax: false
         )
+
+        marketPriceRow
 
         expiryRow
 
@@ -466,7 +842,7 @@ private struct P2PSellContent: View {
         Button(action: createOffer) {
             HStack(spacing: 9) {
                 if isCreating { ProgressView().tint(.white) }
-                Text(isCreating ? "Creating offer...".localized : "Create Offer".localized)
+                Text(isCreating ? creationPhaseTitle : "Create Offer".localized)
                     .font(.system(size: 17, weight: .bold))
             }
             .foregroundColor(isValid ? .white : WpayinColors.textTertiary)
@@ -481,6 +857,68 @@ private struct P2PSellContent: View {
         }
         .disabled(!isValid || isCreating)
         .buttonStyle(WpayinPressableStyle())
+    }
+
+    private var creationPhaseTitle: String {
+        switch creationPhase {
+        case .checking: return "Checking offer...".localized
+        case .wrapping: return "Preparing tokens...".localized
+        case .approving: return "Approving token...".localized
+        case .signing: return "Signing offer...".localized
+        }
+    }
+
+    private var marketPriceRow: some View {
+        HStack(spacing: 8) {
+            Image(systemName: usesMarketPrice ? "chart.line.uptrend.xyaxis" : "slider.horizontal.3")
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundColor(WpayinColors.primary)
+
+            Text(usesMarketPrice
+                 ? "Live market price — you can edit the amount above".localized
+                 : "Custom price set by you".localized)
+                .font(.system(size: 12, weight: .medium))
+                .foregroundColor(WpayinColors.textSecondary)
+
+            Spacer(minLength: 6)
+
+            if !usesMarketPrice, !suggestedReceiveAmount.isEmpty {
+                Button("Use market".localized) {
+                    usesMarketPrice = true
+                    receiveAmount = suggestedReceiveAmount
+                }
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundColor(WpayinColors.primary)
+            }
+        }
+        .padding(.horizontal, 4)
+    }
+
+    private func applyMarketPrice() {
+        guard let sellToken, let receiveToken,
+              sellValue > 0,
+              sellToken.price > 0,
+              receiveToken.price > 0 else {
+            suggestedReceiveAmount = ""
+            if usesMarketPrice { receiveAmount = "" }
+            return
+        }
+
+        let marketAmount = sellValue * sellToken.price / receiveToken.price
+        var formatted = String(format: marketAmount >= 1 ? "%.2f" : "%.6f", marketAmount)
+        while formatted.contains("."), formatted.last == "0" { formatted.removeLast() }
+        if formatted.last == "." { formatted.removeLast() }
+        suggestedReceiveAmount = formatted
+        if usesMarketPrice { receiveAmount = formatted }
+    }
+
+    private func selectDefaultReceiveToken() {
+        receiveToken = receivableTokens.first {
+            $0.symbol.caseInsensitiveCompare("USDT") == .orderedSame
+        } ?? receivableTokens.first {
+            $0.symbol.caseInsensitiveCompare("USDC") == .orderedSame
+        } ?? receivableTokens.first
+        usesMarketPrice = true
     }
 
     // MARK: - My offers
@@ -743,19 +1181,57 @@ private struct P2PSellContent: View {
         }
     }
 
+    /// MAX = highest sell amount whose amount + protocol fee still fits the
+    /// balance; natives also keep back the 0.002 wrap gas reserve
+    /// (mirrors P2PTradeService.wrapNativeShortfall).
+    private func applyMaxSellAmount() {
+        guard let token = sellToken else { return }
+        if let bps = protocolFeeBps {
+            sellAmount = maxSellAmount(for: token, feeBps: bps)
+        } else {
+            Task {
+                let bps = try? await P2PTradeService.shared.fetchProtocolFeeBps(blockchain: token.blockchain)
+                await MainActor.run {
+                    protocolFeeBps = bps
+                    sellAmount = maxSellAmount(for: token, feeBps: bps ?? 0)
+                }
+            }
+        }
+    }
+
+    private func maxSellAmount(for token: Token, feeBps: Int) -> String {
+        var available = token.balance
+        if token.isNative { available -= 0.002 }
+        let maxSell = available / (1 + Double(feeBps) / 10_000)
+        // Floor to 8 decimals minus one unit so double rounding can never
+        // push amount + fee back over the balance.
+        let floored = ((maxSell * 100_000_000).rounded(.down) - 1) / 100_000_000
+        guard floored > 0 else { return "" }
+        var result = String(format: "%.8f", floored)
+        while result.contains("."), result.last == "0" { result.removeLast() }
+        if result.last == "." { result.removeLast() }
+        return result
+    }
+
     private func createOffer() {
         guard let sellToken, let receiveToken,
               sellValue > 0, receiveValue > 0 else { return }
         isCreating = true
 
         Task {
+            // Creating an offer can wrap natives and approve tokens on-chain.
+            guard await settingsManager.authorizeSpending(reason: "auth.confirmPayment".localized) else {
+                await MainActor.run { isCreating = false }
+                return
+            }
             do {
                 let offer = try await P2PTradeService.shared.createOffer(
                     sellToken: sellToken,
                     sellAmount: Decimal(sellValue),
                     receiveToken: receiveToken,
                     receiveAmount: Decimal(receiveValue),
-                    validFor: validHours * 3600
+                    validFor: validHours * 3600,
+                    onPhase: { creationPhase = $0 }
                 )
                 await MainActor.run {
                     isCreating = false
@@ -781,10 +1257,6 @@ private struct P2POfferShareView: View {
     let onDone: () -> Void
 
     @State private var qrImage: UIImage?
-    @State private var isPublishing = false
-    @State private var isPublished = false
-    @State private var publishError: String?
-    @State private var showPublishError = false
 
     private var payload: String {
         P2PTradeService.shared.encode(offer) ?? ""
@@ -853,11 +1325,6 @@ private struct P2POfferShareView: View {
                     .buttonStyle(WpayinPressableStyle())
                 }
 
-                // Publish to the public board so anyone in the app can find it
-                if AppConfig.p2pOfferBoardEnabled {
-                    publishButton
-                }
-
                 Button("Done".localized, action: onDone)
                     .font(.system(size: 15, weight: .semibold))
                     .foregroundColor(WpayinColors.textSecondary)
@@ -866,59 +1333,8 @@ private struct P2POfferShareView: View {
             }
             .padding(20)
         }
-        .onAppear(perform: generateQR)
-        .alert("P2P Trade Failed".localized, isPresented: $showPublishError) {
-            Button("OK".localized) { }
-        } message: {
-            Text(publishError ?? "")
-        }
-    }
-
-    private var publishButton: some View {
-                Button(action: publish) {
-                    HStack(spacing: 8) {
-                        if isPublishing {
-                            ProgressView()
-                                .tint(WpayinColors.primary)
-                        } else {
-                            Image(systemName: isPublished ? "checkmark.circle.fill" : "megaphone.fill")
-                                .font(.system(size: 15, weight: .semibold))
-                        }
-                        Text(isPublished ? "Published to the board".localized : "Publish to Offer Board".localized)
-                            .font(.system(size: 16, weight: .bold))
-                    }
-                    .foregroundColor(isPublished ? WpayinColors.success : WpayinColors.primary)
-                    .frame(maxWidth: .infinity)
-                    .frame(height: 50)
-                    .background(
-                        RoundedRectangle(cornerRadius: 15, style: .continuous)
-                            .fill((isPublished ? WpayinColors.success : WpayinColors.primary).opacity(0.12))
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 15, style: .continuous)
-                                    .stroke((isPublished ? WpayinColors.success : WpayinColors.primary).opacity(0.5), lineWidth: 1)
-                            )
-                    )
-                }
-                .disabled(isPublishing || isPublished)
-                .buttonStyle(WpayinPressableStyle())
-    }
-
-    private func publish() {
-        isPublishing = true
-        Task {
-            do {
-                try await P2PMarketService.shared.publish(offer)
-                await MainActor.run {
-                    isPublishing = false
-                    isPublished = true
-                }
-            } catch {
-                await MainActor.run {
-                    isPublishing = false
-                    publishError = error.localizedDescription
-                    showPublishError = true
-                }
-            }
+        .onAppear {
+            generateQR()
         }
     }
 
@@ -958,8 +1374,6 @@ private struct P2POfferShareView: View {
 // MARK: - Buy (redeem offer)
 
 private struct P2PBuyContent: View {
-    var initialPayload: String? = nil
-
     @EnvironmentObject var walletManager: WalletManager
     @EnvironmentObject var settingsManager: SettingsManager
 
@@ -1003,12 +1417,6 @@ private struct P2PBuyContent: View {
         } message: {
             Text(successMessage)
         }
-        .onAppear {
-            if let initialPayload, check == nil, payloadText.isEmpty {
-                payloadText = initialPayload
-                validate()
-            }
-        }
     }
 
     private var inputCard: some View {
@@ -1036,52 +1444,69 @@ private struct P2PBuyContent: View {
             }
             .buttonStyle(WpayinPressableStyle())
 
-            HStack {
-                Rectangle().fill(WpayinColors.surfaceBorder).frame(height: 1)
-                Text("or".localized)
-                    .font(.system(size: 12, weight: .medium))
-                    .foregroundColor(WpayinColors.textTertiary)
-                Rectangle().fill(WpayinColors.surfaceBorder).frame(height: 1)
-            }
-
-            VStack(spacing: 12) {
-                TextField("Paste offer code".localized, text: $payloadText)
-                    .font(.system(size: 13, design: .monospaced))
-                    .foregroundColor(WpayinColors.text)
-                    .padding(12)
-                    .background(
-                        RoundedRectangle(cornerRadius: WpayinRadius.medium, style: .continuous)
-                            .fill(WpayinColors.surfaceLight)
-                            .overlay(
-                                RoundedRectangle(cornerRadius: WpayinRadius.medium, style: .continuous)
-                                    .stroke(WpayinColors.surfaceBorder, lineWidth: 1)
-                            )
-                    )
-                    .autocorrectionDisabled()
-                    .textInputAutocapitalization(.never)
-
-                Button {
-                    validate()
-                } label: {
-                    HStack(spacing: 9) {
-                        if isValidating { ProgressView().tint(.white) }
-                        Text(isValidating ? "Verifying offer...".localized : "Verify Offer".localized)
-                            .font(.system(size: 16, weight: .bold))
-                    }
-                    .foregroundColor(payloadText.isEmpty ? WpayinColors.textTertiary : .white)
-                    .frame(maxWidth: .infinity)
-                    .frame(height: 50)
-                    .background(
-                        RoundedRectangle(cornerRadius: 15, style: .continuous)
-                            .fill(payloadText.isEmpty
-                                  ? AnyShapeStyle(WpayinColors.surfaceLight)
-                                  : AnyShapeStyle(WpayinColors.accentGradient))
-                    )
+            Button {
+                pasteFromClipboard()
+            } label: {
+                HStack(spacing: 8) {
+                    Image(systemName: "doc.on.clipboard")
+                        .font(.system(size: 15, weight: .semibold))
+                    Text("Paste offer code".localized)
+                        .font(.system(size: 16, weight: .bold))
                 }
-                .disabled(payloadText.isEmpty || isValidating)
-                .buttonStyle(WpayinPressableStyle())
+                .foregroundColor(WpayinColors.primary)
+                .frame(maxWidth: .infinity)
+                .frame(height: 50)
+                .background(
+                    RoundedRectangle(cornerRadius: 15, style: .continuous)
+                        .fill(WpayinColors.primary.opacity(0.12))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 15, style: .continuous)
+                                .stroke(WpayinColors.primary.opacity(0.5), lineWidth: 1)
+                        )
+                )
+            }
+            .buttonStyle(WpayinPressableStyle())
+
+            if isValidating {
+                HStack(spacing: 9) {
+                    ProgressView()
+                        .scaleEffect(0.8)
+                        .tint(WpayinColors.primary)
+                    Text("Verifying offer...".localized)
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundColor(WpayinColors.textSecondary)
+                }
+                .padding(.top, 2)
             }
         }
+        .onChange(of: payloadText) { newValue in
+            autoValidate(newValue)
+        }
+    }
+
+    private func pasteFromClipboard() {
+        guard let clipboard = UIPasteboard.general.string?
+            .trimmingCharacters(in: .whitespacesAndNewlines),
+            !clipboard.isEmpty else {
+            errorMessage = "error.p2p.invalidOffer".localized
+            showError = true
+            return
+        }
+        payloadText = clipboard
+        // onChange fires validation only for decodable payloads — surface
+        // the error directly when the clipboard holds something else.
+        if P2PTradeService.shared.decode(clipboard) == nil {
+            errorMessage = "error.p2p.invalidOffer".localized
+            showError = true
+        }
+    }
+
+    /// Kick off verification automatically once the text is a complete,
+    /// decodable offer payload — no separate "Verify" step needed.
+    private func autoValidate(_ text: String) {
+        guard !isValidating, check == nil,
+              P2PTradeService.shared.decode(text) != nil else { return }
+        validate()
     }
 
     private func offerSummary(_ check: P2POfferCheck) -> some View {
@@ -1136,6 +1561,39 @@ private struct P2PBuyContent: View {
                         RoundedRectangle(cornerRadius: WpayinRadius.card, style: .continuous)
                             .stroke(WpayinColors.surfaceBorder, lineWidth: 1)
                     )
+            )
+
+            // Why neither side can cheat: atomic settlement + pre-flight dry run.
+            VStack(alignment: .leading, spacing: 10) {
+                HStack(alignment: .top, spacing: 10) {
+                    Image(systemName: "lock.shield.fill")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundColor(WpayinColors.primary)
+                        .frame(width: 18)
+
+                    Text("Settlement is atomic — both sides receive their tokens in one transaction, or nothing happens.".localized)
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundColor(WpayinColors.textSecondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+
+                HStack(alignment: .top, spacing: 10) {
+                    Image(systemName: "checkmark.seal")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundColor(WpayinColors.primary)
+                        .frame(width: 18)
+
+                    Text("The offer is re-verified and simulated on-chain right before you confirm — if the seller can no longer cover it, the trade stops and you pay nothing.".localized)
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundColor(WpayinColors.textSecondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+            .padding(14)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(
+                RoundedRectangle(cornerRadius: WpayinRadius.medium, style: .continuous)
+                    .fill(WpayinColors.primary.opacity(0.08))
             )
 
             Button {
@@ -1196,6 +1654,10 @@ private struct P2PBuyContent: View {
         isAccepting = true
 
         Task {
+            guard await settingsManager.authorizeSpending(reason: "auth.confirmPayment".localized) else {
+                await MainActor.run { isAccepting = false }
+                return
+            }
             do {
                 let txHash = try await P2PTradeService.shared.acceptOffer(check.offer)
                 Logger.log("✅ P2P trade submitted! TX: \(txHash)")

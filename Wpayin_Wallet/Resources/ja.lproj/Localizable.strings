@@ -780,5 +780,57 @@
 "Be the first — create an offer and publish it to the board." = "Be the first — create an offer and publish it to the board.";
 "Publish to Offer Board" = "Publish to Offer Board";
 "Published to the board" = "Published to the board";
-"error.p2p.iCloudUnavailable" = "The offer board needs iCloud. Sign in to iCloud in iOS Settings and try again.";
+"error.p2p.boardUnavailable" = "オファーボードは一時的に利用できません。インターネット接続を確認して、もう一度お試しください。";
 "error.p2p.publishFailed" = "Could not publish the offer. Please try again.";
+"Your offer" = "自分のオファー";
+"error.p2p.ownOffer" = "これは自分のオファーです。作成したウォレットと同じウォレットでは受け入れられません。";
+"Bridge" = "ブリッジ";
+"Bridge completed — %@ arrived on %@" = "ブリッジ完了 — %@が%@に到着しました";
+"auth.confirmPayment" = "支払いを確認";
+"Verify to turn off app lock" = "アプリロックをオフにするには認証してください";
+"Markets" = "マーケット";
+"From %@" = "%@から";
+"Offers: %@" = "オファー: %@";
+"How much %@ do you want to buy?" = "%@をどれだけ購入しますか？";
+"Offers are filled in full — you always buy the seller's whole amount." = "オファーは全量で成立します — 常に売り手の全量を購入します。";
+"No offer covers this amount right now. Lower it or check back later." = "現在この数量に対応するオファーはありません。数量を減らすか、後でもう一度ご確認ください。";
+"Best price" = "最良価格";
+"Includes the ERC-20 approval network fee" = "ERC-20承認のネットワーク手数料を含みます";
+"Insufficient %@ balance for the amount and network fee" = "金額とネットワーク手数料に必要な%@残高が不足しています";
+
+// MARK: - Swap Progress (v1.1.8)
+"Approving token" = "トークンを承認中";
+"Submitting transaction" = "トランザクションを送信中";
+"Waiting for network confirmation" = "ネットワークの承認を待機中";
+"Swap completed" = "スワップ完了";
+"Token approval" = "トークン承認";
+"Transaction submitted" = "トランザクション送信済み";
+"Network confirmation" = "ネットワーク承認";
+"Completed" = "完了";
+"This usually takes under a minute, but can take longer when the network is busy." = "通常は1分以内に完了しますが、ネットワークが混雑している場合はさらに時間がかかることがあります。";
+"You can close this window — track the status anytime in Activity." = "このウィンドウは閉じても構いません — ステータスはいつでもアクティビティで確認できます。";
+"The transaction was reverted on-chain" = "トランザクションはオンチェーンでリバートされました";
+"Progress" = "進行状況";
+
+// MARK: - P2P-only Buy (v1.1.8)
+"P2P" = "P2P";
+"Start P2P Trade" = "P2P取引を開始";
+"Trade tokens directly with another Wpayin user. Both sides settle wallet-to-wallet in a single on-chain transaction — no intermediary ever holds your funds." = "他のWpayinユーザーと直接トークンを取引できます。両者はウォレット間で1つのオンチェーントランザクションにより決済され、仲介者が資金を保持することはありません。";
+"How it works" = "仕組み";
+"Create or accept an offer" = "オファーを作成または承諾";
+"Agree with your counterparty on the tokens and amounts to exchange." = "取引相手と交換するトークンと数量について合意します。";
+"Review and sign" = "確認して署名";
+"Each side authorizes the trade from their own wallet — keys never leave the device." = "各自が自分のウォレットから取引を承認します — 鍵がデバイスから出ることはありません。";
+"Atomic on-chain settlement" = "アトミックなオンチェーン決済";
+"A smart contract exchanges both tokens in one transaction — either both transfer or neither does." = "スマートコントラクトが1つのトランザクションで両方のトークンを交換します — 両方とも送金されるか、どちらも送金されないかのいずれかです。";
+"Wpayin never holds your funds and does not process fiat payments." = "Wpayinがお客様の資金を保持したり、法定通貨の決済を処理したりすることはありません。";
+
+// MARK: - P2P marketplace + approval errors (v1.1.8)
+"Available offers" = "利用可能なオファー";
+"Buy %@ for %@" = "%@ を %@ で購入";
+"Posted %@" = "%@ に掲載";
+"The offer is re-verified and simulated on-chain right before you confirm — if the seller can no longer cover it, the trade stops and you pay nothing." = "確認の直前にオファーはオンチェーンで再検証・シミュレーションされます — 売り手が履行できない場合、取引は中止され、支払いは発生しません。";
+"error.swap.approvalFailed" = "トークンの承認がオンチェーンで失敗しました。もう一度お試しください。";
+"error.swap.approvalTimeout" = "トークンの承認に通常より時間がかかっています。アクティビティを確認し、承認後に再試行してください。";
+"Paste from Clipboard" = "クリップボードから貼り付け";
+"error.swap.confirmationTimeout" = "スワップの期限内にネットワークがトランザクションを承認しませんでした。エクスプローラーで最終結果を確認してください — 期限切れの場合、交換は行われていません。";

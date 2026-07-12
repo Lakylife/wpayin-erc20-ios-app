@@ -405,6 +405,41 @@ final class SettingsManager: ObservableObject {
         }
     }
 
+    /// Biometric gate for spending actions (send, swap, bridge, P2P).
+    /// Passes immediately when the Face ID lock is off; otherwise the user
+    /// must authenticate. Falls back to the device passcode only when
+    /// biometrics can't be evaluated, so a broken sensor never locks funds.
+    func authorizeSpending(reason: String) async -> Bool {
+        guard biometricAuthEnabled else { return true }
+        return await evaluateAuth(reason: reason)
+    }
+
+    /// Turning the biometric lock OFF requires passing it first.
+    func disableBiometricAuthAfterVerification() async {
+        guard biometricAuthEnabled else { return }
+        if await evaluateAuth(reason: "Verify to turn off app lock".localized) {
+            await MainActor.run { updateBiometricAuth(false) }
+        } else {
+            // Snap the toggle back to ON after a failed/cancelled prompt.
+            await MainActor.run { objectWillChange.send() }
+        }
+    }
+
+    private func evaluateAuth(reason: String) async -> Bool {
+        // Fresh context every time — LAContext can't be reused after evaluation.
+        let context = LAContext()
+        var error: NSError?
+        let policy: LAPolicy = context.canEvaluatePolicy(.deviceOwnerAuthenticationWithBiometrics, error: &error)
+            ? .deviceOwnerAuthenticationWithBiometrics
+            : .deviceOwnerAuthentication
+        do {
+            return try await context.evaluatePolicy(policy, localizedReason: reason)
+        } catch {
+            Logger.log("🔒 Authorization failed: \(error.localizedDescription)")
+            return false
+        }
+    }
+
     // MARK: - Contact & Support
     @discardableResult
     func openContactUs() -> Bool {

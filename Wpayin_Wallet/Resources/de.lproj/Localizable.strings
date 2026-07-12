@@ -780,5 +780,57 @@
 "Be the first — create an offer and publish it to the board." = "Be the first — create an offer and publish it to the board.";
 "Publish to Offer Board" = "Publish to Offer Board";
 "Published to the board" = "Published to the board";
-"error.p2p.iCloudUnavailable" = "The offer board needs iCloud. Sign in to iCloud in iOS Settings and try again.";
+"error.p2p.boardUnavailable" = "Das Angebotsboard ist vorübergehend nicht verfügbar. Überprüfen Sie Ihre Internetverbindung und versuchen Sie es erneut.";
 "error.p2p.publishFailed" = "Could not publish the offer. Please try again.";
+"Your offer" = "Ihr Angebot";
+"error.p2p.ownOffer" = "Das ist Ihr eigenes Angebot. Es kann nicht mit derselben Wallet angenommen werden, die es erstellt hat.";
+"Bridge" = "Bridge";
+"Bridge completed — %@ arrived on %@" = "Bridge abgeschlossen — %@ ist auf %@ angekommen";
+"auth.confirmPayment" = "Zahlung bestätigen";
+"Verify to turn off app lock" = "Bestätigen Sie, um die App-Sperre zu deaktivieren";
+"Markets" = "Märkte";
+"From %@" = "Ab %@";
+"Offers: %@" = "Angebote: %@";
+"How much %@ do you want to buy?" = "Wie viel %@ möchten Sie kaufen?";
+"Offers are filled in full — you always buy the seller's whole amount." = "Angebote werden vollständig ausgeführt — Sie kaufen immer die gesamte Menge des Verkäufers.";
+"No offer covers this amount right now. Lower it or check back later." = "Kein Angebot deckt diese Menge derzeit ab. Verringern Sie sie oder schauen Sie später wieder vorbei.";
+"Best price" = "Bester Preis";
+"Includes the ERC-20 approval network fee" = "Enthält die Netzwerkgebühr für die ERC-20-Genehmigung";
+"Insufficient %@ balance for the amount and network fee" = "Unzureichendes %@-Guthaben für Betrag und Netzwerkgebühr";
+
+// MARK: - Swap Progress (v1.1.8)
+"Approving token" = "Token wird genehmigt";
+"Submitting transaction" = "Transaktion wird gesendet";
+"Waiting for network confirmation" = "Warten auf Netzwerkbestätigung";
+"Swap completed" = "Swap abgeschlossen";
+"Token approval" = "Token-Genehmigung";
+"Transaction submitted" = "Transaktion gesendet";
+"Network confirmation" = "Netzwerkbestätigung";
+"Completed" = "Abgeschlossen";
+"This usually takes under a minute, but can take longer when the network is busy." = "Dies dauert normalerweise unter einer Minute, bei ausgelastetem Netzwerk auch länger.";
+"You can close this window — track the status anytime in Activity." = "Sie können dieses Fenster schließen — den Status finden Sie jederzeit unter Aktivität.";
+"The transaction was reverted on-chain" = "Die Transaktion wurde on-chain zurückgesetzt";
+"Progress" = "Fortschritt";
+
+// MARK: - P2P-only Buy (v1.1.8)
+"P2P" = "P2P";
+"Start P2P Trade" = "P2P-Handel starten";
+"Trade tokens directly with another Wpayin user. Both sides settle wallet-to-wallet in a single on-chain transaction — no intermediary ever holds your funds." = "Handeln Sie Token direkt mit einem anderen Wpayin-Nutzer. Beide Seiten wickeln Wallet-zu-Wallet in einer einzigen On-Chain-Transaktion ab — kein Vermittler hält jemals Ihre Gelder.";
+"How it works" = "So funktioniert es";
+"Create or accept an offer" = "Angebot erstellen oder annehmen";
+"Agree with your counterparty on the tokens and amounts to exchange." = "Vereinbaren Sie mit Ihrer Gegenpartei die zu tauschenden Token und Beträge.";
+"Review and sign" = "Prüfen und signieren";
+"Each side authorizes the trade from their own wallet — keys never leave the device." = "Jede Seite autorisiert den Handel aus ihrer eigenen Wallet — Schlüssel verlassen nie das Gerät.";
+"Atomic on-chain settlement" = "Atomare On-Chain-Abwicklung";
+"A smart contract exchanges both tokens in one transaction — either both transfer or neither does." = "Ein Smart Contract tauscht beide Token in einer Transaktion — entweder werden beide übertragen oder keiner.";
+"Wpayin never holds your funds and does not process fiat payments." = "Wpayin hält niemals Ihre Gelder und verarbeitet keine Fiat-Zahlungen.";
+
+// MARK: - P2P marketplace + approval errors (v1.1.8)
+"Available offers" = "Verfügbare Angebote";
+"Buy %@ for %@" = "%@ für %@ kaufen";
+"Posted %@" = "Veröffentlicht %@";
+"The offer is re-verified and simulated on-chain right before you confirm — if the seller can no longer cover it, the trade stops and you pay nothing." = "Das Angebot wird direkt vor Ihrer Bestätigung erneut on-chain geprüft und simuliert — kann der Verkäufer es nicht mehr decken, stoppt der Handel und Sie zahlen nichts.";
+"error.swap.approvalFailed" = "Token-Genehmigung ist on-chain fehlgeschlagen. Bitte versuchen Sie es erneut.";
+"error.swap.approvalTimeout" = "Die Token-Genehmigung dauert länger als erwartet. Prüfen Sie die Aktivität und versuchen Sie es nach der Bestätigung erneut.";
+"Paste from Clipboard" = "Aus Zwischenablage einfügen";
+"error.swap.confirmationTimeout" = "Das Netzwerk hat die Transaktion nicht vor Ablauf der Swap-Frist bestätigt. Prüfen Sie das Ergebnis im Explorer — bei Ablauf wurde nichts getauscht.";

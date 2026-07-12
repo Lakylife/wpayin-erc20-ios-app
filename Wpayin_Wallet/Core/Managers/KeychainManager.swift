@@ -15,6 +15,14 @@ class KeychainManager {
     private let privateKeyKey = "PrivateKey"
     private let seedPhraseKey = "SeedPhrase"
 
+    private func seedPhraseAccount(for identifier: String) -> String {
+        "SeedPhrase.\(identifier)"
+    }
+
+    private func privateKeyAccount(for identifier: String) -> String {
+        "PrivateKey.\(identifier)"
+    }
+
     init() {
         // One-time hardening of items stored before accessibility was enforced.
         migrateAccessibilityIfNeeded()
@@ -41,6 +49,30 @@ class KeychainManager {
 
         let status = SecItemAdd(addQuery as CFDictionary, nil)
         return status == errSecSuccess
+    }
+
+    private func value(account: String) -> String? {
+        let query: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: service,
+            kSecAttrAccount as String: account,
+            kSecReturnData as String: true
+        ]
+
+        var result: AnyObject?
+        let status = SecItemCopyMatching(query as CFDictionary, &result)
+        guard status == errSecSuccess,
+              let data = result as? Data else { return nil }
+        return String(data: data, encoding: .utf8)
+    }
+
+    private func delete(account: String) {
+        let query: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: service,
+            kSecAttrAccount as String: account
+        ]
+        SecItemDelete(query as CFDictionary)
     }
 
     private func migrateAccessibilityIfNeeded() {
@@ -70,44 +102,39 @@ class KeychainManager {
         store(seedPhrase, account: seedPhraseKey)
     }
 
+    /// Wallet-scoped secrets allow multiple independent wallets to coexist.
+    /// The legacy unscoped slots remain the active signing identity so the
+    /// transaction services do not need to know about the wallet list.
+    func storeSeedPhrase(_ seedPhrase: String, identifier: String) -> Bool {
+        store(seedPhrase, account: seedPhraseAccount(for: identifier))
+    }
+
+    func storePrivateKey(_ privateKey: String, identifier: String) -> Bool {
+        store(privateKey, account: privateKeyAccount(for: identifier))
+    }
+
+    func getSeedPhrase(identifier: String) -> String? {
+        value(account: seedPhraseAccount(for: identifier))
+    }
+
+    func getPrivateKey(identifier: String) -> String? {
+        value(account: privateKeyAccount(for: identifier))
+    }
+
+    func deleteSeedPhrase(identifier: String) {
+        delete(account: seedPhraseAccount(for: identifier))
+    }
+
+    func deletePrivateKey(identifier: String) {
+        delete(account: privateKeyAccount(for: identifier))
+    }
+
     func getPrivateKey() -> String? {
-        let query: [String: Any] = [
-            kSecClass as String: kSecClassGenericPassword,
-            kSecAttrService as String: service,
-            kSecAttrAccount as String: privateKeyKey,
-            kSecReturnData as String: true
-        ]
-
-        var result: AnyObject?
-        let status = SecItemCopyMatching(query as CFDictionary, &result)
-
-        guard status == errSecSuccess,
-              let data = result as? Data,
-              let privateKey = String(data: data, encoding: .utf8) else {
-            return nil
-        }
-
-        return privateKey
+        value(account: privateKeyKey)
     }
 
     func getSeedPhrase() -> String? {
-        let query: [String: Any] = [
-            kSecClass as String: kSecClassGenericPassword,
-            kSecAttrService as String: service,
-            kSecAttrAccount as String: seedPhraseKey,
-            kSecReturnData as String: true
-        ]
-
-        var result: AnyObject?
-        let status = SecItemCopyMatching(query as CFDictionary, &result)
-
-        guard status == errSecSuccess,
-              let data = result as? Data,
-              let seedPhrase = String(data: data, encoding: .utf8) else {
-            return nil
-        }
-
-        return seedPhrase
+        value(account: seedPhraseKey)
     }
 
     func hasPrivateKey() -> Bool {
@@ -119,22 +146,10 @@ class KeychainManager {
     }
 
     func deletePrivateKey() {
-        let query: [String: Any] = [
-            kSecClass as String: kSecClassGenericPassword,
-            kSecAttrService as String: service,
-            kSecAttrAccount as String: privateKeyKey
-        ]
-
-        SecItemDelete(query as CFDictionary)
+        delete(account: privateKeyKey)
     }
 
     func deleteSeedPhrase() {
-        let query: [String: Any] = [
-            kSecClass as String: kSecClassGenericPassword,
-            kSecAttrService as String: service,
-            kSecAttrAccount as String: seedPhraseKey
-        ]
-
-        SecItemDelete(query as CFDictionary)
+        delete(account: seedPhraseKey)
     }
 }

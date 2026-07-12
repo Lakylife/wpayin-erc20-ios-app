@@ -806,5 +806,92 @@
 "Be the first — create an offer and publish it to the board." = "Buďte první — vytvořte nabídku a zveřejněte ji na nástěnce.";
 "Publish to Offer Board" = "Zveřejnit na nástěnce";
 "Published to the board" = "Zveřejněno na nástěnce";
-"error.p2p.iCloudUnavailable" = "Nástěnka nabídek potřebuje iCloud. Přihlaste se k iCloudu v Nastavení iOS a zkuste to znovu.";
+"error.p2p.boardUnavailable" = "Nástěnka nabídek je dočasně nedostupná. Zkontrolujte připojení k internetu a zkuste to znovu.";
 "error.p2p.publishFailed" = "Nabídku se nepodařilo zveřejnit. Zkuste to prosím znovu.";
+"Your offer" = "Vaše nabídka";
+"error.p2p.ownOffer" = "Tohle je vaše vlastní nabídka. Nelze ji přijmout stejnou peněženkou, která ji vytvořila.";
+"Bridge" = "Bridge";
+"Bridge completed — %@ arrived on %@" = "Bridge dokončen — %@ dorazilo na %@";
+"auth.confirmPayment" = "Potvrďte platbu";
+"Verify to turn off app lock" = "Pro vypnutí zámku aplikace se ověřte";
+"Markets" = "Trhy";
+"From %@" = "Od %@";
+"Offers: %@" = "Nabídek: %@";
+"How much %@ do you want to buy?" = "Kolik %@ chcete koupit?";
+"Offers are filled in full — you always buy the seller's whole amount." = "Nabídky se plní celé — kupujete vždy celé množství prodávajícího.";
+"No offer covers this amount right now. Lower it or check back later." = "Žádná nabídka teď nepokrývá toto množství. Snižte ho, nebo to zkuste později.";
+"Best price" = "Nejlepší cena";
+"Includes the ERC-20 approval network fee" = "Zahrnuje síťový poplatek za schválení ERC-20";
+"Insufficient %@ balance for the amount and network fee" = "Nedostatečný zůstatek %@ pro částku a síťový poplatek";
+
+// MARK: - Swap Progress (v1.1.8)
+"Approving token" = "Schvalování tokenu";
+"Submitting transaction" = "Odesílání transakce";
+"Waiting for network confirmation" = "Čekání na potvrzení sítí";
+"Swap completed" = "Swap dokončen";
+"Token approval" = "Schválení tokenu";
+"Transaction submitted" = "Transakce odeslána";
+"Network confirmation" = "Potvrzení sítí";
+"Completed" = "Dokončeno";
+"This usually takes under a minute, but can take longer when the network is busy." = "Obvykle to trvá do minuty, při vytížené síti ale i déle.";
+"You can close this window — track the status anytime in Activity." = "Toto okno můžete zavřít — stav kdykoli sledujte v Aktivitě.";
+"The transaction was reverted on-chain" = "Transakce byla na blockchainu revertována";
+"Progress" = "Průběh";
+
+// MARK: - P2P-only Buy (v1.1.8)
+"P2P" = "P2P";
+"Start P2P Trade" = "Zahájit P2P obchod";
+"Trade tokens directly with another Wpayin user. Both sides settle wallet-to-wallet in a single on-chain transaction — no intermediary ever holds your funds." = "Obchodujte tokeny přímo s jiným uživatelem Wpayin. Obě strany se vypořádají peněženka–peněženka v jediné on-chain transakci — žádný prostředník nikdy nedrží vaše prostředky.";
+"How it works" = "Jak to funguje";
+"Create or accept an offer" = "Vytvořte nebo přijměte nabídku";
+"Agree with your counterparty on the tokens and amounts to exchange." = "Domluvte se s protistranou na tokenech a částkách ke směně.";
+"Review and sign" = "Zkontrolujte a podepište";
+"Each side authorizes the trade from their own wallet — keys never leave the device." = "Každá strana autorizuje obchod ze své vlastní peněženky — klíče nikdy neopustí zařízení.";
+"Atomic on-chain settlement" = "Atomické on-chain vypořádání";
+"A smart contract exchanges both tokens in one transaction — either both transfer or neither does." = "Smart contract smění oba tokeny v jedné transakci — převedou se buď oba, nebo žádný.";
+"Wpayin never holds your funds and does not process fiat payments." = "Wpayin nikdy nedrží vaše prostředky a nezpracovává fiat platby.";
+
+// MARK: - P2P marketplace + approval errors (v1.1.8)
+"Available offers" = "Dostupné nabídky";
+"Buy %@ for %@" = "Koupit %@ za %@";
+"Posted %@" = "Zveřejněno %@";
+"The offer is re-verified and simulated on-chain right before you confirm — if the seller can no longer cover it, the trade stops and you pay nothing." = "Nabídka se těsně před potvrzením znovu ověřuje a simuluje on-chain — pokud ji prodejce už nedokáže pokrýt, obchod se zastaví a nezaplatíte nic.";
+"error.swap.approvalFailed" = "Schválení tokenu na blockchainu selhalo. Zkuste to prosím znovu.";
+"error.swap.approvalTimeout" = "Schválení tokenu trvá déle, než je obvyklé. Zkontrolujte Aktivitu a po potvrzení to zkuste znovu.";
+"Paste from Clipboard" = "Vložit ze schránky";
+"error.swap.confirmationTimeout" = "Síť transakci nepotvrdila před vypršením deadline swapu. Zkontrolujte výsledek v exploreru — pokud vypršela, žádná směna neproběhla.";
+
+// MARK: - Veřejné/soukromé P2P nabídky
+"Live market price — you can edit the amount above" = "Aktuální tržní cena — částku nahoře můžete upravit";
+"Custom price set by you" = "Vlastní cena nastavená vámi";
+"Use market" = "Použít tržní cenu";
+"Offer visibility" = "Viditelnost nabídky";
+"Public" = "Veřejná";
+"Private" = "Soukromá";
+"Visible to everyone" = "Viditelná pro všechny";
+"QR or code only" = "Pouze QR nebo kód";
+"Publishing this offer for everyone" = "Nabídka se zveřejňuje pro všechny";
+"Share this private offer with the buyer" = "Sdílejte tuto soukromou nabídku s kupujícím";
+"Report Offer" = "Nahlásit nabídku";
+"Block Seller" = "Zablokovat prodejce";
+"Offer reported" = "Nabídka byla nahlášena";
+"Seller blocked" = "Prodejce byl zablokován";
+"Checking offer..." = "Kontrola nabídky…";
+"Preparing tokens..." = "Příprava tokenů…";
+"Approving token..." = "Schvalování tokenu…";
+"Signing offer..." = "Podepisování nabídky…";
+
+// MARK: - Detail stavu bridge
+"Bridge details" = "Detail přemostění";
+"Bridge in progress" = "Přemostění probíhá";
+"Bridge completed" = "Přemostění dokončeno";
+"Bridge failed" = "Přemostění selhalo";
+"Status" = "Stav";
+"Transactions" = "Transakce";
+"Source transaction" = "Zdrojová transakce";
+"Destination transaction" = "Cílová transakce";
+"Waiting for arrival" = "Čeká se na doručení";
+"Your source transaction was submitted. Funds will appear after the destination chain confirms the bridge." = "Zdrojová transakce byla odeslána. Prostředky se zobrazí po potvrzení přemostění cílovou sítí.";
+"Funds arrived on %@." = "Prostředky dorazily do sítě %@.";
+"The bridge provider reported a failure. Open the source transaction for details." = "Poskytovatel bridge nahlásil selhání. Podrobnosti najdete ve zdrojové transakci.";
+"Share this offer with the buyer" = "Sdílejte tuto nabídku s kupujícím";

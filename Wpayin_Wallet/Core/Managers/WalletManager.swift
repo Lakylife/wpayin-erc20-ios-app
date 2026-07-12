@@ -48,12 +48,27 @@ final class WalletManager: ObservableObject {
     @Published var nfts: [NFT] = []
     @Published var transactions: [Transaction] = []
     @Published var balance: Double = 0.0
-    @Published var previousBalance: Double = 0.0
-    @Published var balanceChangePercentage: Double = 0.0
     @Published var selectedBlockchains: Set<BlockchainPlatform> = [.ethereum]
     @Published var favoriteTokenSymbols: Set<String> = []
     /// 24h price change in percent, keyed by uppercased token symbol (live-updated).
     @Published var priceChanges24h: [String: Double] = [:]
+
+    /// 24h portfolio change derived from each visible token's 24h price move,
+    /// weighted by its current value. Depends only on live market data — never
+    /// on locally persisted balance snapshots.
+    var balanceChangePercentage: Double {
+        let holdings = visibleTokens.filter { $0.totalValue > 0 }
+        let currentValue = holdings.reduce(0) { $0 + $1.totalValue }
+        guard currentValue > 0 else { return 0 }
+
+        var valueDayAgo = 0.0
+        for token in holdings {
+            let changePct = priceChanges24h[token.symbol.uppercased()] ?? 0
+            valueDayAgo += token.totalValue / (1 + changePct / 100)
+        }
+        guard valueDayAgo > 0 else { return 0 }
+        return (currentValue - valueDayAgo) / valueDayAgo * 100
+    }
     /// Bumped on every completed live price refresh (drives "updated" pulses).
     @Published var lastPriceUpdate: Date?
 
@@ -67,6 +82,7 @@ final class WalletManager: ObservableObject {
     private let selectedBlockchainsKey = "SelectedBlockchains"  // NEW: Persistence key
     private let cachedTokenPricesKey = "CachedTokenPrices"
     private let cachedTransactionsPrefix = "CachedTransactions"
+    private let cachedHoldingsPrefix = "CachedHoldings"
     private let seenTransactionsPrefix = "SeenTransactionHashes"
 
     private var chainAccounts: [BlockchainType: ChainAccount] = [:]
@@ -158,6 +174,45 @@ final class WalletManager: ObservableObject {
         default:
             return true
         }
+    }
+
+    /// Current USD price used to value explorer transactions. Prefer the
+    /// exact asset on the exact network, then fall back to the same symbol on
+    /// another network (for example ETH on Ethereum for an L2 gas fee).
+    func currentUSDPrice(for symbol: String, blockchain: BlockchainType) -> Double? {
+        if let exactPrice = tokens.first(where: {
+            $0.blockchain == blockchain
+                && $0.symbol.caseInsensitiveCompare(symbol) == .orderedSame
+                && $0.price > 0
+        })?.price {
+            return exactPrice
+        }
+
+        return tokens.first(where: {
+            $0.symbol.caseInsensitiveCompare(symbol) == .orderedSame && $0.price > 0
+        })?.price
+    }
+
+    func currentUSDValue(for transaction: Transaction) -> Double? {
+        guard transaction.amount > 0,
+              let price = currentUSDPrice(
+                for: transaction.token,
+                blockchain: transaction.resolvedBlockchain
+              ) else {
+            return nil
+        }
+        return transaction.amount * price
+    }
+
+    func currentGasFeeUSDValue(for transaction: Transaction) -> Double? {
+        guard transaction.gasFee > 0,
+              let price = currentUSDPrice(
+                for: transaction.resolvedBlockchain.nativeToken,
+                blockchain: transaction.resolvedBlockchain
+              ) else {
+            return nil
+        }
+        return transaction.gasFee * price
     }
 
     // Available blockchains for the selected platforms
@@ -258,21 +313,64 @@ final class WalletManager: ObservableObject {
     }
 
     func checkExistingWallet() async {
-        await MainActor.run {
-            isInitializing = true
-        }
+        isInitializing = true
 
         hasWallet = keychain.hasSeedPhrase() || keychain.hasPrivateKey()
 
         if hasWallet {
+            // Restore addresses, cached prices and transaction history before
+            // the first network request. The wallet becomes usable immediately
+            // while fresh balances replace the cached shell in the background.
+            primeWalletForImmediateDisplay()
+            isInitializing = false
+            await Task.yield()
             await refreshWalletData()
             startPriceUpdates()
         } else {
             stopPriceUpdates()
-        }
-
-        await MainActor.run {
             isInitializing = false
+        }
+    }
+
+    @MainActor
+    private func primeWalletForImmediateDisplay() {
+        do {
+            if let mnemonic = keychain.getSeedPhrase() {
+                let wallet = try mnemonicService.loadWallet(from: mnemonic)
+                let accountIndex = activeWallet.map { getAccountIndex(for: $0) } ?? 0
+                UserDefaults.standard.set(accountIndex, forKey: "ActiveAccountIndex")
+                chainAccounts = deriveAccounts(using: wallet, accountIndex: accountIndex)
+            } else if let privateKey = keychain.getPrivateKey() {
+                let normalized = try mnemonicService.normalizePrivateKey(privateKey)
+                let address = try mnemonicService.deriveEthereumAddress(fromPrivateKey: normalized)
+                let accounts = availableBlockchains.compactMap { config -> ChainAccount? in
+                    guard config.network == .mainnet,
+                          config.isEnabled,
+                          let tokenType = config.blockchainType,
+                          tokenType.isEVM else { return nil }
+                    return ChainAccount(
+                        config: config,
+                        tokenType: tokenType,
+                        coinType: config.coinType,
+                        address: address
+                    )
+                }
+                chainAccounts = Dictionary(uniqueKeysWithValues: accounts.map { ($0.tokenType, $0) })
+            }
+
+            walletAddress = chainAccounts[.ethereum]?.address
+                ?? chainAccounts.values.first?.address
+                ?? walletAddress
+            if tokens.isEmpty, !walletAddress.isEmpty {
+                tokens = cachedHoldings(for: walletAddress)
+            }
+            tokens = mergedSupportedTokens(with: tokens)
+            balance = visibleTokens.reduce(0) { $0 + $1.totalValue }
+            if transactions.isEmpty, !walletAddress.isEmpty {
+                transactions = cachedTransactions(for: walletAddress)
+            }
+        } catch {
+            Logger.log("⚠️ Fast wallet restore failed; continuing with live refresh: \(error.localizedDescription)")
         }
     }
 
@@ -285,17 +383,24 @@ final class WalletManager: ObservableObject {
     func importWallet(privateKey: String) -> Bool {
         do {
             let normalized = try mnemonicService.normalizePrivateKey(privateKey)
-            let success = keychain.storePrivateKey(normalized)
-            if success {
-                hasWallet = true
-                Task {
-                    await refreshWalletData()
-                    await MainActor.run {
-                        isInitializing = false
-                    }
-                }
-            }
-            return success
+            ensureActiveCredentialBackedUp()
+
+            let credentialId = "private-\(UUID().uuidString)"
+            guard keychain.storePrivateKey(normalized, identifier: credentialId),
+                  keychain.storePrivateKey(normalized) else { return false }
+            keychain.deleteSeedPhrase()
+
+            let address = try mnemonicService.deriveEthereumAddress(fromPrivateKey: normalized)
+            var wallet = MultiChainWallet(
+                name: nextWalletName(prefix: "Imported Wallet"),
+                type: .imported,
+                privateKeyId: credentialId
+            )
+            wallet.accounts = walletAccounts(forEVMAddress: address, privateKeyId: credentialId)
+            addWallet(wallet)
+            hasWallet = true
+            isInitializing = false
+            return true
         } catch {
             Logger.log("Import wallet error: \(error.localizedDescription)")
             return false
@@ -331,6 +436,13 @@ final class WalletManager: ObservableObject {
         stopPriceUpdates()
         keychain.deleteSeedPhrase()
         keychain.deletePrivateKey()
+        for wallet in multiChainWallets {
+            if let identifier = wallet.seedPhraseId { keychain.deleteSeedPhrase(identifier: identifier) }
+            if let identifier = wallet.privateKeyId { keychain.deletePrivateKey(identifier: identifier) }
+        }
+        multiChainWallets = []
+        activeWallet = nil
+        saveWallets()
         resetState()
         savedAddresses = []
         saveSavedAddresses()
@@ -473,6 +585,12 @@ final class WalletManager: ObservableObject {
 
             let accounts = deriveAccounts(using: wallet, accountIndex: accountIndex)
             chainAccounts = accounts
+            if let activeId = activeWallet?.id,
+               let index = multiChainWallets.firstIndex(where: { $0.id == activeId }) {
+                multiChainWallets[index].accounts = walletAccounts(from: accounts, accountIndex: accountIndex)
+                activeWallet = multiChainWallets[index]
+                saveWallets()
+            }
             Logger.log("⛓️ Derived accounts for \(accounts.count) blockchains")
 
             // Only fetch balances for the selected blockchain platforms
@@ -486,44 +604,24 @@ final class WalletManager: ObservableObject {
             var fetchedTokens = await apiService.getNativeAssets(for: requests)
             Logger.log("💰 Fetched \(fetchedTokens.count) native tokens")
 
-            // Load Bitcoin balance if selected
-            if let btcAccount = accounts[.bitcoin], selectedBlockchains.contains(.bitcoin) {
-                Logger.log("🪙 Bitcoin account found, loading BTC balance...")
-                do {
-                    let btcBalanceResult = try await BitcoinService.shared.fetchBalance(address: btcAccount.address)
-                    let btcBalance = BitcoinService.shared.satoshisToBTC(btcBalanceResult.confirmed)
-                    
-                    // Try to get BTC price and icon from API
-                    let existingBtcToken = fetchedTokens.first(where: { $0.symbol == "BTC" })
-                    let btcPrice = existingBtcToken?.price ?? 0
-                    let btcIconUrl = existingBtcToken?.iconUrl ?? getDefaultIconUrl(for: "BTC")
-                    
-                    let btcToken = Token(
-                        contractAddress: nil,
-                        name: "Bitcoin",
-                        symbol: "BTC",
-                        decimals: 8,
-                        balance: NSDecimalNumber(decimal: btcBalance).doubleValue,
-                        price: btcPrice,
-                        iconUrl: btcIconUrl,
-                        blockchain: .bitcoin,
-                        isNative: true,
-                        receivingAddress: btcAccount.address
-                    )
-                    fetchedTokens.append(btcToken)
-                    Logger.log("✅ Bitcoin balance loaded: \(btcBalance) BTC")
-                } catch {
-                    Logger.log("❌ Failed to load Bitcoin balance: \(error)")
+            // Known-token calls are independent across networks. Run them in
+            // parallel instead of waiting for every chain one after another.
+            let evmAccounts = selectedPlatformAccounts.filter { $0.tokenType.isEVM }
+            let knownTokens = await withTaskGroup(of: [Token].self) { group in
+                for account in evmAccounts {
+                    group.addTask { [weak self] in
+                        guard let self else { return [] }
+                        return await self.loadKnownERC20Tokens(
+                            for: account.address,
+                            config: account.config
+                        )
+                    }
                 }
+                var result: [Token] = []
+                for await batch in group { result.append(contentsOf: batch) }
+                return result
             }
-
-            // Load known ERC-20 tokens per enabled EVM network (USDT, USDC, WETH where supported).
-            for account in selectedPlatformAccounts where account.tokenType.isEVM {
-                Logger.log("🔍 Loading known tokens on \(account.tokenType.name)...")
-                let knownTokens = await loadKnownERC20Tokens(for: account.address, config: account.config)
-                Logger.log("📦 Loaded \(knownTokens.count) known tokens on \(account.tokenType.name)")
-                fetchedTokens.append(contentsOf: knownTokens)
-            }
+            fetchedTokens.append(contentsOf: knownTokens)
 
             Logger.log("🎯 Total tokens before updateState: \(fetchedTokens.count)")
             let defaultAddress = accounts[.ethereum]?.address ?? accounts.values.first?.address
@@ -532,7 +630,9 @@ final class WalletManager: ObservableObject {
             Logger.log("✅ refreshFromMnemonic completed")
         } catch {
             Logger.log("❌ Failed to refresh wallet data: \(error.localizedDescription)")
-            resetState()
+            // A temporary RPC/API problem must not blank a wallet that was
+            // already restored from its last known good snapshot.
+            hasWallet = keychain.hasSeedPhrase() || keychain.hasPrivateKey()
         }
     }
 
@@ -557,6 +657,16 @@ final class WalletManager: ObservableObject {
                 }
 
             chainAccounts = Dictionary(uniqueKeysWithValues: evmAccounts.map { ($0.tokenType, $0) })
+            if let activeId = activeWallet?.id,
+               let index = multiChainWallets.firstIndex(where: { $0.id == activeId }),
+               let privateKeyId = multiChainWallets[index].privateKeyId {
+                multiChainWallets[index].accounts = walletAccounts(
+                    forEVMAddress: primaryAddress,
+                    privateKeyId: privateKeyId
+                )
+                activeWallet = multiChainWallets[index]
+                saveWallets()
+            }
 
             let requests = evmAccounts.map { NativeBalanceRequest(config: $0.config, tokenType: $0.tokenType, address: $0.address) }
             let fetchedTokens = await apiService.getNativeAssets(for: requests)
@@ -564,7 +674,7 @@ final class WalletManager: ObservableObject {
             await updateState(with: fetchedTokens, accounts: evmAccounts, defaultAddress: primaryAddress)
         } catch {
             Logger.log("Failed to refresh legacy wallet: \(error.localizedDescription)")
-            resetState()
+            hasWallet = keychain.hasSeedPhrase() || keychain.hasPrivateKey()
         }
     }
 
@@ -578,29 +688,26 @@ final class WalletManager: ObservableObject {
             return []
         }
 
-        var tokens: [Token] = []
-
-        for tokenInfo in knownTokens {
-            Logger.log("🔎 Checking balance for \(tokenInfo.symbol) at \(tokenInfo.contractAddress)")
-            do {
-                let token = try await apiService.getERC20TokenBalance(
-                    address: address,
-                    contractAddress: tokenInfo.contractAddress,
-                    config: config,
-                    name: tokenInfo.name,
-                    symbol: tokenInfo.symbol,
-                    decimals: tokenInfo.decimals
-                )
-                if let token = token {
-                    Logger.log("✅ \(tokenInfo.symbol): balance=\(token.balance), price=$\(token.price), totalValue=$\(token.totalValue)")
-                    // Always add the token, even with 0 balance, so users can see it
-                    tokens.append(token)
-                } else {
-                    Logger.log("⚠️ API returned nil for \(tokenInfo.symbol)")
+        let tokens = await withTaskGroup(of: Token?.self) { group in
+            for tokenInfo in knownTokens {
+                group.addTask { [apiService] in
+                    do {
+                        return try await apiService.getERC20TokenBalance(
+                            address: address,
+                            contractAddress: tokenInfo.contractAddress,
+                            config: config,
+                            name: tokenInfo.name,
+                            symbol: tokenInfo.symbol,
+                            decimals: tokenInfo.decimals
+                        )
+                    } catch { return nil }
                 }
-            } catch {
-                Logger.log("❌ Error getting balance for \(tokenInfo.symbol): \(error)")
             }
+            var result: [Token] = []
+            for await token in group {
+                if let token { result.append(token) }
+            }
+            return result
         }
 
         Logger.log("📦 Loaded \(tokens.count) known ERC-20 tokens")
@@ -731,6 +838,7 @@ final class WalletManager: ObservableObject {
         // Resolve address first - use visible tokens only
         let resolvedAddress = defaultAddress ?? self.visibleTokens.first?.receivingAddress ?? walletAddress
         self.walletAddress = resolvedAddress
+        cacheHoldings(self.tokens, for: resolvedAddress)
         Logger.log("📍 Wallet address: \(resolvedAddress)")
 
         if transactions.isEmpty {
@@ -745,41 +853,8 @@ final class WalletManager: ObservableObject {
         let newBalance = self.visibleTokens.reduce(0) { $0 + $1.totalValue }
         Logger.log("💰 New balance calculated: $\(newBalance) (from \(self.visibleTokens.count) visible tokens)")
 
-        // Load previous balance from UserDefaults only once (on first load)
-        let savedPreviousBalance = UserDefaults.standard.double(forKey: "previousBalance_\(resolvedAddress)")
-        Logger.log("📖 Saved previous balance from UserDefaults: $\(savedPreviousBalance)")
-        Logger.log("🧠 In-memory previous balance: $\(previousBalance)")
-
-        // If we don't have previousBalance in memory yet, load from UserDefaults or set new baseline
-        if previousBalance == 0.0 {
-            if savedPreviousBalance > 0 {
-                // Use saved previous balance from UserDefaults
-                previousBalance = savedPreviousBalance
-                Logger.log("✅ Loaded previous balance from UserDefaults: $\(savedPreviousBalance)")
-            } else {
-                // No saved balance - this is truly the first time, set baseline
-                previousBalance = newBalance
-                Logger.log("🆕 Setting new baseline: $\(newBalance)")
-                // Only save if newBalance > 0 to avoid saving 0 as baseline
-                if newBalance > 0 {
-                    UserDefaults.standard.set(newBalance, forKey: "previousBalance_\(resolvedAddress)")
-                    Logger.log("💾 Saved baseline to UserDefaults")
-                }
-            }
-        }
-        // Otherwise keep the in-memory previousBalance (don't reload from UserDefaults)
-
-        // Calculate percentage change
-        if previousBalance > 0 && newBalance != previousBalance {
-            balanceChangePercentage = ((newBalance - previousBalance) / previousBalance) * 100
-            Logger.log("📈 Balance change: \(balanceChangePercentage)% (from $\(previousBalance) to $\(newBalance))")
-        } else {
-            balanceChangePercentage = 0 // No change
-            Logger.log("➖ No balance change (previous: $\(previousBalance), new: $\(newBalance))")
-        }
-
-        // Update current balance (but keep previousBalance unchanged for comparison)
         self.balance = newBalance
+        updateActiveWalletPortfolioValue(newBalance)
         self.hasWallet = keychain.hasSeedPhrase() || keychain.hasPrivateKey()
 
         // Load real NFTs from API
@@ -811,16 +886,196 @@ final class WalletManager: ObservableObject {
             return
         }
 
-        do {
-            let fetchedTransactions = try await apiService.getTransactions(for: resolvedAddress, using: configs)
-            notifyForNewTransactions(fetchedTransactions, walletAddress: resolvedAddress)
-            transactions = fetchedTransactions
-            cacheTransactions(fetchedTransactions, for: resolvedAddress)
-        } catch let apiError as APIError {
-            Logger.log("Transaction fetch error: \(apiError.localizedDescription)")
-        } catch {
-            Logger.log("Transaction fetch unexpected error: \(error.localizedDescription)")
+        // Explorer indexing is slower than balance RPCs and is not required to
+        // enable Send/Swap/Bridge. Cached Activity is already visible, so let
+        // the live history refresh finish outside the critical refresh path.
+        Task { [weak self] in
+            guard let self else { return }
+            do {
+                let fetchedTransactions = try await self.apiService.getTransactions(
+                    for: resolvedAddress,
+                    using: configs
+                )
+                await MainActor.run {
+                    self.notifyForNewTransactions(fetchedTransactions, walletAddress: resolvedAddress)
+                    let merged = self.mergingLocalTransactions(into: fetchedTransactions)
+                    self.transactions = merged
+                    self.cacheTransactions(merged, for: resolvedAddress)
+                }
+            } catch let apiError as APIError {
+                Logger.log("Transaction fetch error: \(apiError.localizedDescription)")
+            } catch {
+                Logger.log("Transaction fetch unexpected error: \(error.localizedDescription)")
+            }
         }
+    }
+
+    // MARK: - Locally Submitted Transactions
+
+    /// Register a just-broadcast transaction so Activity shows it immediately,
+    /// before any explorer indexes it.
+    @MainActor
+    func registerLocalTransaction(_ transaction: Transaction) {
+        guard !transactions.contains(where: {
+            $0.hash.caseInsensitiveCompare(transaction.hash) == .orderedSame
+        }) else { return }
+
+        transactions.insert(transaction, at: 0)
+        cacheTransactions(transactions, for: walletAddress)
+
+        if transaction.status == .pending, transaction.resolvedBlockchain.isEVM {
+            Task { [weak self] in
+                await self?.watchLocalTransaction(hash: transaction.hash,
+                                                  blockchain: transaction.resolvedBlockchain)
+            }
+        }
+    }
+
+    /// Reflect a broadcast send immediately instead of briefly showing the
+    /// pre-transaction RPC balance. The next confirmed/failed refresh replaces
+    /// this projection with authoritative chain data.
+    @MainActor
+    func applyOptimisticSend(token: Token, tokenDebit: Double, nativeGasDebit: Double) {
+        func identityMatches(_ candidate: Token, _ target: Token) -> Bool {
+            candidate.blockchain == target.blockchain &&
+            (candidate.contractAddress ?? "native").lowercased() ==
+                (target.contractAddress ?? "native").lowercased()
+        }
+
+        tokens = tokens.map { current in
+            var debit = 0.0
+            if identityMatches(current, token) {
+                debit += tokenDebit
+            }
+            if current.blockchain == token.blockchain, current.isNative {
+                debit += nativeGasDebit
+            }
+            guard debit > 0 else { return current }
+
+            return Token(
+                contractAddress: current.contractAddress,
+                name: current.name,
+                symbol: current.symbol,
+                decimals: current.decimals,
+                balance: max(0, current.balance - debit),
+                price: current.price,
+                iconUrl: current.iconUrl,
+                blockchain: current.blockchain,
+                isNative: current.isNative,
+                id: current.id,
+                receivingAddress: current.receivingAddress,
+                tokenProtocol: current.tokenProtocol
+            )
+        }
+        balance = visibleTokens.reduce(0) { $0 + $1.totalValue }
+        updateActiveWalletPortfolioValue(balance)
+    }
+
+    private func watchLocalTransaction(hash: String, blockchain: BlockchainType) async {
+        let deadline = Date().addingTimeInterval(15 * 60)
+        while Date() < deadline, !Task.isCancelled {
+            if let state = try? await SwapService.shared.fetchTransactionState(
+                hash: hash,
+                blockchain: blockchain
+            ) {
+                switch state {
+                case .notFound, .pending:
+                    break
+                case .confirmed(let blockNumber, let gasUsed, let gasFeeNative):
+                    updateLocalTransactionStatus(hash: hash, status: .confirmed,
+                                                 gasUsed: gasUsed, gasFee: gasFeeNative,
+                                                 blockNumber: blockNumber)
+                    await refreshWalletData()
+                    return
+                case .failed(let blockNumber, let gasUsed, let gasFeeNative):
+                    updateLocalTransactionStatus(hash: hash, status: .failed,
+                                                 gasUsed: gasUsed, gasFee: gasFeeNative,
+                                                 blockNumber: blockNumber)
+                    await refreshWalletData()
+                    return
+                }
+            }
+            try? await Task.sleep(nanoseconds: 5_000_000_000)
+        }
+    }
+
+    /// Update a locally tracked transaction once its on-chain receipt is known.
+    /// `newHash`/`newAmount`/`newExplorerUrl` replace placeholder values used
+    /// while a bridge destination transaction is still unknown.
+    @MainActor
+    func updateLocalTransactionStatus(
+        hash: String,
+        status: Transaction.TransactionStatus,
+        gasUsed: Double? = nil,
+        gasFee: Double? = nil,
+        blockNumber: String? = nil,
+        newHash: String? = nil,
+        newAmount: Double? = nil,
+        newExplorerUrl: URL? = nil
+    ) {
+        guard let index = transactions.firstIndex(where: {
+            $0.hash.caseInsensitiveCompare(hash) == .orderedSame
+        }) else { return }
+
+        let old = transactions[index]
+        transactions[index] = Transaction(
+            hash: newHash ?? old.hash,
+            from: old.from,
+            to: old.to,
+            amount: newAmount ?? old.amount,
+            token: old.token,
+            type: old.type,
+            status: status,
+            timestamp: old.timestamp,
+            gasUsed: gasUsed ?? old.gasUsed,
+            gasFee: gasFee ?? old.gasFee,
+            blockNumber: blockNumber ?? old.blockNumber,
+            explorerUrl: newExplorerUrl ?? old.explorerUrl,
+            blockchain: old.blockchain,
+            id: old.id
+        )
+        cacheTransactions(transactions, for: walletAddress)
+    }
+
+    /// Explorers index with a delay — keep recent locally submitted
+    /// transactions the fetch doesn't know about yet instead of dropping
+    /// them. Confirmed local entries are kept for good: bridge arrivals are
+    /// internal transactions the explorer `txlist` fetch never returns.
+    /// When the explorer does index a hash we know, its richer data wins but
+    /// our more specific type (swap/bridge) is kept.
+    private func mergingLocalTransactions(into fetched: [Transaction]) -> [Transaction] {
+        var localTypes: [String: Transaction.TransactionType] = [:]
+        for tx in transactions where tx.type == .swap || tx.type == .bridge || tx.type == .bridgeReceive {
+            localTypes[tx.hash.lowercased()] = tx.type
+        }
+        let relabeled = fetched.map { tx -> Transaction in
+            guard let localType = localTypes[tx.hash.lowercased()], localType != tx.type else { return tx }
+            return Transaction(
+                hash: tx.hash,
+                from: tx.from,
+                to: tx.to,
+                amount: tx.amount,
+                token: tx.token,
+                type: localType,
+                status: tx.status,
+                timestamp: tx.timestamp,
+                gasUsed: tx.gasUsed,
+                gasFee: tx.gasFee,
+                blockNumber: tx.blockNumber,
+                explorerUrl: tx.explorerUrl,
+                blockchain: tx.blockchain,
+                id: tx.id
+            )
+        }
+
+        let fetchedHashes = Set(relabeled.map { $0.hash.lowercased() })
+        let cutoff = Date().addingTimeInterval(-48 * 3600)
+        let localOnly = transactions.filter {
+            !fetchedHashes.contains($0.hash.lowercased()) &&
+            ($0.timestamp > cutoff || $0.status == .confirmed)
+        }
+        guard !localOnly.isEmpty else { return relabeled }
+        return (localOnly + relabeled).sorted { $0.timestamp > $1.timestamp }
     }
 
     private func cachedTransactions(for walletAddress: String) -> [Transaction] {
@@ -844,6 +1099,29 @@ final class WalletManager: ObservableObject {
         UserDefaults.standard.set(
             data,
             forKey: "\(cachedTransactionsPrefix)_\(walletAddress.lowercased())"
+        )
+    }
+
+    /// Last known good holdings are deliberately account-scoped. They provide
+    /// an immediate, stable wallet UI while fresh RPC values load, and are only
+    /// replaced after a successful refresh.
+    private func cachedHoldings(for walletAddress: String) -> [Token] {
+        guard !walletAddress.isEmpty,
+              let data = UserDefaults.standard.data(
+                forKey: "\(cachedHoldingsPrefix)_\(walletAddress.lowercased())"
+              ),
+              let cached = try? JSONDecoder().decode([Token].self, from: data) else {
+            return []
+        }
+        return cached
+    }
+
+    private func cacheHoldings(_ tokens: [Token], for walletAddress: String) {
+        guard !walletAddress.isEmpty, !tokens.isEmpty,
+              let data = try? JSONEncoder().encode(tokens) else { return }
+        UserDefaults.standard.set(
+            data,
+            forKey: "\(cachedHoldingsPrefix)_\(walletAddress.lowercased())"
         )
     }
 
@@ -904,18 +1182,97 @@ final class WalletManager: ObservableObject {
     }
 
     private func persistSeedPhrase(_ mnemonic: String) -> Bool {
-        let success = keychain.storeSeedPhrase(mnemonic)
-        if success {
-            keychain.deletePrivateKey()
-            hasWallet = true
-            Task {
-                await refreshWalletData()
-                await MainActor.run {
-                    isInitializing = false
-                }
-            }
+        ensureActiveCredentialBackedUp()
+
+        let credentialId = "seed-\(UUID().uuidString)"
+        guard keychain.storeSeedPhrase(mnemonic, identifier: credentialId),
+              keychain.storeSeedPhrase(mnemonic),
+              let hdWallet = try? mnemonicService.loadWallet(from: mnemonic) else { return false }
+        keychain.deletePrivateKey()
+
+        let accountIndex = 0
+        let derived = deriveAccounts(using: hdWallet, accountIndex: accountIndex)
+        var wallet = MultiChainWallet(
+            name: multiChainWallets.isEmpty ? "Main Wallet" : nextWalletName(prefix: "Wallet"),
+            type: .seed,
+            seedPhraseId: credentialId
+        )
+        wallet.accounts = walletAccounts(from: derived, accountIndex: accountIndex)
+        chainAccounts = derived
+        addWallet(wallet)
+        hasWallet = true
+        isInitializing = false
+        return true
+    }
+
+    private func nextWalletName(prefix: String) -> String {
+        let existingNames = Set(multiChainWallets.map(\.name))
+        var index = 1
+        var candidate = prefix == "Wallet" ? "Wallet \(multiChainWallets.count + 1)" : prefix
+        while existingNames.contains(candidate) {
+            index += 1
+            candidate = "\(prefix) \(index)"
         }
-        return success
+        return candidate
+    }
+
+    private func walletAccounts(
+        from accounts: [BlockchainType: ChainAccount],
+        accountIndex: Int
+    ) -> [WalletAccount] {
+        accounts.values.compactMap { account in
+            guard let coinType = account.coinType else { return nil }
+            return WalletAccount(
+                blockchainConfig: account.config,
+                address: account.address,
+                derivationPath: mnemonicService.derivationPath(for: coinType, accountIndex: accountIndex)
+            )
+        }
+    }
+
+    private func walletAccounts(forEVMAddress address: String, privateKeyId: String) -> [WalletAccount] {
+        availableBlockchains.compactMap { config in
+            guard config.network == .mainnet,
+                  config.blockchainType?.isEVM == true else { return nil }
+            return WalletAccount(
+                blockchainConfig: config,
+                address: address,
+                privateKeyId: privateKeyId
+            )
+        }
+    }
+
+    private func ensureActiveCredentialBackedUp() {
+        guard let wallet = activeWallet else { return }
+        if let identifier = wallet.seedPhraseId,
+           keychain.getSeedPhrase(identifier: identifier) == nil,
+           let seed = keychain.getSeedPhrase() {
+            _ = keychain.storeSeedPhrase(seed, identifier: identifier)
+        }
+        if let identifier = wallet.privateKeyId,
+           keychain.getPrivateKey(identifier: identifier) == nil,
+           let privateKey = keychain.getPrivateKey() {
+            _ = keychain.storePrivateKey(privateKey, identifier: identifier)
+        }
+    }
+
+    @discardableResult
+    private func activateCredential(for wallet: MultiChainWallet) -> Bool {
+        if let identifier = wallet.seedPhraseId,
+           let seed = keychain.getSeedPhrase(identifier: identifier) ??
+                (identifier == "main-seed" ? keychain.getSeedPhrase() : nil) {
+            guard keychain.storeSeedPhrase(seed) else { return false }
+            keychain.deletePrivateKey()
+            return true
+        }
+        if let identifier = wallet.privateKeyId,
+           let privateKey = keychain.getPrivateKey(identifier: identifier) ??
+                (identifier == "main-private" ? keychain.getPrivateKey() : nil) {
+            guard keychain.storePrivateKey(privateKey) else { return false }
+            keychain.deleteSeedPhrase()
+            return true
+        }
+        return false
     }
 
     @MainActor
@@ -973,8 +1330,26 @@ final class WalletManager: ObservableObject {
             multiChainWallets[i].seedPhraseId = "main-seed"
             needsSave = true
         }
+        for i in 0..<multiChainWallets.count
+        where multiChainWallets[i].type == .imported && multiChainWallets[i].privateKeyId == nil {
+            multiChainWallets[i].privateKeyId = "main-private"
+            needsSave = true
+        }
         if needsSave {
             saveWallets()
+        }
+
+        // Preserve the original single-wallet credential before any newly
+        // created/imported wallet becomes the active legacy signing slot.
+        if let legacySeed = keychain.getSeedPhrase(),
+           let seedId = multiChainWallets.first(where: { $0.seedPhraseId != nil })?.seedPhraseId,
+           keychain.getSeedPhrase(identifier: seedId) == nil {
+            _ = keychain.storeSeedPhrase(legacySeed, identifier: seedId)
+        }
+        if let legacyKey = keychain.getPrivateKey(),
+           let keyId = multiChainWallets.first(where: { $0.type == .imported })?.privateKeyId,
+           keychain.getPrivateKey(identifier: keyId) == nil {
+            _ = keychain.storePrivateKey(legacyKey, identifier: keyId)
         }
 
         // IMPORTANT: Migrate old keychain wallet to new multi-wallet system
@@ -988,10 +1363,17 @@ final class WalletManager: ObservableObject {
             var mainWallet = MultiChainWallet(
                 name: "Main Wallet",
                 type: walletType,
-                seedPhraseId: keychain.hasSeedPhrase() ? "main-seed" : nil
+                seedPhraseId: keychain.hasSeedPhrase() ? "main-seed" : nil,
+                privateKeyId: keychain.hasPrivateKey() ? "main-private" : nil
             )
             mainWallet.isActive = true
             multiChainWallets.append(mainWallet)
+            if let seed = keychain.getSeedPhrase() {
+                _ = keychain.storeSeedPhrase(seed, identifier: "main-seed")
+            }
+            if let privateKey = keychain.getPrivateKey() {
+                _ = keychain.storePrivateKey(privateKey, identifier: "main-private")
+            }
             saveWallets()
             Logger.log("✅ Main Wallet created and set as active")
         }
@@ -1013,7 +1395,11 @@ final class WalletManager: ObservableObject {
         }
 
         activeWallet = multiChainWallets.first(where: { $0.isActive }) ?? multiChainWallets.first
-        hasWallet = keychain.hasSeedPhrase() || keychain.hasPrivateKey()
+        if let activeWallet {
+            _ = activateCredential(for: activeWallet)
+            UserDefaults.standard.set(getAccountIndex(for: activeWallet), forKey: "ActiveAccountIndex")
+        }
+        hasWallet = !multiChainWallets.isEmpty && (keychain.hasSeedPhrase() || keychain.hasPrivateKey())
 
         // Set wallet address from active wallet if available
         if (keychain.hasSeedPhrase() || keychain.hasPrivateKey()),
@@ -1159,16 +1545,6 @@ final class WalletManager: ObservableObject {
         isInitializing = false
     }
 
-    // MARK: - Balance Change Tracking
-
-    /// Reset the baseline balance to current balance (sets percentage to 0%)
-    func resetBalanceBaseline() {
-        previousBalance = balance
-        balanceChangePercentage = 0.0
-        // Save new baseline to UserDefaults
-        UserDefaults.standard.set(balance, forKey: "previousBalance_\(walletAddress)")
-    }
-
     // MARK: - Multi-Wallet Management
 
     func setActiveWallet(_ wallet: MultiChainWallet) {
@@ -1182,12 +1558,17 @@ final class WalletManager: ObservableObject {
             multiChainWallets[index].isActive = true
             activeWallet = multiChainWallets[index]
 
+            guard activateCredential(for: multiChainWallets[index]) else {
+                Logger.log("❌ Unable to activate wallet credential")
+                return
+            }
+
+            let accountIndex = getAccountIndex(for: multiChainWallets[index])
+            UserDefaults.standard.set(accountIndex, forKey: "ActiveAccountIndex")
+
             // Immediately update wallet address from the first account
             if let firstAccount = multiChainWallets[index].accounts.first {
                 walletAddress = firstAccount.address
-
-                // Load previous balance for this wallet from UserDefaults
-                previousBalance = UserDefaults.standard.double(forKey: "previousBalance_\(firstAccount.address)")
             }
 
             // Clear old wallet data immediately
@@ -1195,7 +1576,6 @@ final class WalletManager: ObservableObject {
             transactions = []
             nfts = []
             balance = 0.0
-            balanceChangePercentage = 0.0
 
             // Save to UserDefaults
             saveWallets()
@@ -1219,6 +1599,9 @@ final class WalletManager: ObservableObject {
         multiChainWallets.append(newWallet)
         activeWallet = newWallet
 
+        _ = activateCredential(for: newWallet)
+        UserDefaults.standard.set(getAccountIndex(for: newWallet), forKey: "ActiveAccountIndex")
+
         saveWallets()
 
         // Refresh wallet data for the new active wallet
@@ -1228,6 +1611,13 @@ final class WalletManager: ObservableObject {
     }
 
     func removeWallet(_ wallet: MultiChainWallet) {
+        if let identifier = wallet.seedPhraseId,
+           !multiChainWallets.contains(where: { $0.id != wallet.id && $0.seedPhraseId == identifier }) {
+            keychain.deleteSeedPhrase(identifier: identifier)
+        }
+        if let identifier = wallet.privateKeyId {
+            keychain.deletePrivateKey(identifier: identifier)
+        }
         multiChainWallets.removeAll { $0.id == wallet.id }
 
         // If this was the active wallet, set another as active
@@ -1237,7 +1627,11 @@ final class WalletManager: ObservableObject {
                 if let index = multiChainWallets.firstIndex(where: { $0.id == newActive.id }) {
                     multiChainWallets[index].isActive = true
                 }
+                _ = activateCredential(for: newActive)
+                UserDefaults.standard.set(getAccountIndex(for: newActive), forKey: "ActiveAccountIndex")
             }
+        } else if let current = activeWallet {
+            _ = activateCredential(for: current)
         }
 
         saveWallets()
@@ -1336,7 +1730,10 @@ final class WalletManager: ObservableObject {
 
     /// Create a new account from the same seed phrase with next account index
     func createNewAccount(name: String? = nil) async -> Bool {
-        guard let seedPhrase = keychain.getSeedPhrase() else {
+        guard let sourceWallet = activeWallet,
+              sourceWallet.type == .seed,
+              let sourceSeedId = sourceWallet.seedPhraseId,
+              let seedPhrase = keychain.getSeedPhrase(identifier: sourceSeedId) ?? keychain.getSeedPhrase() else {
             Logger.log("❌ No seed phrase available")
             return false
         }
@@ -1347,7 +1744,7 @@ final class WalletManager: ObservableObject {
         }
 
         // Find the highest account index from existing seed wallets
-        let seedWallets = multiChainWallets.filter { $0.type == .seed && $0.seedPhraseId == "main-seed" }
+        let seedWallets = multiChainWallets.filter { $0.type == .seed && $0.seedPhraseId == sourceSeedId }
         let nextAccountIndex = seedWallets.count
         UserDefaults.standard.set(nextAccountIndex, forKey: "ActiveAccountIndex")
 
@@ -1374,7 +1771,7 @@ final class WalletManager: ObservableObject {
         let walletName = name ?? "Account \(nextAccountIndex + 1)"
 
         // Create new wallet
-        var newWallet = MultiChainWallet(name: walletName, type: .seed, seedPhraseId: "main-seed")
+        var newWallet = MultiChainWallet(name: walletName, type: .seed, seedPhraseId: sourceSeedId)
 
         // Convert chainAccounts to WalletAccount array and populate newWallet.accounts
         newWallet.accounts = chainAccounts.compactMap { (blockchainType, chainAccount) in
@@ -1420,6 +1817,57 @@ final class WalletManager: ObservableObject {
         if let data = try? JSONEncoder().encode(multiChainWallets) {
             UserDefaults.standard.set(data, forKey: walletsStorageKey)
         }
+    }
+
+    func portfolioValue(for wallet: MultiChainWallet) -> Double {
+        wallet.id == activeWallet?.id ? balance : (wallet.portfolioValueUSD ?? 0)
+    }
+
+    /// Refresh selector totals from each wallet's persisted public addresses.
+    /// This never changes the active signing credential or the visible wallet.
+    func refreshWalletPortfolioValues() async {
+        for wallet in multiChainWallets where wallet.id != activeWallet?.id {
+            let accounts = wallet.accounts.compactMap { account -> ChainAccount? in
+                let config = account.blockchainConfig
+                guard config.network == .mainnet,
+                      config.isEnabled,
+                      selectedBlockchains.contains(config.platform),
+                      let blockchain = config.blockchainType else { return nil }
+                return ChainAccount(
+                    config: config,
+                    tokenType: blockchain,
+                    coinType: config.coinType,
+                    address: account.address
+                )
+            }
+
+            guard !accounts.isEmpty else { continue }
+            let requests = accounts.map {
+                NativeBalanceRequest(config: $0.config, tokenType: $0.tokenType, address: $0.address)
+            }
+            var walletTokens = await apiService.getNativeAssets(for: requests)
+
+            for account in accounts where account.tokenType.isEVM {
+                walletTokens.append(contentsOf: await loadKnownERC20Tokens(
+                    for: account.address,
+                    config: account.config
+                ))
+            }
+
+            let value = walletTokens.reduce(0) { $0 + $1.totalValue }
+            if let index = multiChainWallets.firstIndex(where: { $0.id == wallet.id }) {
+                multiChainWallets[index].portfolioValueUSD = value
+                saveWallets()
+            }
+        }
+    }
+
+    private func updateActiveWalletPortfolioValue(_ value: Double) {
+        guard let activeId = activeWallet?.id,
+              let index = multiChainWallets.firstIndex(where: { $0.id == activeId }) else { return }
+        multiChainWallets[index].portfolioValueUSD = value
+        activeWallet = multiChainWallets[index]
+        saveWallets()
     }
 
     // MARK: - Favorite Tokens
@@ -1549,6 +1997,7 @@ final class WalletManager: ObservableObject {
             lastPriceUpdate = Date()
 
             balance = visibleTokens.reduce(0) { $0 + $1.totalValue }
+            updateActiveWalletPortfolioValue(balance)
             Logger.log("✅ Price/logo refresh completed")
         } catch {
             Logger.log("❌ Price/logo refresh failed: \(error.localizedDescription)")

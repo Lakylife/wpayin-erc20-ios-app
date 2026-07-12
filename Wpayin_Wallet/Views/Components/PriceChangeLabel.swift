@@ -21,7 +21,9 @@ struct PriceChangeLabel: View {
 
                 Text(String(format: "%.1f%%", abs(change)))
                     .font(.system(size: 11, weight: .semibold, design: .rounded))
+                    .lineLimit(1)
             }
+            .fixedSize()
             .foregroundColor(change >= 0 ? WpayinColors.success : WpayinColors.error)
             .padding(.horizontal, 5)
             .padding(.vertical, 2)

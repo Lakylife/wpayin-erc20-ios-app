@@ -15,7 +15,7 @@ struct NativeBalanceRequest: Sendable {
     let address: String
 }
 
-class APIService: ObservableObject {
+final class APIService: ObservableObject, @unchecked Sendable {
     static let shared = APIService()
 
     private let session = URLSession.shared
@@ -67,6 +67,7 @@ class APIService: ObservableObject {
         let isError: String?
         let txreceipt_status: String?
         let contractAddress: String?
+        let input: String?
     }
 
     private struct ExplorerTokenTransaction: Decodable {
@@ -151,37 +152,47 @@ class APIService: ObservableObject {
         guard !requests.isEmpty else { return [] }
 
         let priceIds = Set(requests.compactMap { $0.tokenType.coingeckoId })
-        let priceAndLogoLookup = (try? await fetchPricesAndLogos(for: Array(priceIds))) ?? [:]
+        async let priceLookupTask = (try? fetchPricesAndLogos(for: Array(priceIds))) ?? [:]
 
+        // Every chain has an independent RPC. Fetching them serially made app
+        // launch scale linearly with the number of enabled networks.
+        let balances = await withTaskGroup(of: (Int, Double)?.self) { group in
+            for (index, request) in requests.enumerated() {
+                group.addTask { [self] in
+                    do {
+                        let balance: Double
+                        switch request.tokenType {
+                        case .bitcoin:
+                            balance = try await fetchBitcoinBalance(address: request.address)
+                        case .solana:
+                            balance = try await fetchSolanaBalance(
+                                address: request.address,
+                                rpcURL: request.config.rpcUrl
+                            )
+                        default:
+                            balance = try await fetchEVMNativeBalanceWithFailover(
+                                address: request.address,
+                                blockchain: request.tokenType,
+                                primaryRpcUrl: request.config.rpcUrl
+                            )
+                        }
+                        return (index, balance)
+                    } catch { return nil }
+                }
+            }
+
+            var result: [Int: Double] = [:]
+            for await value in group {
+                if let (index, balance) = value { result[index] = balance }
+            }
+            return result
+        }
+
+        let priceAndLogoLookup = await priceLookupTask
         var collectedTokens: [Token] = []
 
-        for request in requests {
-            let balance: Double
-
-            do {
-                switch request.tokenType {
-                case .bitcoin:
-                    balance = try await fetchBitcoinBalance(address: request.address)
-                case .solana:
-                    balance = try await fetchSolanaBalance(
-                        address: request.address,
-                        rpcURL: request.config.rpcUrl
-                    )
-                default:
-                    balance = try await fetchEVMNativeBalanceWithFailover(
-                        address: request.address,
-                        blockchain: request.tokenType,
-                        primaryRpcUrl: request.config.rpcUrl
-                    )
-                }
-            } catch {
-                // Do NOT emit a zero-balance token on a transient RPC failure —
-                // skipping keeps the last known balance in WalletManager's merge
-                // instead of making the user's funds "disappear" until the next
-                // successful refresh.
-                Logger.log("⚠️ Balance fetch failed for \(request.tokenType.name), keeping last known value: \(error)")
-                continue
-            }
+        for (index, request) in requests.enumerated() {
+            guard let balance = balances[index] else { continue }
 
             let priceAndLogo = request.tokenType.coingeckoId.flatMap { priceAndLogoLookup[$0] }
             let price = priceAndLogo?.price ?? 0
@@ -491,8 +502,13 @@ class APIService: ObservableObject {
         let gasUsedDouble = Double(entry.gasUsed) ?? 0
         let status = transactionStatus(receipt: entry.txreceipt_status, isError: entry.isError)
         let isOutgoing = entry.from.lowercased() == normalizedAddress
-        let transactionType: Transaction.TransactionType = isOutgoing ? .send : .receive
         let destination = entry.to.isEmpty ? (entry.contractAddress ?? entry.to) : entry.to
+        let transactionType = normalTransactionType(
+            isOutgoing: isOutgoing,
+            destination: destination,
+            input: entry.input,
+            blockchain: blockchain
+        )
         let explorer = explorerURL(base: config.explorerUrl, hash: entry.hash)
 
         return Transaction(
@@ -578,6 +594,51 @@ class APIService: ObservableObject {
             if isError == "1" { return .failed }
         }
         return .pending
+    }
+
+    /// Explorers return every outgoing contract interaction as a normal
+    /// transaction. Recognize swaps and native wrapping by their calldata so
+    /// Activity does not misleadingly label them as a plain "Send".
+    private func normalTransactionType(
+        isOutgoing: Bool,
+        destination: String,
+        input: String?,
+        blockchain: BlockchainType
+    ) -> Transaction.TransactionType {
+        guard isOutgoing else { return .receive }
+
+        let normalizedInput = input?.lowercased() ?? ""
+        let selector = String(normalizedInput.prefix(10))
+        let dexSwapSelectors: Set<String> = [
+            "0x7ff36ab5", // swapExactETHForTokens
+            "0x18cbafe5", // swapExactTokensForETH
+            "0x38ed1739"  // swapExactTokensForTokens
+        ]
+        if dexSwapSelectors.contains(selector) {
+            return .swap
+        }
+
+        // LI.FI diamond — the app's bridge entry point, same address on
+        // every supported chain.
+        if destination.lowercased() == "0x1231deb6f5749ef6ce6943a275a1d3e7486f4eae" {
+            return .bridge
+        }
+
+        let wrappedNativeAddresses: [BlockchainType: String] = [
+            .ethereum: "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2",
+            .bsc: "0xbb4cdb9cbd36b01bd1cbaebf2de08d9173bc095c",
+            .polygon: "0x0d500b1d8e8ef31e21c99d1db9a6444d3adf1270",
+            .arbitrum: "0x82af49447d8a07e3bd95bd0d56f35241523fbab1",
+            .optimism: "0x4200000000000000000000000000000000000006",
+            .base: "0x4200000000000000000000000000000000000006"
+        ]
+        let isWrapCall = selector == "0xd0e30db0" || selector == "0x2e1a7d4d"
+        if isWrapCall,
+           destination.lowercased() == wrappedNativeAddresses[blockchain] {
+            return .swap
+        }
+
+        return .send
     }
 
     // MARK: - Gas Price Operations

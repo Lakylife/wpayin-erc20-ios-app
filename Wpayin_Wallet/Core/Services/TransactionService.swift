@@ -108,6 +108,7 @@ class TransactionService {
         amount: Decimal,
         blockchain: BlockchainType,
         customGasPrice: GasPrice? = nil,
+        gasPriceMultiplier: Double = 1,
         gasLimit: Int = 21000
     ) async throws -> TransactionResult {
         // Get private key
@@ -135,13 +136,25 @@ class TransactionService {
             gasPriceEstimate = custom
         } else {
             let estimate = try await gasPriceService.getGasPrice(for: blockchain)
-            gasPriceEstimate = estimate.recommended
+            gasPriceEstimate = adjustedGasPrice(estimate.recommended, multiplier: gasPriceMultiplier)
         }
 
         // Convert amount to wei
         let decimals = blockchain.nativeDecimals
         let amountInWei = (amount * pow(Decimal(10), decimals)).rounded()
         let valueInWei = BigUInt(amountInWei.description) ?? BigUInt(0)
+
+        // Simulate the exact transfer before signing. A fixed 21k limit is
+        // only valid for an EOA recipient; contract wallets may need more gas
+        // or may reject native transfers entirely.
+        let resolvedGasLimit = try await estimateEvmGasLimit(
+            from: fromAddress,
+            to: recipientAddress,
+            value: valueInWei,
+            data: Data(),
+            rpcUrl: rpcUrl,
+            fallback: gasLimit
+        )
 
         // Extract gas price in Wei (use maxFee for EIP-1559)
         let gasPriceInWei: BigUInt
@@ -158,7 +171,7 @@ class TransactionService {
             to: recipientAddress,
             value: valueInWei,
             gasPrice: gasPriceInWei,
-            gasLimit: BigUInt(gasLimit),
+            gasLimit: BigUInt(resolvedGasLimit),
             nonce: BigUInt(nonce),
             data: Data(),
             chainId: chainId,
@@ -186,7 +199,7 @@ class TransactionService {
             from: fromAddress,
             to: recipientAddress,
             amount: String(describing: amount),
-            gasUsed: String(gasLimit)
+            gasUsed: String(resolvedGasLimit)
         )
     }
 
@@ -198,6 +211,7 @@ class TransactionService {
         decimals: Int,
         blockchain: BlockchainType,
         customGasPrice: GasPrice? = nil,
+        gasPriceMultiplier: Double = 1,
         gasLimit: Int = 65000
     ) async throws -> TransactionResult {
         // Get private key
@@ -228,7 +242,7 @@ class TransactionService {
             gasPriceEstimate = custom
         } else {
             let estimate = try await gasPriceService.getGasPrice(for: blockchain)
-            gasPriceEstimate = estimate.recommended
+            gasPriceEstimate = adjustedGasPrice(estimate.recommended, multiplier: gasPriceMultiplier)
         }
 
         // Convert amount to token's smallest unit
@@ -237,6 +251,15 @@ class TransactionService {
 
         // Create ERC-20 transfer data
         let transferData = createERC20TransferData(to: recipientAddress, amount: amountBigUInt)
+
+        let resolvedGasLimit = try await estimateEvmGasLimit(
+            from: fromAddress,
+            to: tokenAddress,
+            value: BigUInt(0),
+            data: transferData,
+            rpcUrl: rpcUrl,
+            fallback: gasLimit
+        )
 
         // Extract gas price in Wei
         let gasPriceInWei: BigUInt
@@ -253,7 +276,7 @@ class TransactionService {
             to: tokenAddress, // Send to token contract
             value: BigUInt(0), // 0 ETH for ERC-20 transfer
             gasPrice: gasPriceInWei,
-            gasLimit: BigUInt(gasLimit),
+            gasLimit: BigUInt(resolvedGasLimit),
             nonce: BigUInt(nonce),
             data: transferData,
             chainId: chainId,
@@ -281,11 +304,24 @@ class TransactionService {
             from: fromAddress,
             to: recipientAddress,
             amount: String(describing: amount),
-            gasUsed: String(gasLimit)
+            gasUsed: String(resolvedGasLimit)
         )
     }
 
     // MARK: - Platform Fee
+
+    private func adjustedGasPrice(_ gasPrice: GasPrice, multiplier: Double) -> GasPrice {
+        let safeMultiplier = min(max(multiplier, 0.8), 2)
+        switch gasPrice {
+        case .legacy(let price):
+            return .legacy(gasPrice: max(1, Int(Double(price) * safeMultiplier)))
+        case .eip1559(let maxFee, let priorityFee):
+            return .eip1559(
+                maxFeePerGas: max(1, Int(Double(maxFee) * safeMultiplier)),
+                maxPriorityFeePerGas: max(1, Int(Double(priorityFee) * safeMultiplier))
+            )
+        }
+    }
 
     /// Platform fee for a given amount (0 when fee collection is disabled).
     static func platformFee(for amount: Decimal) -> Decimal {
@@ -494,6 +530,50 @@ class TransactionService {
         // Convert hex to int
         let hexString = result.hasPrefix("0x") ? String(result.dropFirst(2)) : result
         return Int(hexString, radix: 16) ?? 0
+    }
+
+    /// `eth_estimateGas` both detects a revert before funds are broadcast and
+    /// supplies a safe limit for contract recipients. A 20% buffer absorbs
+    /// small state changes between simulation and mining.
+    private func estimateEvmGasLimit(
+        from: String,
+        to: String,
+        value: BigUInt,
+        data: Data,
+        rpcUrl: String,
+        fallback: Int
+    ) async throws -> Int {
+        guard let url = URL(string: rpcUrl) else {
+            throw TransactionError.networkError("Invalid RPC URL")
+        }
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+
+        let call: [String: String] = [
+            "from": from,
+            "to": to,
+            "value": "0x" + String(value, radix: 16),
+            "data": "0x" + data.hexString
+        ]
+        request.httpBody = try JSONSerialization.data(withJSONObject: [
+            "jsonrpc": "2.0",
+            "method": "eth_estimateGas",
+            "params": [call],
+            "id": 1
+        ])
+
+        let (responseData, _) = try await URLSession.shared.data(for: request)
+        let json = try JSONSerialization.jsonObject(with: responseData) as? [String: Any]
+        if let error = json?["error"] as? [String: Any],
+           let message = error["message"] as? String {
+            throw TransactionError.fromRPCMessage(message)
+        }
+        guard let result = json?["result"] as? String,
+              let estimate = Int(result.dropFirst(2), radix: 16) else {
+            throw TransactionError.networkError("Unable to verify this transaction before sending".localized)
+        }
+        return max(fallback, Int((Double(estimate) * 1.2).rounded(.up)))
     }
 
     private func fetchGasPrice(rpcUrl: String) async throws -> Decimal {

@@ -70,6 +70,9 @@ struct WithdrawView: View {
     @State private var errorMessage = ""
     @State private var selectedGasSpeed: WithdrawGasSpeed = .standard
     @State private var showGasSettings = false
+    @State private var liveStandardGasPrice: GasPrice?
+    @State private var isLoadingGasPrice = false
+    @State private var submittedTransaction: Transaction?
 
     init(initialToken: Token? = nil, initialRecipientAddress: String = "") {
         _selectedSymbol = State(initialValue: initialToken?.symbol.uppercased())
@@ -108,6 +111,24 @@ struct WithdrawView: View {
         amountValue + platformFeeValue
     }
 
+    private var nativeBalance: Double {
+        guard let token = selectedToken else { return 0 }
+        return walletManager.tokens.first {
+            $0.blockchain == token.blockchain && $0.isNative
+        }?.balance ?? 0
+    }
+
+    private var requiredGasLimit: Int {
+        guard let token = selectedToken, token.blockchain != .bitcoin else { return 0 }
+        let perTransaction = token.isNative ? 21_000 : 65_000
+        return perTransaction * (AppConfig.platformFeeEnabled ? 2 : 1)
+    }
+
+    private var selectedGasPrice: GasPrice? {
+        guard let liveStandardGasPrice else { return nil }
+        return adjustedGasPrice(liveStandardGasPrice, multiplier: selectedGasSpeed.multiplier)
+    }
+
     private var isValidTransaction: Bool {
         guard let token = selectedToken else { return false }
 
@@ -124,11 +145,16 @@ struct WithdrawView: View {
         }
 
         // EVM address validation (balance must cover amount + platform fee)
+        let hasGas = token.isNative
+            ? totalDebit + estimatedGasFee <= token.balance
+            : nativeBalance >= estimatedGasFee
         return !recipientAddress.isEmpty &&
                recipientAddress.hasPrefix("0x") &&
                recipientAddress.count == 42 &&
                amountValue > 0 &&
-               totalDebit <= token.balance
+               totalDebit <= token.balance &&
+               hasGas &&
+               selectedGasPrice != nil
     }
     
     private var headerTitle: String {
@@ -168,22 +194,25 @@ struct WithdrawView: View {
             }
         }
 
-        // Base gas fee by network (in native tokens)
-        let baseGas: Double
-        switch token.blockchain {
-        case .ethereum:
-            baseGas = 0.002
-        case .arbitrum, .optimism:
-            baseGas = 0.0003
-        case .polygon:
-            baseGas = 0.0001
-        case .bsc:
-            baseGas = 0.0002
-        default:
-            baseGas = 0.001
+        guard let selectedGasPrice else { return 0 }
+        let weiPerGas: Int
+        switch selectedGasPrice {
+        case .legacy(let gasPrice): weiPerGas = gasPrice
+        case .eip1559(let maxFeePerGas, _): weiPerGas = maxFeePerGas
         }
+        return Double(requiredGasLimit) * Double(weiPerGas) / 1_000_000_000_000_000_000
+    }
 
-        return baseGas * selectedGasSpeed.multiplier
+    private var selectedGweiText: String {
+        guard let selectedGasPrice else { return isLoadingGasPrice ? "…" : "—" }
+        switch selectedGasPrice {
+        case .legacy(let gasPrice):
+            return String(format: "%.2f Gwei", Double(gasPrice) / 1_000_000_000)
+        case .eip1559(let maxFeePerGas, let priorityFee):
+            return String(format: "%.2f Gwei · %.2f priority",
+                          Double(maxFeePerGas) / 1_000_000_000,
+                          Double(priorityFee) / 1_000_000_000)
+        }
     }
 
     var body: some View {
@@ -229,7 +258,8 @@ struct WithdrawView: View {
 
                         AmountInputView(
                             amount: $amount,
-                            selectedToken: selectedToken
+                            selectedToken: selectedToken,
+                            reservedNetworkFee: selectedToken?.isNative == true ? estimatedGasFee : 0
                         )
 
                         if isValidTransaction {
@@ -313,8 +343,9 @@ struct WithdrawView: View {
                 token: selectedToken!,
                 amount: amountValue,
                 recipient: recipientAddress,
-                gasSpeed: selectedGasSpeed,
+                gasSpeed: $selectedGasSpeed,
                 estimatedGas: estimatedGasFee,
+                gweiText: selectedGweiText,
                 onConfirm: {
                     processTransaction()
                 }
@@ -324,8 +355,14 @@ struct WithdrawView: View {
             WithdrawGasSettingsSheet(
                 selectedSpeed: $selectedGasSpeed, 
                 estimatedGas: estimatedGasFee,
-                selectedToken: selectedToken
+                selectedToken: selectedToken,
+                gweiText: selectedGweiText
             )
+        }
+        .sheet(item: $submittedTransaction) { transaction in
+            TransactionDetailView(transaction: transaction)
+                .environmentObject(walletManager)
+                .environmentObject(settingsManager)
         }
         .alert("Transaction Error".localized, isPresented: $showError) {
             Button("OK".localized) { }
@@ -341,6 +378,9 @@ struct WithdrawView: View {
         .onChange(of: selectedSymbol) { _ in
             ensureValidNetworkForSelectedAsset()
         }
+        .task(id: selectedToken.map { "\($0.blockchain.rawValue):\($0.contractAddress ?? "native")" }) {
+            await refreshGasPrice()
+        }
     }
 
     private func ensureValidSelection() {
@@ -352,7 +392,8 @@ struct WithdrawView: View {
 
         let symbols = Array(Set(spendableTokens.map { $0.symbol.uppercased() })).sorted()
         if selectedSymbol == nil || !symbols.contains(selectedSymbol ?? "") {
-            selectedSymbol = symbols.first
+            // Ethereum is the sensible default, not the alphabetical winner.
+            selectedSymbol = symbols.contains("ETH") ? "ETH" : symbols.first
         }
         ensureValidNetworkForSelectedAsset()
     }
@@ -363,7 +404,7 @@ struct WithdrawView: View {
             .filter { $0.symbol.uppercased() == selectedSymbol.uppercased() }
             .map { $0.blockchain }
         if selectedNetwork == nil || !networks.contains(selectedNetwork!) {
-            selectedNetwork = networks.first
+            selectedNetwork = networks.contains(.ethereum) ? .ethereum : networks.first
         }
     }
 
@@ -371,6 +412,10 @@ struct WithdrawView: View {
         isProcessing = true
 
         Task {
+            guard await settingsManager.authorizeSpending(reason: "auth.confirmPayment".localized) else {
+                await MainActor.run { isProcessing = false }
+                return
+            }
             do {
                 guard let token = selectedToken else {
                     throw TransactionError.failedToCreateTransaction
@@ -393,7 +438,8 @@ struct WithdrawView: View {
                         to: recipientAddress,
                         amount: Decimal(amountValue),
                         blockchain: token.blockchain,
-                        customGasPrice: nil, // Use automatic gas price
+                        customGasPrice: selectedGasPrice,
+                        gasPriceMultiplier: 1,
                         gasLimit: 21000
                     )
                 } else {
@@ -404,7 +450,8 @@ struct WithdrawView: View {
                         amount: Decimal(amountValue),
                         decimals: token.decimals,
                         blockchain: token.blockchain,
-                        customGasPrice: nil, // Use automatic gas price
+                        customGasPrice: selectedGasPrice,
+                        gasPriceMultiplier: 1,
                         gasLimit: 65000
                     )
                 }
@@ -413,11 +460,33 @@ struct WithdrawView: View {
 
                 await MainActor.run {
                     isProcessing = false
-                    // Refresh wallet data to show updated balance
-                    Task {
-                        await walletManager.refreshWalletData()
+                    let explorerURL = URL(string: NetworkManager.shared.getExplorerUrl(
+                        for: token.blockchain,
+                        txHash: result.hash
+                    ))
+                    let pendingTransaction = Transaction(
+                        hash: result.hash,
+                        from: result.from,
+                        to: result.to,
+                        amount: amountValue,
+                        token: token.symbol,
+                        type: .send,
+                        status: .pending,
+                        timestamp: Date(),
+                        gasUsed: Double(result.gasUsed ?? "") ?? 0,
+                        gasFee: estimatedGasFee,
+                        explorerUrl: explorerURL,
+                        blockchain: token.blockchain
+                    )
+                    walletManager.registerLocalTransaction(pendingTransaction)
+                    if token.blockchain != .bitcoin {
+                        walletManager.applyOptimisticSend(
+                            token: token,
+                            tokenDebit: amountValue + platformFeeValue,
+                            nativeGasDebit: estimatedGasFee
+                        )
                     }
-                    dismiss()
+                    submittedTransaction = pendingTransaction
                 }
             } catch {
                 await MainActor.run {
@@ -426,6 +495,35 @@ struct WithdrawView: View {
                     showError = true
                 }
             }
+        }
+    }
+
+    @MainActor
+    private func refreshGasPrice() async {
+        guard let token = selectedToken, token.blockchain != .bitcoin else {
+            liveStandardGasPrice = nil
+            return
+        }
+        isLoadingGasPrice = true
+        defer { isLoadingGasPrice = false }
+        do {
+            liveStandardGasPrice = try await GasPriceService.shared
+                .getGasPrice(for: token.blockchain).recommended
+        } catch {
+            liveStandardGasPrice = nil
+            Logger.log("Failed to load send gas price: \(error.localizedDescription)")
+        }
+    }
+
+    private func adjustedGasPrice(_ price: GasPrice, multiplier: Double) -> GasPrice {
+        switch price {
+        case .legacy(let gasPrice):
+            return .legacy(gasPrice: max(1, Int(Double(gasPrice) * multiplier)))
+        case .eip1559(let maxFeePerGas, let priorityFee):
+            return .eip1559(
+                maxFeePerGas: max(1, Int(Double(maxFeePerGas) * multiplier)),
+                maxPriorityFeePerGas: max(1, Int(Double(priorityFee) * multiplier))
+            )
         }
     }
 }
@@ -768,6 +866,7 @@ struct RecipientAddressView: View {
 struct AmountInputView: View {
     @Binding var amount: String
     let selectedToken: Token?
+    let reservedNetworkFee: Double
 
     private var amountValue: Double {
         Double(amount) ?? 0.0
@@ -781,9 +880,10 @@ struct AmountInputView: View {
     /// Max sendable so that amount + platform fee still fits in the balance.
     private var maxSendable: Double {
         guard let token = selectedToken else { return 0 }
-        guard token.blockchain != .bitcoin, AppConfig.platformFeeEnabled else { return token.balance }
+        let availableAfterGas = max(0, token.balance - reservedNetworkFee)
+        guard token.blockchain != .bitcoin, AppConfig.platformFeeEnabled else { return availableAfterGas }
         let rate = (AppConfig.platformFeeRate as NSDecimalNumber).doubleValue
-        return token.balance / (1 + rate)
+        return availableAfterGas / (1 + rate)
     }
 
     var body: some View {
@@ -826,7 +926,7 @@ struct AmountInputView: View {
                         Spacer()
 
                         Button("Max".localized) {
-                            amount = String(maxSendable)
+                            amount = formattedMaximum(maxSendable, decimals: token.decimals)
                         }
                         .font(.system(size: 12, weight: .bold))
                         .foregroundColor(WpayinColors.primary)
@@ -845,7 +945,7 @@ struct AmountInputView: View {
                         .foregroundColor(WpayinColors.textSecondary)
                     }
 
-                    if amountValue + platformFeeValue > token.balance {
+                    if amountValue + platformFeeValue + reservedNetworkFee > token.balance {
                         Text("Insufficient balance".localized)
                             .font(.wpayinCaption)
                             .foregroundColor(WpayinColors.error)
@@ -862,6 +962,14 @@ struct AmountInputView: View {
                         .stroke(WpayinColors.surfaceBorder, lineWidth: 1)
                 )
         )
+    }
+
+    private func formattedMaximum(_ value: Double, decimals: Int) -> String {
+        let precision = min(max(decimals, 0), 12)
+        var result = String(format: "%.*f", precision, max(0, value))
+        while result.contains(".") && result.last == "0" { result.removeLast() }
+        if result.last == "." { result.removeLast() }
+        return result
     }
 }
 
@@ -1219,10 +1327,12 @@ struct TransactionConfirmationView: View {
     let token: Token
     let amount: Double
     let recipient: String
-    let gasSpeed: WithdrawGasSpeed
+    @Binding var gasSpeed: WithdrawGasSpeed
     let estimatedGas: Double
+    let gweiText: String
     let onConfirm: () -> Void
     @Environment(\.dismiss) private var dismiss
+    @State private var showGasSettings = false
 
     var body: some View {
         NavigationView {
@@ -1251,9 +1361,11 @@ struct TransactionConfirmationView: View {
                         token: token,
                         amount: amount,
                         recipient: recipient,
-                        gasSpeed: .constant(gasSpeed),
+                        gasSpeed: $gasSpeed,
                         estimatedGas: estimatedGas,
-                        onGasSettingsTapped: { }
+                        onGasSettingsTapped: {
+                            showGasSettings = true
+                        }
                     )
 
                     Spacer()
@@ -1281,6 +1393,14 @@ struct TransactionConfirmationView: View {
             }
             .navigationTitle("Confirm".localized)
             .navigationBarTitleDisplayMode(.inline)
+        }
+        .sheet(isPresented: $showGasSettings) {
+            WithdrawGasSettingsSheet(
+                selectedSpeed: $gasSpeed,
+                estimatedGas: estimatedGas,
+                selectedToken: token,
+                gweiText: gweiText
+            )
         }
     }
 }
@@ -1404,6 +1524,7 @@ struct WithdrawGasSettingsSheet: View {
     @Binding var selectedSpeed: WithdrawGasSpeed
     let estimatedGas: Double
     let selectedToken: Token?
+    let gweiText: String
     @Environment(\.dismiss) private var dismiss
 
     private func feeText(for speed: WithdrawGasSpeed) -> String {
@@ -1438,6 +1559,12 @@ struct WithdrawGasSettingsSheet: View {
                             Text("Choose your transaction speed".localized)
                                 .font(.wpayinBody)
                                 .foregroundColor(WpayinColors.textSecondary)
+
+                            if selectedToken?.blockchain != .bitcoin {
+                                Text(gweiText)
+                                    .font(.system(size: 13, weight: .semibold, design: .monospaced))
+                                    .foregroundColor(WpayinColors.primary)
+                            }
                         }
                         .padding(.top, 20)
 

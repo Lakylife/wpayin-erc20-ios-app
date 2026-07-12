@@ -182,7 +182,8 @@ struct DepositView: View {
 
         let symbols = availableAssetSymbols
         if selectedSymbol == nil || !symbols.contains(selectedSymbol ?? "") {
-            selectedSymbol = symbols.first
+            // Ethereum is the sensible default, not the alphabetical winner.
+            selectedSymbol = symbols.contains("ETH") ? "ETH" : symbols.first
         }
         ensureValidNetworkForSelectedAsset()
     }
@@ -198,7 +199,7 @@ struct DepositView: View {
             .map { $0.blockchain }
 
         if selectedNetwork == nil || !networks.contains(selectedNetwork!) {
-            selectedNetwork = networks.first
+            selectedNetwork = networks.contains(.ethereum) ? .ethereum : networks.first
         }
     }
 
@@ -325,6 +326,8 @@ struct AssetNetworkSelector: View {
                             .font(.system(size: 16, weight: .medium))
                             .foregroundColor(WpayinColors.textSecondary)
                     }
+
+                    Spacer()
 
                     Image(systemName: "chevron.down")
                         .font(.system(size: 12, weight: .medium))

@@ -806,5 +806,92 @@
 "Be the first — create an offer and publish it to the board." = "Be the first — create an offer and publish it to the board.";
 "Publish to Offer Board" = "Publish to Offer Board";
 "Published to the board" = "Published to the board";
-"error.p2p.iCloudUnavailable" = "The offer board needs iCloud. Sign in to iCloud in iOS Settings and try again.";
+"error.p2p.boardUnavailable" = "The offer board is temporarily unavailable. Check your internet connection and try again.";
 "error.p2p.publishFailed" = "Could not publish the offer. Please try again.";
+"Your offer" = "Your offer";
+"error.p2p.ownOffer" = "This is your own offer. It can't be accepted with the same wallet that created it.";
+"Bridge" = "Bridge";
+"Bridge completed — %@ arrived on %@" = "Bridge completed — %@ arrived on %@";
+"auth.confirmPayment" = "Confirm the payment";
+"Verify to turn off app lock" = "Verify to turn off app lock";
+"Markets" = "Markets";
+"From %@" = "From %@";
+"Offers: %@" = "Offers: %@";
+"How much %@ do you want to buy?" = "How much %@ do you want to buy?";
+"Offers are filled in full — you always buy the seller's whole amount." = "Offers are filled in full — you always buy the seller's whole amount.";
+"No offer covers this amount right now. Lower it or check back later." = "No offer covers this amount right now. Lower it or check back later.";
+"Best price" = "Best price";
+"Includes the ERC-20 approval network fee" = "Includes the ERC-20 approval network fee";
+"Insufficient %@ balance for the amount and network fee" = "Insufficient %@ balance for the amount and network fee";
+
+// MARK: - Swap Progress (v1.1.8)
+"Approving token" = "Approving token";
+"Submitting transaction" = "Submitting transaction";
+"Waiting for network confirmation" = "Waiting for network confirmation";
+"Swap completed" = "Swap completed";
+"Token approval" = "Token approval";
+"Transaction submitted" = "Transaction submitted";
+"Network confirmation" = "Network confirmation";
+"Completed" = "Completed";
+"This usually takes under a minute, but can take longer when the network is busy." = "This usually takes under a minute, but can take longer when the network is busy.";
+"You can close this window — track the status anytime in Activity." = "You can close this window — track the status anytime in Activity.";
+"The transaction was reverted on-chain" = "The transaction was reverted on-chain";
+"Progress" = "Progress";
+
+// MARK: - P2P-only Buy (v1.1.8)
+"P2P" = "P2P";
+"Start P2P Trade" = "Start P2P Trade";
+"Trade tokens directly with another Wpayin user. Both sides settle wallet-to-wallet in a single on-chain transaction — no intermediary ever holds your funds." = "Trade tokens directly with another Wpayin user. Both sides settle wallet-to-wallet in a single on-chain transaction — no intermediary ever holds your funds.";
+"How it works" = "How it works";
+"Create or accept an offer" = "Create or accept an offer";
+"Agree with your counterparty on the tokens and amounts to exchange." = "Agree with your counterparty on the tokens and amounts to exchange.";
+"Review and sign" = "Review and sign";
+"Each side authorizes the trade from their own wallet — keys never leave the device." = "Each side authorizes the trade from their own wallet — keys never leave the device.";
+"Atomic on-chain settlement" = "Atomic on-chain settlement";
+"A smart contract exchanges both tokens in one transaction — either both transfer or neither does." = "A smart contract exchanges both tokens in one transaction — either both transfer or neither does.";
+"Wpayin never holds your funds and does not process fiat payments." = "Wpayin never holds your funds and does not process fiat payments.";
+
+// MARK: - P2P marketplace + approval errors (v1.1.8)
+"Available offers" = "Available offers";
+"Buy %@ for %@" = "Buy %@ for %@";
+"Posted %@" = "Posted %@";
+"The offer is re-verified and simulated on-chain right before you confirm — if the seller can no longer cover it, the trade stops and you pay nothing." = "The offer is re-verified and simulated on-chain right before you confirm — if the seller can no longer cover it, the trade stops and you pay nothing.";
+"error.swap.approvalFailed" = "Token approval failed on-chain. Please try again.";
+"error.swap.approvalTimeout" = "Token approval is taking longer than expected. Check Activity and try again once it confirms.";
+"Paste from Clipboard" = "Paste from Clipboard";
+"error.swap.confirmationTimeout" = "The network did not confirm the transaction before the swap deadline expired. Check the explorer for the final result — if it expired, nothing was exchanged.";
+
+// MARK: - Public/private P2P offers
+"Live market price — you can edit the amount above" = "Live market price — you can edit the amount above";
+"Custom price set by you" = "Custom price set by you";
+"Use market" = "Use market";
+"Offer visibility" = "Offer visibility";
+"Public" = "Public";
+"Private" = "Private";
+"Visible to everyone" = "Visible to everyone";
+"QR or code only" = "QR or code only";
+"Publishing this offer for everyone" = "Publishing this offer for everyone";
+"Share this private offer with the buyer" = "Share this private offer with the buyer";
+"Report Offer" = "Report Offer";
+"Block Seller" = "Block Seller";
+"Offer reported" = "Offer reported";
+"Seller blocked" = "Seller blocked";
+"Checking offer..." = "Checking offer...";
+"Preparing tokens..." = "Preparing tokens...";
+"Approving token..." = "Approving token...";
+"Signing offer..." = "Signing offer...";
+
+// MARK: - Bridge status detail
+"Bridge details" = "Bridge details";
+"Bridge in progress" = "Bridge in progress";
+"Bridge completed" = "Bridge completed";
+"Bridge failed" = "Bridge failed";
+"Status" = "Status";
+"Transactions" = "Transactions";
+"Source transaction" = "Source transaction";
+"Destination transaction" = "Destination transaction";
+"Waiting for arrival" = "Waiting for arrival";
+"Your source transaction was submitted. Funds will appear after the destination chain confirms the bridge." = "Your source transaction was submitted. Funds will appear after the destination chain confirms the bridge.";
+"Funds arrived on %@." = "Funds arrived on %@.";
+"The bridge provider reported a failure. Open the source transaction for details." = "The bridge provider reported a failure. Open the source transaction for details.";
+"Share this offer with the buyer" = "Share this offer with the buyer";

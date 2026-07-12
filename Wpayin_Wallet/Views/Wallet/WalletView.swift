@@ -206,12 +206,12 @@ struct WalletHeaderView: View {
                     .font(.system(size: 36, weight: .bold, design: .rounded))
                     .foregroundColor(WpayinColors.text)
 
-                // Balance change percentage
+                // 24h portfolio change
                 if abs(walletManager.balanceChangePercentage) > 0.01 {
                     HStack(spacing: 4) {
                         Image(systemName: walletManager.balanceChangePercentage >= 0 ? "arrow.up.right" : "arrow.down.right")
                             .font(.system(size: 12, weight: .bold))
-                        Text(String(format: "%.2f%%", abs(walletManager.balanceChangePercentage)))
+                        Text(String(format: "%.2f%% (24h)", abs(walletManager.balanceChangePercentage)))
                             .font(.system(size: 14, weight: .semibold))
                     }
                     .foregroundColor(walletManager.balanceChangePercentage >= 0 ? WpayinColors.success : WpayinColors.error)
@@ -538,7 +538,7 @@ struct ModernBalanceCardView: View {
                         Image(systemName: walletManager.balanceChangePercentage >= 0 ? "arrow.up.right" : "arrow.down.right")
                             .font(.system(size: 10, weight: .bold))
 
-                        Text(String(format: "%.2f%%", abs(walletManager.balanceChangePercentage)))
+                        Text(String(format: "%.2f%% (24h)", abs(walletManager.balanceChangePercentage)))
                             .font(.system(size: 12, weight: .semibold))
                     }
                     .foregroundColor(walletManager.balanceChangePercentage >= 0 ? WpayinColors.success : WpayinColors.error)
@@ -633,8 +633,8 @@ struct ModernQuickActionsView: View {
             )
 
             QuickActionButton(
-                icon: "plus.circle",
-                title: L10n.Action.buy.localized,
+                icon: "person.2",
+                title: "P2P",
                 action: onBuy
             )
 

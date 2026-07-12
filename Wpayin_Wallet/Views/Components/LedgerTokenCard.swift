@@ -75,11 +75,13 @@ struct LedgerTokenCard: View {
                         .foregroundColor(WpayinColors.textSecondary)
                         .lineLimit(1)
 
-                    // Price with live 24h change
+                    // Price with live 24h change — must never wrap to a second line
                     HStack(spacing: 6) {
                         Text(token.price.formatted(as: settingsManager.selectedCurrency))
                             .font(.system(size: 12))
                             .foregroundColor(WpayinColors.textTertiary)
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.7)
 
                         PriceChangeLabel(change: walletManager.priceChanges24h[token.symbol.uppercased()])
                     }

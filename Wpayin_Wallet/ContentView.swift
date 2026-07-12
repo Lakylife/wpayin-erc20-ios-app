@@ -14,6 +14,7 @@ struct ContentView: View {
     @StateObject private var settingsManager: SettingsManager
     @StateObject private var networkManager = NetworkConfigManager()
     @StateObject private var lockManager = AppLockManager()
+    @State private var isShowingLaunchExperience = true
     @Environment(\.scenePhase) private var scenePhase
 
     init() {
@@ -29,7 +30,7 @@ struct ContentView: View {
     var body: some View {
         ZStack {
             Group {
-                if walletManager.isInitializing {
+                if walletManager.isInitializing || isShowingLaunchExperience {
                     LoadingView()
                         .transition(.opacity)
                 } else if !walletManager.hasCompletedOnboarding {
@@ -61,8 +62,20 @@ struct ContentView: View {
         .preferredColorScheme(.dark)
         .environment(\.locale, Locale(identifier: settingsManager.selectedLanguage.rawValue))
         .task {
+            let launchStartedAt = Date()
             lockManager.lockOnLaunchIfNeeded(hasWallet: walletManager.keychain.hasSeedPhrase() || walletManager.keychain.hasPrivateKey())
             await walletManager.checkExistingWallet()
+
+            // Keep the branded launch experience visible long enough to feel
+            // intentional, even when the cached wallet restores instantly.
+            let minimumLaunchDuration: TimeInterval = 1.15
+            let remaining = minimumLaunchDuration - Date().timeIntervalSince(launchStartedAt)
+            if remaining > 0 {
+                try? await Task.sleep(nanoseconds: UInt64(remaining * 1_000_000_000))
+            }
+            withAnimation(.easeOut(duration: 0.3)) {
+                isShowingLaunchExperience = false
+            }
 
             // Start automatic price updates when wallet is ready
             if walletManager.hasWallet {

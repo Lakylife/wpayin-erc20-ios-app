@@ -780,5 +780,57 @@
 "Be the first — create an offer and publish it to the board." = "Be the first — create an offer and publish it to the board.";
 "Publish to Offer Board" = "Publish to Offer Board";
 "Published to the board" = "Published to the board";
-"error.p2p.iCloudUnavailable" = "The offer board needs iCloud. Sign in to iCloud in iOS Settings and try again.";
+"error.p2p.boardUnavailable" = "报价板暂时不可用。请检查网络连接后重试。";
 "error.p2p.publishFailed" = "Could not publish the offer. Please try again.";
+"Your offer" = "您的报价";
+"error.p2p.ownOffer" = "这是您自己的报价。无法使用创建该报价的同一钱包接受。";
+"Bridge" = "跨链桥";
+"Bridge completed — %@ arrived on %@" = "跨链完成 — %@ 已到账 %@";
+"auth.confirmPayment" = "确认付款";
+"Verify to turn off app lock" = "验证以关闭应用锁定";
+"Markets" = "市场";
+"From %@" = "%@ 起";
+"Offers: %@" = "报价：%@";
+"How much %@ do you want to buy?" = "您想购买多少 %@？";
+"Offers are filled in full — you always buy the seller's whole amount." = "报价须整单成交 — 您始终购买卖家的全部数量。";
+"No offer covers this amount right now. Lower it or check back later." = "目前没有报价能满足该数量。请减少数量或稍后再试。";
+"Best price" = "最优价格";
+"Includes the ERC-20 approval network fee" = "包含 ERC-20 授权网络费用";
+"Insufficient %@ balance for the amount and network fee" = "%@ 余额不足以支付金额和网络费用";
+
+// MARK: - Swap Progress (v1.1.8)
+"Approving token" = "正在授权代币";
+"Submitting transaction" = "正在提交交易";
+"Waiting for network confirmation" = "等待网络确认";
+"Swap completed" = "兑换完成";
+"Token approval" = "代币授权";
+"Transaction submitted" = "交易已提交";
+"Network confirmation" = "网络确认";
+"Completed" = "已完成";
+"This usually takes under a minute, but can take longer when the network is busy." = "通常在一分钟内完成，网络繁忙时可能需要更长时间。";
+"You can close this window — track the status anytime in Activity." = "您可以关闭此窗口 — 随时在活动中查看状态。";
+"The transaction was reverted on-chain" = "交易已在链上回滚";
+"Progress" = "进度";
+
+// MARK: - P2P-only Buy (v1.1.8)
+"P2P" = "P2P";
+"Start P2P Trade" = "开始 P2P 交易";
+"Trade tokens directly with another Wpayin user. Both sides settle wallet-to-wallet in a single on-chain transaction — no intermediary ever holds your funds." = "与其他 Wpayin 用户直接交易代币。双方通过单笔链上交易实现钱包对钱包结算 — 任何中介都不会持有您的资金。";
+"How it works" = "运作方式";
+"Create or accept an offer" = "创建或接受报价";
+"Agree with your counterparty on the tokens and amounts to exchange." = "与交易对手商定要交换的代币和数量。";
+"Review and sign" = "检查并签名";
+"Each side authorizes the trade from their own wallet — keys never leave the device." = "双方各自从自己的钱包授权交易 — 密钥绝不离开设备。";
+"Atomic on-chain settlement" = "原子化链上结算";
+"A smart contract exchanges both tokens in one transaction — either both transfer or neither does." = "智能合约在一笔交易中交换两种代币 — 要么全部转账，要么都不转。";
+"Wpayin never holds your funds and does not process fiat payments." = "Wpayin 绝不持有您的资金，也不处理法币支付。";
+
+// MARK: - P2P marketplace + approval errors (v1.1.8)
+"Available offers" = "可用报价";
+"Buy %@ for %@" = "以 %2$@ 购买 %1$@";
+"Posted %@" = "发布于 %@";
+"The offer is re-verified and simulated on-chain right before you confirm — if the seller can no longer cover it, the trade stops and you pay nothing." = "在您确认前，报价会在链上重新验证并模拟 — 如果卖家已无法履约，交易将中止，您无需支付任何费用。";
+"error.swap.approvalFailed" = "代币授权在链上失败。请重试。";
+"error.swap.approvalTimeout" = "代币授权耗时超出预期。请查看活动，待确认后重试。";
+"Paste from Clipboard" = "从剪贴板粘贴";
+"error.swap.confirmationTimeout" = "网络未能在兑换截止时间前确认交易。请在浏览器中查看最终结果 — 如已过期，则没有进行任何兑换。";

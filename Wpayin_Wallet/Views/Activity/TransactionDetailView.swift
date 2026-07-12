@@ -14,23 +14,19 @@ struct TransactionDetailView: View {
     @Environment(\.dismiss) private var dismiss
     @EnvironmentObject private var walletManager: WalletManager
     @EnvironmentObject private var settingsManager: SettingsManager
+    /// Live receipt result, refined while the view is open (pending txs only).
+    @State private var liveStatus: Transaction.TransactionStatus?
 
-    private var matchingToken: Token? {
-        walletManager.tokens.first {
-            $0.symbol.caseInsensitiveCompare(transaction.token) == .orderedSame &&
-            $0.blockchain == transaction.inferredBlockchain
-        } ?? walletManager.tokens.first {
-            $0.symbol.caseInsensitiveCompare(transaction.token) == .orderedSame
-        }
+    private var displayStatus: Transaction.TransactionStatus {
+        liveStatus ?? transaction.status
     }
 
     private var fiatValue: Double? {
-        guard let price = matchingToken?.price,
-              price > 0,
-              transaction.amount > 0 else {
-            return nil
-        }
-        return transaction.amount * price
+        walletManager.currentUSDValue(for: transaction)
+    }
+
+    private var gasFeeFiatValue: Double? {
+        walletManager.currentGasFeeUSDValue(for: transaction)
     }
 
     var body: some View {
@@ -43,13 +39,16 @@ struct TransactionDetailView: View {
                         TransactionHeroCard(
                             transaction: transaction,
                             fiatValue: fiatValue,
-                            currency: settingsManager.selectedCurrency
+                            status: displayStatus
                         )
+
+                        TransactionProgressCard(status: displayStatus)
 
                         TransactionInformationCard(
                             transaction: transaction,
                             formattedDate: formattedDate,
-                            networkName: transaction.inferredBlockchain.name
+                            networkName: transaction.resolvedBlockchain.name,
+                            gasFeeFiatValue: gasFeeFiatValue
                         )
 
                         VStack(spacing: 12) {
@@ -139,6 +138,57 @@ struct TransactionDetailView: View {
                     .buttonStyle(PlainButtonStyle())
                 }
             }
+            .task {
+                await watchPendingStatus()
+            }
+        }
+    }
+
+    /// While the shown transaction is still pending on an EVM chain, poll its
+    /// receipt so the detail reflects the real on-chain phase live.
+    private func watchPendingStatus() async {
+        guard transaction.status == .pending,
+              transaction.resolvedBlockchain.isEVM,
+              !transaction.hash.isEmpty else { return }
+
+        let deadline = Date().addingTimeInterval(15 * 60)
+        while Date() < deadline, !Task.isCancelled {
+            if let state = try? await SwapService.shared.fetchTransactionState(
+                hash: transaction.hash,
+                blockchain: transaction.resolvedBlockchain
+            ) {
+                switch state {
+                case .notFound:
+                    break
+                case .pending:
+                    break
+                case .confirmed(let blockNumber, let gasUsed, let gasFeeNative):
+                    await MainActor.run {
+                        liveStatus = .confirmed
+                        walletManager.updateLocalTransactionStatus(
+                            hash: transaction.hash,
+                            status: .confirmed,
+                            gasUsed: gasUsed,
+                            gasFee: gasFeeNative,
+                            blockNumber: blockNumber
+                        )
+                    }
+                    return
+                case .failed(let blockNumber, let gasUsed, let gasFeeNative):
+                    await MainActor.run {
+                        liveStatus = .failed
+                        walletManager.updateLocalTransactionStatus(
+                            hash: transaction.hash,
+                            status: .failed,
+                            gasUsed: gasUsed,
+                            gasFee: gasFeeNative,
+                            blockNumber: blockNumber
+                        )
+                    }
+                    return
+                }
+            }
+            try? await Task.sleep(nanoseconds: 5_000_000_000)
         }
     }
 
@@ -174,7 +224,7 @@ struct TransactionDetailView: View {
 private struct TransactionHeroCard: View {
     let transaction: Transaction
     let fiatValue: Double?
-    let currency: Currency
+    let status: Transaction.TransactionStatus
 
     var body: some View {
         VStack(spacing: 18) {
@@ -183,7 +233,7 @@ private struct TransactionHeroCard: View {
 
                 Spacer()
 
-                TransactionStatusPill(status: transaction.status)
+                TransactionStatusPill(status: status)
             }
 
             VStack(alignment: .leading, spacing: 7) {
@@ -197,11 +247,9 @@ private struct TransactionHeroCard: View {
                     .lineLimit(1)
                     .minimumScaleFactor(0.5)
 
-                if let fiatValue {
-                    Text(fiatValue.formatted(as: currency))
-                        .font(.system(size: 16, weight: .medium, design: .rounded))
-                        .foregroundColor(Color.white.opacity(0.7))
-                }
+                Text(fiatValue.map { "\($0.formatted(as: .usd)) USD" } ?? "— USD")
+                    .font(.system(size: 16, weight: .medium, design: .rounded))
+                    .foregroundColor(Color.white.opacity(0.7))
             }
             .frame(maxWidth: .infinity, alignment: .leading)
         }
@@ -266,6 +314,7 @@ private struct TransactionInformationCard: View {
     let transaction: Transaction
     let formattedDate: String
     let networkName: String
+    let gasFeeFiatValue: Double?
 
     var body: some View {
         VStack(spacing: 0) {
@@ -293,7 +342,7 @@ private struct TransactionInformationCard: View {
                 TransactionInformationRow(
                     icon: "fuelpump",
                     title: "Gas Fee".localized,
-                    value: "\(String(format: "%.6f", transaction.gasFee)) \(transaction.inferredBlockchain.nativeToken)"
+                    value: "\(String(format: "%.6f", transaction.gasFee)) \(transaction.resolvedBlockchain.nativeToken)\n\(gasFeeFiatValue.map { "\($0.formatted(as: .usd)) USD" } ?? "— USD")"
                 )
             }
 
@@ -420,5 +469,70 @@ private struct TransactionCopyCard: View {
     private var displayValue: String {
         guard !value.isEmpty else { return "—" }
         return value
+    }
+}
+
+/// Phase timeline: submitted → network confirmation → completed. Reuses the
+/// step rows from the live swap progress sheet.
+private struct TransactionProgressCard: View {
+    let status: Transaction.TransactionStatus
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text("Progress".localized)
+                .font(.wpayinCaption)
+                .foregroundColor(WpayinColors.textSecondary)
+                .padding(.horizontal, 16)
+                .padding(.top, 14)
+
+            VStack(spacing: 0) {
+                SwapProgressStepRow(
+                    title: "Transaction submitted".localized,
+                    state: .done,
+                    isFirst: true,
+                    isLast: false
+                )
+
+                SwapProgressStepRow(
+                    title: "Network confirmation".localized,
+                    state: confirmationState,
+                    isFirst: false,
+                    isLast: false
+                )
+
+                SwapProgressStepRow(
+                    title: "Completed".localized,
+                    state: completedState,
+                    isFirst: false,
+                    isLast: true
+                )
+            }
+            .padding(.bottom, 8)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            RoundedRectangle(cornerRadius: 20, style: .continuous)
+                .fill(WpayinColors.surface)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 20, style: .continuous)
+                        .stroke(WpayinColors.surfaceBorder, lineWidth: 1)
+                )
+        )
+    }
+
+    private var confirmationState: SwapProgressStepRow.StepState {
+        switch status {
+        case .pending: return .active
+        case .confirmed: return .done
+        case .failed: return .failed
+        }
+    }
+
+    private var completedState: SwapProgressStepRow.StepState {
+        switch status {
+        case .pending: return .upcoming
+        case .confirmed: return .done
+        case .failed: return .failed
+        }
     }
 }
