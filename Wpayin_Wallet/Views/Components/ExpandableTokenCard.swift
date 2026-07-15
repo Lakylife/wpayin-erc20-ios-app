@@ -16,6 +16,7 @@ struct ExpandableTokenCard: View {
     @EnvironmentObject var walletManager: WalletManager
     @EnvironmentObject var settingsManager: SettingsManager
     @State private var isExpanded = false
+    @State private var showRemoveConfirmation = false
 
     var body: some View {
         VStack(spacing: 0) {
@@ -114,6 +115,14 @@ struct ExpandableTokenCard: View {
             .buttonStyle(PlainButtonStyle())
             .contextMenu {
                 FavoriteToggleButton(symbol: token.symbol)
+
+                if walletManager.canRemoveFromAssets(token) {
+                    Button(role: .destructive) {
+                        showRemoveConfirmation = true
+                    } label: {
+                        Label("Remove from Your Assets".localized, systemImage: "trash")
+                    }
+                }
             }
 
             // Expanded network rows
@@ -137,6 +146,14 @@ struct ExpandableTokenCard: View {
                 )
                 .padding(.top, 8) // Space between main card and expanded content
             }
+        }
+        .alert("Remove %@?".localized(token.symbol), isPresented: $showRemoveConfirmation) {
+            Button("Cancel".localized, role: .cancel) { }
+            Button("Remove".localized, role: .destructive) {
+                walletManager.removeTokenSymbolFromAssets(token)
+            }
+        } message: {
+            Text("This only removes the token from Your Assets. Your funds remain on the blockchain.".localized)
         }
     }
 
@@ -249,7 +266,9 @@ struct FavoriteToggleButton: View {
 struct CompactTokenRow: View {
     let token: Token
     let onTap: () -> Void
+    @EnvironmentObject var walletManager: WalletManager
     @EnvironmentObject var settingsManager: SettingsManager
+    @State private var showRemoveConfirmation = false
 
     var body: some View {
         Button(action: onTap) {
@@ -290,6 +309,22 @@ struct CompactTokenRow: View {
         .buttonStyle(PlainButtonStyle())
         .contextMenu {
             FavoriteToggleButton(symbol: token.symbol)
+
+            if walletManager.canRemoveFromAssets(token) {
+                Button(role: .destructive) {
+                    showRemoveConfirmation = true
+                } label: {
+                    Label("Remove from Your Assets".localized, systemImage: "trash")
+                }
+            }
+        }
+        .alert("Remove %@?".localized(token.symbol), isPresented: $showRemoveConfirmation) {
+            Button("Cancel".localized, role: .cancel) { }
+            Button("Remove".localized, role: .destructive) {
+                walletManager.removeTokenSymbolFromAssets(token)
+            }
+        } message: {
+            Text("This only removes the token from Your Assets. Your funds remain on the blockchain.".localized)
         }
     }
 }

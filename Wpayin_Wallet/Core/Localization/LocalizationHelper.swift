@@ -161,6 +161,7 @@ enum L10n {
         static let submitted = "bridge.submitted"
         static let failed = "bridge.failed"
         static let sameNetwork = "bridge.sameNetwork"
+        static let receiveAddress = "bridge.receiveAddress"
     }
 
     // MARK: - Swap

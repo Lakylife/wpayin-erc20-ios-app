@@ -46,6 +46,9 @@ final class WalletManager: ObservableObject {
     @Published var walletAddress: String = ""
     @Published var tokens: [Token] = []
     @Published var nfts: [NFT] = []
+    @Published private(set) var isLoadingNFTs = false
+    @Published private var manuallyHiddenNFTIdentities: Set<String> = []
+    @Published private var trustedNFTIdentities: Set<String> = []
     @Published var transactions: [Transaction] = []
     @Published var balance: Double = 0.0
     @Published var selectedBlockchains: Set<BlockchainPlatform> = [.ethereum]
@@ -84,12 +87,16 @@ final class WalletManager: ObservableObject {
     private let cachedTransactionsPrefix = "CachedTransactions"
     private let cachedHoldingsPrefix = "CachedHoldings"
     private let seenTransactionsPrefix = "SeenTransactionHashes"
+    private let hiddenTokenIdentitiesKey = "HiddenTokenIdentities"
+    private let hiddenNFTIdentitiesKey = "HiddenNFTIdentities"
+    private let trustedNFTIdentitiesKey = "TrustedNFTIdentities"
 
     private var chainAccounts: [BlockchainType: ChainAccount] = [:]
     private var cancellables = Set<AnyCancellable>()
     private var priceUpdateTimer: Timer?
     private let priceUpdateInterval: TimeInterval = 60 // Live prices — CoinGecko free tier is fine with 1 call/min
     private var savedCustomTokens: [Token] = []
+    private var hiddenTokenIdentities: Set<String> = []
 
     // Public access to chain accounts for deposit address generation
     var availableChainAccounts: [BlockchainType: ChainAccount] {
@@ -101,12 +108,36 @@ final class WalletManager: ObservableObject {
             guard let platform = BlockchainPlatform(rawValue: token.blockchain.rawValue) else {
                 return false
             }
-            return selectedBlockchains.contains(platform) && hasActiveAccount(for: token.blockchain)
+            return selectedBlockchains.contains(platform)
+                && hasActiveAccount(for: token.blockchain)
+                && !hiddenTokenIdentities.contains(tokenIdentityKey(for: token))
         }
     }
 
     var visibleSupportedTokens: [Token] {
-        mergedSupportedTokens(with: visibleTokens)
+        mergedSupportedTokens(with: visibleTokens).filter {
+            !hiddenTokenIdentities.contains(tokenIdentityKey(for: $0))
+        }
+    }
+
+    /// Main gallery. Spam and manually hidden collectibles stay reviewable in
+    /// a separate folder; nothing is burned or transferred on-chain.
+    var visibleNFTs: [NFT] {
+        nfts.filter { nft in
+            let identity = nftIdentityKey(for: nft)
+            if trustedNFTIdentities.contains(identity) { return true }
+            return !manuallyHiddenNFTIdentities.contains(identity)
+                && !NFTSpamFilter.isLikelySpam(nft)
+        }
+    }
+
+    var suspiciousNFTs: [NFT] {
+        nfts.filter { nft in
+            let identity = nftIdentityKey(for: nft)
+            if trustedNFTIdentities.contains(identity) { return false }
+            return manuallyHiddenNFTIdentities.contains(identity)
+                || NFTSpamFilter.isLikelySpam(nft)
+        }
     }
 
     // Computed property to group tokens by symbol and combine balances
@@ -274,6 +305,37 @@ final class WalletManager: ObservableObject {
     private func tokenIdentityKey(for token: Token) -> String {
         "\(token.blockchain.rawValue):\((token.contractAddress ?? "native").lowercased())"
     }
+
+    private func nftIdentityKey(for nft: NFT) -> String {
+        [
+            nft.ownerAddress.lowercased(),
+            nft.blockchain.rawValue,
+            nft.contractAddress.lowercased(),
+            nft.tokenId.lowercased()
+        ].joined(separator: ":")
+    }
+
+    func isNFTInSpamFolder(_ nft: NFT) -> Bool {
+        let identity = nftIdentityKey(for: nft)
+        if trustedNFTIdentities.contains(identity) { return false }
+        return manuallyHiddenNFTIdentities.contains(identity) || NFTSpamFilter.isLikelySpam(nft)
+    }
+
+    func hideNFT(_ nft: NFT) {
+        let identity = nftIdentityKey(for: nft)
+        trustedNFTIdentities.remove(identity)
+        manuallyHiddenNFTIdentities.insert(identity)
+        saveNFTVisibilityPreferences()
+        AppToast.show("NFT moved to Hidden Spam".localized, icon: "eye.slash.fill")
+    }
+
+    func trustNFT(_ nft: NFT) {
+        let identity = nftIdentityKey(for: nft)
+        manuallyHiddenNFTIdentities.remove(identity)
+        trustedNFTIdentities.insert(identity)
+        saveNFTVisibilityPreferences()
+        AppToast.show("NFT restored to gallery".localized, icon: "checkmark.shield.fill")
+    }
     
 
     init() {
@@ -282,6 +344,8 @@ final class WalletManager: ObservableObject {
         loadSavedAddresses()
         loadFavorites()
         loadCustomTokens()
+        loadHiddenTokenIdentities()
+        loadNFTVisibilityPreferences()
         loadSelectedBlockchains()  // NEW: Load selected blockchains
         checkOnboardingStatus()
         // Don't set isInitializing = false here, let ContentView handle it
@@ -857,12 +921,20 @@ final class WalletManager: ObservableObject {
         updateActiveWalletPortfolioValue(newBalance)
         self.hasWallet = keychain.hasSeedPhrase() || keychain.hasPrivateKey()
 
-        // Load real NFTs from API
+        // Load real NFTs from configured providers or the public Blockscout
+        // fallback. NFT loading stays independent from fungible balances.
+        let nftBlockchains = Array(Set(accounts.compactMap { $0.config.blockchainType }))
+            .filter(\.isEVM)
+        self.isLoadingNFTs = true
         Task {
             do {
-                let fetchedNFTs = try await APIService.shared.fetchNFTs(for: resolvedAddress)
+                let fetchedNFTs = try await APIService.shared.fetchNFTs(
+                    for: resolvedAddress,
+                    blockchains: nftBlockchains
+                )
                 await MainActor.run {
                     self.nfts = fetchedNFTs
+                    self.isLoadingNFTs = false
                     Logger.log("✅ Loaded \(fetchedNFTs.count) NFTs for wallet")
                 }
             } catch {
@@ -870,6 +942,7 @@ final class WalletManager: ObservableObject {
                 await MainActor.run {
                     // Don't show fake data - just empty array if fetch fails
                     self.nfts = []
+                    self.isLoadingNFTs = false
                     Logger.log("❌ NFT fetch failed, showing empty list")
                 }
             }
@@ -1646,16 +1719,25 @@ final class WalletManager: ObservableObject {
 
     /// Add a custom token to the wallet
     func addCustomToken(_ token: Token) {
-        // Check if token already exists
-        if tokens.contains(where: { $0.contractAddress?.lowercased() == token.contractAddress?.lowercased() }) {
+        let identity = tokenIdentityKey(for: token)
+
+        // Adding a previously removed contract makes it visible again.
+        hiddenTokenIdentities.remove(identity)
+        saveHiddenTokenIdentities()
+
+        if savedCustomTokens.contains(where: { tokenIdentityKey(for: $0) == identity }) {
             Logger.log("⚠️ Token already exists: \(token.symbol)")
             return
         }
 
-        // Add token to the list
-        tokens.append(token)
+        savedCustomTokens.append(token)
 
-        // Save to UserDefaults for persistence
+        if let existingIndex = tokens.firstIndex(where: { tokenIdentityKey(for: $0) == identity }) {
+            tokens[existingIndex] = token
+        } else {
+            tokens.append(token)
+        }
+
         saveCustomTokens()
 
         // Notify user
@@ -1666,17 +1748,48 @@ final class WalletManager: ObservableObject {
 
     /// Remove a custom token from the wallet
     func removeCustomToken(_ token: Token) {
-        tokens.removeAll { $0.contractAddress?.lowercased() == token.contractAddress?.lowercased() }
+        removeTokenFromAssets(token)
+    }
+
+    /// Permanently hide a non-native token from Your Assets. This only changes
+    /// the local portfolio list; funds and contracts on-chain are untouched.
+    func removeTokenFromAssets(_ token: Token) {
+        guard !token.isNative else { return }
+        let identity = tokenIdentityKey(for: token)
+        hiddenTokenIdentities.insert(identity)
+        tokens.removeAll { tokenIdentityKey(for: $0) == identity }
+        savedCustomTokens.removeAll { tokenIdentityKey(for: $0) == identity }
         saveCustomTokens()
-        Logger.log("🗑️ Custom token removed: \(token.symbol)")
+        saveHiddenTokenIdentities()
+        Logger.log("🗑️ Token removed from Your Assets: \(token.symbol) on \(token.blockchain.name)")
+    }
+
+    /// Your Assets groups equal symbols across chains, so removing a grouped
+    /// card hides every non-native network variant represented by that card.
+    func removeTokenSymbolFromAssets(_ token: Token) {
+        guard !token.isNative else { return }
+        let symbol = token.symbol.uppercased()
+        let matchingTokens = mergedSupportedTokens(with: tokens).filter {
+            !$0.isNative && $0.symbol.uppercased() == symbol
+        }
+        for matchingToken in matchingTokens {
+            hiddenTokenIdentities.insert(tokenIdentityKey(for: matchingToken))
+        }
+        tokens.removeAll { !$0.isNative && $0.symbol.uppercased() == symbol }
+        savedCustomTokens.removeAll { !$0.isNative && $0.symbol.uppercased() == symbol }
+        saveCustomTokens()
+        saveHiddenTokenIdentities()
+        Logger.log("🗑️ Token removed from Your Assets on all networks: \(token.symbol)")
+    }
+
+    func canRemoveFromAssets(_ token: Token) -> Bool {
+        !token.isNative
     }
 
     private func saveCustomTokens() {
-        // Save custom tokens to UserDefaults
-        let customTokens = tokens.filter { !$0.isNative }
-        if let data = try? JSONEncoder().encode(customTokens) {
+        if let data = try? JSONEncoder().encode(savedCustomTokens) {
             UserDefaults.standard.set(data, forKey: "CustomTokens")
-            Logger.log("💾 Saved \(customTokens.count) custom tokens")
+            Logger.log("💾 Saved \(savedCustomTokens.count) custom tokens")
         }
     }
 
@@ -1691,6 +1804,34 @@ final class WalletManager: ObservableObject {
 
         savedCustomTokens = customTokens
         Logger.log("📦 Loaded \(customTokens.count) custom tokens from storage")
+    }
+
+    private func loadHiddenTokenIdentities() {
+        guard let data = UserDefaults.standard.data(forKey: hiddenTokenIdentitiesKey),
+              let identities = try? JSONDecoder().decode(Set<String>.self, from: data) else {
+            hiddenTokenIdentities = []
+            return
+        }
+        hiddenTokenIdentities = identities
+    }
+
+    private func saveHiddenTokenIdentities() {
+        guard let data = try? JSONEncoder().encode(hiddenTokenIdentities) else { return }
+        UserDefaults.standard.set(data, forKey: hiddenTokenIdentitiesKey)
+    }
+
+    private func loadNFTVisibilityPreferences() {
+        if let hidden = UserDefaults.standard.stringArray(forKey: hiddenNFTIdentitiesKey) {
+            manuallyHiddenNFTIdentities = Set(hidden)
+        }
+        if let trusted = UserDefaults.standard.stringArray(forKey: trustedNFTIdentitiesKey) {
+            trustedNFTIdentities = Set(trusted)
+        }
+    }
+
+    private func saveNFTVisibilityPreferences() {
+        UserDefaults.standard.set(Array(manuallyHiddenNFTIdentities), forKey: hiddenNFTIdentitiesKey)
+        UserDefaults.standard.set(Array(trustedNFTIdentities), forKey: trustedNFTIdentitiesKey)
     }
 
     private struct CachedTokenPrice: Codable {

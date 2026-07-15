@@ -261,8 +261,8 @@
 "Swap" = "스왑";
 "Swap tokens instantly with best rates. Access DeFi protocols, track your portfolio, and manage all your crypto in one place." = "최적의 환율로 토큰을 즉시 스왑하세요. DeFi 프로토콜에 접근하고 포트폴리오를 추적하며 암호화폐를 한곳에서 관리하세요.";
 "Switch or create wallets" = "지갑 전환 또는 생성";
-"Syncing latest balances..." = "최신 잔액 동기화 중...";
-"Syncing..." = "동기화 중...";
+"Syncing latest balances..." = "잔액 업데이트 중...";
+"Syncing..." = "업데이트 중...";
 "TESTNET" = "TESTNET";
 "Tap the words:" = "단어를 탭하세요:";
 "Terms & Conditions" = "이용약관";
@@ -347,7 +347,7 @@
 "wallet.options" = "지갑 옵션";
 "wallet.connect" = "지갑 연결";
 "wallet.noAssets" = "아직 자산 없음";
-"wallet.syncing" = "동기화 중...";
+"wallet.syncing" = "업데이트 중...";
 "wallet.portfolioUpToDate" = "포트폴리오가 최신 상태입니다";
 "wallet.refresh" = "포트폴리오 새로고침";
 "wallet.loadingData" = "시장 데이터 불러오는 중...";
@@ -724,6 +724,10 @@
 "error.bridge.unsupportedNetwork" = "This network does not support bridging";
 "error.bridge.noRoute" = "No bridge route found for this token and network pair";
 "error.bridge.quoteFailed" = "Could not get a bridge quote. Please try again.";
+"bridge.receiveAddress" = "Receiving address";
+"error.bridge.missingDestinationAddress" = "Could not determine the receiving address on the destination network";
+"error.bridge.solanaSendFailed" = "Failed to sign or send the Solana transaction";
+"error.bridge.insufficientFunds" = "Balance is not enough to cover the amount plus network fees. Try a smaller amount.";
 "All Networks" = "All Networks";
 "Platform fee %@: %@ %@" = "Platform fee %@: %@ %@";
 
@@ -746,6 +750,13 @@
 "Offer verified on-chain" = "Offer verified on-chain";
 "Seller" = "Seller";
 "Platform fee" = "Platform fee";
+"Fetching token details..." = "토큰 정보를 불러오는 중...";
+"Explore DeFi" = "DeFi 둘러보기";
+"Choose a protocol to continue securely on its official website." = "프로토콜을 선택하고 공식 웹사이트에서 안전하게 계속하세요.";
+"Lending & borrowing" = "대출 및 차입";
+"Swap & liquidity" = "스왑 및 유동성";
+"Liquid staking" = "유동성 스테이킹";
+"Loading NFTs..." = "NFT 불러오는 중...";
 "Confirm Trade" = "Confirm Trade";
 "Completing trade..." = "Completing trade...";
 "Trade Completed" = "Trade Completed";
@@ -769,6 +780,9 @@
 "Expired" = "Expired";
 "Active" = "Active";
 "Remove" = "Remove";
+"Remove from Your Assets" = "내 자산에서 제거";
+"Remove %@?" = "%@을(를) 제거할까요?";
+"This only removes the token from Your Assets. Your funds remain on the blockchain." = "토큰은 내 자산 목록에서만 제거됩니다. 자금은 블록체인에 그대로 남습니다.";
 "error.p2p.fillWouldFail" = "The trade would fail on-chain (the seller may have moved their funds). Nothing was sent — no fees were charged.";
 "No tokens to sell" = "No tokens to sell";
 "P2P trades settle in ERC-20 tokens (USDC, USDT, WETH…). You don't hold any yet — swap some of your %@ first, then come back." = "P2P trades settle in ERC-20 tokens (USDC, USDT, WETH…). You don't hold any yet — swap some of your %@ first, then come back.";
@@ -797,6 +811,21 @@
 "Best price" = "최저가";
 "Includes the ERC-20 approval network fee" = "ERC-20 승인 네트워크 수수료 포함";
 "Insufficient %@ balance for the amount and network fee" = "금액과 네트워크 수수료를 위한 %@ 잔액이 부족합니다";
+"Network fee is paid separately in %@. Required: %@ %@ · Available: %@ %@" = "네트워크 수수료는 %@로 별도 지불됩니다. 필요: %@ %@ · 사용 가능: %@ %@";
+"Edit recipient" = "수신자 수정";
+"Continue" = "계속";
+"Amount plus the network fee exceeds the available %@ balance." = "금액과 네트워크 수수료가 사용 가능한 %@ 잔액을 초과합니다.";
+"Sending %@ on %@ requires %@ for the network fee. Required: ~%@ %@ · Available: %@ %@" = "%@을(를) %@에서 보내려면 네트워크 수수료로 %@가 필요합니다. 필요: ~%@ %@ · 사용 가능: %@ %@";
+"Total balance" = "총 잔액";
+"Balance history" = "잔액 내역";
+"Based on your wallet activity" = "지갑 활동 기준";
+"No balance changes in this period" = "이 기간에는 잔액 변동이 없습니다";
+"Now" = "현재";
+"All time" = "전체 기간";
+"Last 7 days" = "최근 7일";
+"Last 30 days" = "최근 30일";
+"Last 90 days" = "최근 90일";
+"Last year" = "최근 1년";
 
 // MARK: - Swap Progress (v1.1.8)
 "Approving token" = "토큰 승인 중";

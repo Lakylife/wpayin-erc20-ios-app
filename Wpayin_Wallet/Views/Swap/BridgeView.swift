@@ -62,45 +62,121 @@ struct BridgeContentView: View {
         walletManager.availableBlockchains
             .filter {
                 $0.network == .mainnet &&
-                walletManager.selectedBlockchains.contains($0.platform) &&
-                ($0.blockchainType.map { BridgeService.supportedBlockchains.contains($0) } ?? false)
+                ($0.blockchainType.map { BridgeService.supportedSourceBlockchains.contains($0) } ?? false)
             }
             .map { $0.platform }
     }
 
-    private var availableTokens: [Token] {
+    /// Destinations additionally include Bitcoin and Solana (receive-only).
+    private var availableDestinationNetworks: [BlockchainPlatform] {
+        walletManager.availableBlockchains
+            .filter {
+                $0.network == .mainnet &&
+                ($0.blockchainType.map { BridgeService.supportedDestinationBlockchains.contains($0) } ?? false)
+            }
+            .map { $0.platform }
+    }
+
+    /// Native coin symbol when the destination is a non-EVM chain (BTC/SOL) —
+    /// LI.FI always pays out the native asset there.
+    private var destinationNativeSymbol: String? {
+        guard let type = toNetwork.blockchainType,
+              BridgeService.nativeTokenParam(for: type) != nil else { return nil }
+        return type.nativeToken
+    }
+
+    /// Where bridged funds land when the destination is a non-EVM network.
+    private func receiveAddress(for blockchain: BlockchainType) -> String? {
+        walletManager.availableChainAccounts[blockchain]?.address
+            ?? walletManager.tokens.first { $0.blockchain == blockchain && $0.isNative }?.receivingAddress
+    }
+
+    private var selectableTokens: [Token] {
         walletManager.visibleSupportedTokens.filter {
-            $0.blockchain.rawValue == fromNetwork.rawValue &&
-            BridgeService.supportedBlockchains.contains($0.blockchain)
+            BridgeService.supportedSourceBlockchains.contains($0.blockchain) &&
+            // Non-EVM sources can only send their native coin
+            (BridgeService.nativeTokenParam(for: $0.blockchain) == nil || $0.isNative)
         }
     }
 
-    /// Same asset on the destination chain, when the wallet knows it.
+    private var availableTokens: [Token] {
+        selectableTokens.filter { $0.blockchain.rawValue == fromNetwork.rawValue }
+    }
+
+    /// The asset that actually arrives, when the wallet knows it — used for
+    /// the receive-side icon, price and (for EVM tokens) the quote's
+    /// toToken contract.
     private var destinationToken: Token? {
-        guard let token = selectedToken else { return nil }
+        let targetSymbol = destinationSymbol
+        guard !targetSymbol.isEmpty else { return nil }
         return walletManager.visibleSupportedTokens.first {
             $0.blockchain.rawValue == toNetwork.rawValue &&
-            $0.symbol.uppercased() == token.symbol.uppercased()
+            $0.symbol.uppercased() == targetSymbol.uppercased()
         }
+    }
+
+    /// Symbol shown on the receive side. The quote is authoritative; before
+    /// one arrives, mirror LI.FI's routing: a native coin bridges to the
+    /// destination chain's native coin, a token keeps its symbol.
+    private var destinationSymbol: String {
+        if let quote { return quote.toSymbol }
+        if let native = destinationNativeSymbol { return native }
+        guard let token = selectedToken else { return "" }
+        if token.isNative, let type = toNetwork.blockchainType {
+            return type.nativeToken
+        }
+        return token.symbol
     }
 
     private var isValidBridge: Bool {
         guard let token = selectedToken,
               let value = Double(amount),
               value > 0 else { return false }
-        return fromNetwork != toNetwork && value <= token.balance && hasSufficientBridgeGas
+        return fromNetwork != toNetwork
+            && value + platformFeeValue <= token.balance
+            && hasSufficientBridgeGas
+    }
+
+    private var platformFeeDecimal: Decimal {
+        guard let token = selectedToken,
+              token.blockchain.isEVM,
+              let value = Decimal(string: amount.replacingOccurrences(of: ",", with: ".")) else {
+            return 0
+        }
+        return TransactionService.platformFee(for: value)
+    }
+
+    private var platformFeeValue: Double {
+        NSDecimalNumber(decimal: platformFeeDecimal).doubleValue
+    }
+
+    private var sourceNativeBalanceDecimal: Decimal {
+        guard let token = selectedToken else { return 0 }
+        if quoteEstimateKey == bridgeEstimateKey,
+           let liveBalance = feeEstimate?.availableNativeBalance {
+            return liveBalance
+        }
+
+        // A refresh can briefly leave both a placeholder and a live token in
+        // memory. Never let the first (often zero) entry decide gas validity.
+        let balance = walletManager.tokens
+            .filter { $0.blockchain == token.blockchain && $0.isNative }
+            .map(\.balance)
+            .max() ?? 0
+        return Decimal(string: String(balance)) ?? 0
     }
 
     private var sourceNativeBalance: Double {
-        guard let token = selectedToken else { return 0 }
-        return walletManager.tokens.first {
-            $0.blockchain == token.blockchain && $0.isNative
-        }?.balance ?? 0
+        NSDecimalNumber(decimal: sourceNativeBalanceDecimal).doubleValue
+    }
+
+    private var networkFeeNativeDecimal: Decimal {
+        guard quoteEstimateKey == bridgeEstimateKey, let feeEstimate else { return 0 }
+        return feeEstimate.feeNative
     }
 
     private var networkFeeNative: Double {
-        guard quoteEstimateKey == bridgeEstimateKey, let feeEstimate else { return 0 }
-        return NSDecimalNumber(decimal: feeEstimate.feeNative).doubleValue
+        NSDecimalNumber(decimal: networkFeeNativeDecimal).doubleValue
     }
 
     private var networkFeeUSD: Double {
@@ -114,11 +190,42 @@ struct BridgeContentView: View {
 
     private var hasSufficientBridgeGas: Bool {
         guard let token = selectedToken,
-              let value = Double(amount),
-              networkFeeNative > 0 else { return true }
+              let value = Decimal(string: amount.replacingOccurrences(of: ",", with: ".")),
+              networkFeeNativeDecimal > 0 else { return true }
+        let requiredFee = networkFeeNativeDecimal + networkFeeReserveDecimal
         return token.isNative
-            ? value + networkFeeNative <= token.balance
-            : sourceNativeBalance >= networkFeeNative
+            ? value + platformFeeDecimal + requiredFee <= sourceNativeBalanceDecimal
+            : sourceNativeBalanceDecimal >= requiredFee
+    }
+
+    private var networkFeeReserveDecimal: Decimal {
+        guard let token = selectedToken, networkFeeNativeDecimal > 0 else { return 0 }
+        let isNonEVMSource = BridgeService.nativeTokenParam(for: token.blockchain) != nil
+        return isNonEVMSource
+            ? networkFeeNativeDecimal
+            : max(networkFeeNativeDecimal * Decimal(string: "0.05")!, Decimal(string: "0.00000001")!)
+    }
+
+    private var networkFeeReserve: Double {
+        NSDecimalNumber(decimal: networkFeeReserveDecimal).doubleValue
+    }
+
+    private var insufficientGasMessage: String {
+        guard let token = selectedToken else { return "" }
+        let symbol = token.blockchain.nativeToken
+        if token.isNative {
+            return "Insufficient %@ balance for the amount and network fee".localized(symbol)
+        }
+
+        let required = formattedFee(networkFeeNative + networkFeeReserve)
+        let available = formattedFee(sourceNativeBalance)
+        return "Network fee is paid separately in %@. Required: %@ %@ · Available: %@ %@".localized(
+            symbol,
+            required,
+            symbol,
+            available,
+            symbol
+        )
     }
 
     private var bridgeEstimateKey: String {
@@ -129,9 +236,11 @@ struct BridgeContentView: View {
         guard let token = selectedToken else { return L10n.Tokens.selectToken.localized }
         if fromNetwork == toNetwork { return L10n.Bridge.sameNetwork.localized }
         guard let value = Double(amount) else { return "Enter a valid amount".localized }
-        if value > token.balance { return L10n.Swap.insufficient.localized(token.symbol) }
+        if value + platformFeeValue > token.balance {
+            return L10n.Swap.insufficient.localized(token.symbol)
+        }
         if !hasSufficientBridgeGas {
-            return "Insufficient %@ balance for the amount and network fee".localized(token.blockchain.nativeToken)
+            return insufficientGasMessage
         }
         return "Enter a valid amount".localized
     }
@@ -156,7 +265,15 @@ struct BridgeContentView: View {
             bottomAction
         }
         .sheet(isPresented: $showTokenPicker) {
-            TokenPickerView(tokens: availableTokens, selectedToken: selectedToken) { token in
+            TokenPickerView(
+                tokens: selectableTokens,
+                selectedToken: selectedToken,
+                initialNetwork: fromNetwork,
+                availableNetworks: availableNetworks
+            ) { token in
+                if let tokenNetwork = BlockchainPlatform(rawValue: token.blockchain.rawValue) {
+                    fromNetwork = tokenNetwork
+                }
                 selectedToken = token
             }
         }
@@ -166,7 +283,7 @@ struct BridgeContentView: View {
         .sheet(isPresented: $showToNetworkSelector) {
             NetworkSelectorSheet(
                 selectedNetwork: $toNetwork,
-                availableNetworks: availableNetworks.filter { $0 != fromNetwork }
+                availableNetworks: availableDestinationNetworks.filter { $0 != fromNetwork }
             )
         }
         .sheet(isPresented: $showReview) {
@@ -178,6 +295,7 @@ struct BridgeContentView: View {
                     toNetwork: toNetwork,
                     networkFeeNative: networkFeeNative,
                     networkFeeUSD: networkFeeUSD,
+                    platformFee: platformFeeValue,
                     approvalRequired: feeEstimate?.approvalRequired ?? false,
                     isBridging: isBridging,
                     onConfirm: performBridge
@@ -202,9 +320,11 @@ struct BridgeContentView: View {
         }
         .onChange(of: fromNetwork) { _ in
             if toNetwork == fromNetwork {
-                toNetwork = availableNetworks.first { $0 != fromNetwork } ?? toNetwork
+                toNetwork = availableDestinationNetworks.first { $0 != fromNetwork } ?? toNetwork
             }
-            selectedToken = availableTokens.first
+            if selectedToken?.blockchain.rawValue != fromNetwork.rawValue {
+                selectedToken = availableTokens.first
+            }
             amount = ""
             clearQuote()
         }
@@ -257,7 +377,7 @@ struct BridgeContentView: View {
 
                 NetworkSelectorButton(
                     selectedNetwork: $toNetwork,
-                    availableNetworks: availableNetworks.filter { $0 != fromNetwork },
+                    availableNetworks: availableDestinationNetworks.filter { $0 != fromNetwork },
                     onTap: { showToNetworkSelector = true }
                 )
             }
@@ -315,7 +435,7 @@ struct BridgeContentView: View {
                     HStack(spacing: 8) {
                         TokenIconView(token: destinationToken ?? token, size: 34, showNetworkBadge: false)
 
-                        Text(token.symbol)
+                        Text(destinationSymbol)
                             .font(.system(size: 17, weight: .bold, design: .rounded))
                             .foregroundColor(WpayinColors.text)
                     }
@@ -377,6 +497,15 @@ struct BridgeContentView: View {
                 showsInfo: true
             )
 
+            if platformFeeValue > 0 {
+                divider
+
+                SwapDetailRow(
+                    label: "Platform fee".localized,
+                    value: "\(formattedAmount(platformFeeDecimal)) \(selectedToken?.symbol ?? "")"
+                )
+            }
+
             divider
 
             SwapDetailRow(
@@ -391,6 +520,17 @@ struct BridgeContentView: View {
                 value: "\(formattedAmount(quote.toAmountMin)) \(quote.toSymbol)",
                 highlightsValue: true
             )
+
+            if destinationNativeSymbol != nil,
+               let type = toNetwork.blockchainType,
+               let address = receiveAddress(for: type) {
+                divider
+
+                SwapDetailRow(
+                    label: L10n.Bridge.receiveAddress.localized,
+                    value: shortAddress(address)
+                )
+            }
         }
         .background(
             RoundedRectangle(cornerRadius: WpayinRadius.card, style: .continuous)
@@ -414,8 +554,9 @@ struct BridgeContentView: View {
             if !isValidBridge && !amount.isEmpty {
                 Text(invalidReason)
                     .font(.system(size: 12, weight: .medium))
-                    .foregroundColor(WpayinColors.error)
-                    .lineLimit(2)
+                    .foregroundColor(hasSufficientBridgeGas ? WpayinColors.error : WpayinColors.warning)
+                    .lineLimit(3)
+                    .fixedSize(horizontal: false, vertical: true)
             }
 
             Button(action: requestQuoteAndReview) {
@@ -489,7 +630,13 @@ struct BridgeContentView: View {
 
     private var secondaryReceivedText: String {
         guard let quote, let token = selectedToken else { return "" }
-        let price = destinationToken?.price ?? token.price
+        var price = destinationToken?.price ?? 0
+        if price <= 0 {
+            price = walletManager.currentUSDPrice(
+                for: quote.toSymbol,
+                blockchain: toNetwork.blockchainType ?? token.blockchain
+            ) ?? token.price
+        }
         let value = (quote.toAmount as NSDecimalNumber).doubleValue * price
         return "≈ \(value.formatted(as: settingsManager.selectedCurrency))"
     }
@@ -513,6 +660,11 @@ struct BridgeContentView: View {
         return String(format: value < 0.0001 ? "%.8f" : "%.6f", value)
     }
 
+    private func shortAddress(_ address: String) -> String {
+        guard address.count > 16 else { return address }
+        return "\(address.prefix(8))…\(address.suffix(6))"
+    }
+
     private func formattedDuration(_ seconds: TimeInterval) -> String {
         if seconds < 60 {
             return "< 1 min"
@@ -525,8 +677,8 @@ struct BridgeContentView: View {
         if !availableNetworks.contains(fromNetwork) {
             fromNetwork = availableNetworks.first ?? .ethereum
         }
-        if toNetwork == fromNetwork || !availableNetworks.contains(toNetwork) {
-            toNetwork = availableNetworks.first { $0 != fromNetwork } ?? toNetwork
+        if toNetwork == fromNetwork || !availableDestinationNetworks.contains(toNetwork) {
+            toNetwork = availableDestinationNetworks.first { $0 != fromNetwork } ?? toNetwork
         }
     }
 
@@ -538,12 +690,10 @@ struct BridgeContentView: View {
             isQuoting = false
 
             guard quote != nil, feeEstimate != nil else { return }
-            guard hasSufficientBridgeGas else {
-                let symbol = selectedToken?.blockchain.nativeToken ?? "ETH"
-                errorMessage = "Insufficient %@ balance for the amount and network fee".localized(symbol)
-                self.showError = true
-                return
-            }
+            // Gas shortage is already shown inline with the exact required
+            // and available native balance. It is a validation state, not a
+            // failed bridge, so never show the "Bridge Failed" alert here.
+            guard hasSufficientBridgeGas else { return }
             showReview = true
         }
     }
@@ -556,14 +706,20 @@ struct BridgeContentView: View {
 
         let requestedKey = bridgeEstimateKey
         do {
-            let destinationAddress = destinationToken.flatMap {
+            let isNonEVMDestination = BridgeService.nativeTokenParam(for: toBlockchain) != nil
+            let destinationAddress = isNonEVMDestination ? nil : destinationToken.flatMap {
                 $0.isNative ? "0x0000000000000000000000000000000000000000" : $0.contractAddress
             }
+            // Always explicit — with a non-EVM source LI.FI can't infer the
+            // destination address from the sender.
+            let toAddress = receiveAddress(for: toBlockchain)
+                ?? (toBlockchain.isEVM ? walletManager.walletAddress : nil)
             let newQuote = try await BridgeService.shared.getQuote(
                 fromToken: token,
                 toBlockchain: toBlockchain,
                 toTokenAddress: destinationAddress,
-                amount: value
+                amount: value,
+                toAddress: toAddress
             )
             let newFee = try await BridgeService.shared.estimateNetworkFee(
                 quote: newQuote,
@@ -589,26 +745,48 @@ struct BridgeContentView: View {
         guard let token = selectedToken, token.balance > 0 else { return }
         Task {
             isQuoting = true
-            amount = editableBridgeAmount(token.isNative ? token.balance * 0.99 : token.balance)
+            let tokenBalance = Decimal(string: String(token.balance)) ?? 0
+            let feeRate = token.blockchain.isEVM && AppConfig.platformFeeEnabled
+                ? AppConfig.platformFeeRate
+                : 0
+            let provisionalAmount = token.isNative
+                ? tokenBalance * Decimal(string: "0.99")! / (1 + feeRate)
+                : tokenBalance / (1 + feeRate)
+            amount = editableBridgeAmount(provisionalAmount)
             await refreshBridgeQuote(showError: false)
 
-            if token.isNative, networkFeeNative > 0 {
-                let reserve = max(networkFeeNative * 0.05, 0.00000001)
-                amount = editableBridgeAmount(max(0, token.balance - networkFeeNative - reserve))
-                await refreshBridgeQuote(showError: true)
+            if token.isNative, networkFeeNativeDecimal > 0 {
+                // Recalculate twice because the route/gas estimate can change
+                // slightly after MAX itself changes. The fee and safety
+                // reserve are always removed from the live on-chain balance.
+                for _ in 0..<2 {
+                    let spendable = max(
+                        Decimal.zero,
+                        sourceNativeBalanceDecimal - networkFeeNativeDecimal - networkFeeReserveDecimal
+                    ) / (1 + feeRate)
+                    guard spendable > 0 else {
+                        amount = ""
+                        clearQuote()
+                        break
+                    }
+                    let adjustedAmount = editableBridgeAmount(spendable)
+                    guard adjustedAmount != amount else { break }
+                    amount = adjustedAmount
+                    await refreshBridgeQuote(showError: false)
+                }
             }
             isQuoting = false
-
-            if !hasSufficientBridgeGas {
-                errorMessage = "Insufficient %@ balance for the amount and network fee".localized(token.blockchain.nativeToken)
-                showError = true
-            }
         }
     }
 
-    private func editableBridgeAmount(_ value: Double) -> String {
-        var result = String(format: "%.12f", max(0, value))
-        while result.last == "0" { result.removeLast() }
+    private func editableBridgeAmount(_ value: Decimal) -> String {
+        var input = max(Decimal.zero, value)
+        var floored = Decimal.zero
+        // MAX must never round upward: even a fraction of the smallest shown
+        // unit above the spendable balance makes an otherwise valid tx fail.
+        NSDecimalRound(&floored, &input, 12, .down)
+        var result = NSDecimalNumber(decimal: floored).stringValue
+        while result.contains("."), result.last == "0" { result.removeLast() }
         if result.last == "." { result.removeLast() }
         return result
     }
@@ -640,6 +818,9 @@ struct BridgeContentView: View {
 
                 let sourceNetwork = token.blockchain
                 let destinationNetwork = toNetwork.blockchainType ?? sourceNetwork
+                let arrivalAddress = BridgeService.nativeTokenParam(for: destinationNetwork) != nil
+                    ? (receiveAddress(for: destinationNetwork) ?? walletManager.walletAddress)
+                    : walletManager.walletAddress
                 let sentAmount = (quote.fromAmount as NSDecimalNumber).doubleValue
                 let expectedAmount = (quote.toAmount as NSDecimalNumber).doubleValue
                 let explorerUrl = URL(
@@ -693,7 +874,7 @@ struct BridgeContentView: View {
                         Transaction(
                             hash: arrivalPlaceholder,
                             from: quote.txTo,
-                            to: walletManager.walletAddress,
+                            to: arrivalAddress,
                             amount: expectedAmount,
                             token: quote.toSymbol,
                             type: .bridgeReceive,
@@ -712,7 +893,8 @@ struct BridgeContentView: View {
 
                 // Follow the bridge until the funds land on the destination
                 // chain, then flip both Activity entries to their final state.
-                if let fromChain = sourceNetwork.chainId, let toChain = destinationNetwork.chainId {
+                if let fromChain = BridgeService.lifiChainId(for: sourceNetwork),
+                   let toChain = BridgeService.lifiChainId(for: destinationNetwork) {
                     let arrival = await BridgeService.shared.waitForArrival(
                         sourceTxHash: txHash,
                         fromChain: fromChain,
@@ -1050,6 +1232,7 @@ struct BridgeReviewSheet: View {
     let toNetwork: BlockchainPlatform
     let networkFeeNative: Double
     let networkFeeUSD: Double
+    let platformFee: Double
     let approvalRequired: Bool
     let isBridging: Bool
     let onConfirm: () -> Void
@@ -1126,6 +1309,13 @@ struct BridgeReviewSheet: View {
                         showsInfo: true,
                         highlightsValue: true
                     )
+
+                    if platformFee > 0 {
+                        SwapDetailRow(
+                            label: "Platform fee".localized,
+                            value: "\(formatted(Decimal(platformFee))) \(fromToken.symbol)"
+                        )
+                    }
 
                     if approvalRequired {
                         Text("Includes the ERC-20 approval network fee".localized)

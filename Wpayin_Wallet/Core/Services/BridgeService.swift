@@ -12,11 +12,16 @@
 
 import Foundation
 import BigInt
+import WalletCore
+import SwiftProtobuf
 
 enum BridgeError: LocalizedError {
     case unsupportedNetwork
     case noRoute
     case quoteFailed
+    case missingDestinationAddress
+    case solanaSendFailed
+    case insufficientFunds
 
     var errorDescription: String? {
         switch self {
@@ -26,6 +31,12 @@ enum BridgeError: LocalizedError {
             return "error.bridge.noRoute".localized
         case .quoteFailed:
             return "error.bridge.quoteFailed".localized
+        case .missingDestinationAddress:
+            return "error.bridge.missingDestinationAddress".localized
+        case .solanaSendFailed:
+            return "error.bridge.solanaSendFailed".localized
+        case .insufficientFunds:
+            return "error.bridge.insufficientFunds".localized
         }
     }
 }
@@ -42,6 +53,12 @@ struct BridgeQuote {
     let txData: Data
     let txValue: BigUInt
     let gasLimit: BigUInt
+    // Non-EVM source payloads — LI.FI doesn't return EVM calldata for these.
+    // Bitcoin: send the exact sat amount to the deposit address.
+    let bitcoinDepositAddress: String?
+    let bitcoinDepositSats: Int64?
+    // Solana: base64 unsigned transaction to re-sign and broadcast.
+    let solanaTransaction: String?
 }
 
 struct BridgeNetworkFeeEstimate {
@@ -49,6 +66,10 @@ struct BridgeNetworkFeeEstimate {
     let approvalGasLimit: Int
     let approvalRequired: Bool
     let feeNative: Decimal
+    /// Live on-chain balance of the source chain's native fee token at the
+    /// same moment the fee was estimated. This avoids validating against a
+    /// stale or placeholder balance from the wallet token list.
+    let availableNativeBalance: Decimal?
 }
 
 final class BridgeService {
@@ -60,6 +81,44 @@ final class BridgeService {
         .ethereum, .arbitrum, .base, .optimism, .polygon, .bsc, .avalanche
     ]
 
+    /// Chains a bridge can start from — the EVM set plus Bitcoin (funds go to
+    /// a deposit address via the existing BTC send path) and Solana (LI.FI
+    /// returns a transaction that WalletCore re-signs).
+    static let supportedSourceBlockchains: Set<BlockchainType> =
+        supportedBlockchains.union([.bitcoin, .solana])
+
+    /// Chains funds can arrive on.
+    static let supportedDestinationBlockchains: Set<BlockchainType> =
+        supportedBlockchains.union([.bitcoin, .solana])
+
+    /// LI.FI's synthetic chain id for the Bitcoin mainnet (UTXO chain type).
+    static let bitcoinLifiChainId = 20_000_000_000_001
+
+    /// LI.FI's chain id for the Solana mainnet (SVM chain type).
+    static let solanaLifiChainId = 1_151_111_081_099_710
+
+    /// Chain identifier LI.FI expects — the EVM chainId, or the synthetic
+    /// id for non-EVM chains.
+    static func lifiChainId(for blockchain: BlockchainType) -> Int? {
+        switch blockchain {
+        case .bitcoin: return bitcoinLifiChainId
+        case .solana: return solanaLifiChainId
+        default: return blockchain.chainId
+        }
+    }
+
+    /// LI.FI token identifier of the native asset on non-EVM destinations
+    /// (EVM chains use contract/zero addresses instead). Non-nil marks the
+    /// chain as a non-EVM destination that always receives its native coin
+    /// and needs an explicit `toAddress`.
+    static func nativeTokenParam(for blockchain: BlockchainType) -> String? {
+        switch blockchain {
+        case .bitcoin: return "bitcoin"
+        case .solana: return "11111111111111111111111111111111"
+        default: return nil
+        }
+    }
+
     private let quoteEndpoint = "https://li.quest/v1/quote"
     private let nativeAddress = "0x0000000000000000000000000000000000000000"
 
@@ -68,19 +127,31 @@ final class BridgeService {
     /// Ask LI.FI for the best route bridging `amount` of `fromToken` to the
     /// same asset on `toBlockchain`. `toTokenAddress` is the asset's contract
     /// on the destination chain when known; nil falls back to the symbol,
-    /// which LI.FI resolves for all common tokens.
+    /// which LI.FI resolves for all common tokens. Non-EVM destinations
+    /// (Bitcoin, Solana) need an explicit `toAddress` because the funds
+    /// can't land on the EVM sender address.
     func getQuote(
         fromToken: Token,
         toBlockchain: BlockchainType,
         toTokenAddress: String?,
         amount: Decimal,
-        slippage: Double = 0.5
+        slippage: Double = 0.5,
+        toAddress: String? = nil
     ) async throws -> BridgeQuote {
-        guard let fromChain = fromToken.blockchain.chainId,
-              let toChain = toBlockchain.chainId,
-              Self.supportedBlockchains.contains(fromToken.blockchain),
-              Self.supportedBlockchains.contains(toBlockchain) else {
+        guard let fromChain = Self.lifiChainId(for: fromToken.blockchain),
+              let toChain = Self.lifiChainId(for: toBlockchain),
+              Self.supportedSourceBlockchains.contains(fromToken.blockchain),
+              Self.supportedDestinationBlockchains.contains(toBlockchain) else {
             throw BridgeError.unsupportedNetwork
+        }
+
+        let sourceNativeParam = Self.nativeTokenParam(for: fromToken.blockchain)
+        let destinationNativeParam = Self.nativeTokenParam(for: toBlockchain)
+
+        // When either side is non-EVM the destination address can't be
+        // inferred from the sender, so it must be explicit.
+        if sourceNativeParam != nil || destinationNativeParam != nil, (toAddress ?? "").isEmpty {
+            throw BridgeError.missingDestinationAddress
         }
 
         guard let privateKey = try SwapService.shared.getPrivateKey(for: fromToken.blockchain) else {
@@ -89,8 +160,11 @@ final class BridgeService {
         let fromAddress = try SwapService.shared.deriveAddress(from: privateKey, blockchain: fromToken.blockchain)
 
         let amountWei = (amount * swapPow(Decimal(10), fromToken.decimals)).swapRounded().description
-        let fromTokenParam = fromToken.isNative ? nativeAddress : (fromToken.contractAddress ?? nativeAddress)
-        let toTokenParam = toTokenAddress ?? (fromToken.isNative ? nativeAddress : fromToken.symbol.uppercased())
+        let fromTokenParam = sourceNativeParam
+            ?? (fromToken.isNative ? nativeAddress : (fromToken.contractAddress ?? nativeAddress))
+        let toTokenParam = destinationNativeParam
+            ?? toTokenAddress
+            ?? (fromToken.isNative ? nativeAddress : fromToken.symbol.uppercased())
 
         var components = URLComponents(string: quoteEndpoint)!
         components.queryItems = [
@@ -102,6 +176,9 @@ final class BridgeService {
             URLQueryItem(name: "fromAddress", value: fromAddress),
             URLQueryItem(name: "slippage", value: String(slippage / 100))
         ]
+        if let toAddress, !toAddress.isEmpty {
+            components.queryItems?.append(URLQueryItem(name: "toAddress", value: toAddress))
+        }
 
         var request = URLRequest(url: components.url!)
         request.timeoutInterval = 25
@@ -111,8 +188,13 @@ final class BridgeService {
         if let http = response as? HTTPURLResponse, http.statusCode != 200 {
             let message = (try? JSONSerialization.jsonObject(with: data) as? [String: Any])?["message"] as? String
             Logger.log("🛑 LI.FI quote failed (HTTP \(http.statusCode)): \(message ?? "?")")
-            // 404 = no route between the requested pair, anything else = provider trouble
-            throw http.statusCode == 404 ? BridgeError.noRoute : BridgeError.quoteFailed
+            // 404 = no route between the requested pair; LI.FI also validates
+            // the source balance for UTXO chains (amount + BTC fee must fit).
+            if http.statusCode == 404 { throw BridgeError.noRoute }
+            if message?.lowercased().contains("insufficient") == true {
+                throw BridgeError.insufficientFunds
+            }
+            throw BridgeError.quoteFailed
         }
 
         guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
@@ -123,10 +205,7 @@ final class BridgeService {
               let toSymbol = toTokenInfo["symbol"] as? String,
               let toAmountRaw = estimate["toAmount"] as? String,
               let toAmountMinRaw = estimate["toAmountMin"] as? String,
-              let txRequest = json["transactionRequest"] as? [String: Any],
-              let txTo = txRequest["to"] as? String,
-              let txDataHex = txRequest["data"] as? String,
-              let txData = Data(hexString: txDataHex) else {
+              let txRequest = json["transactionRequest"] as? [String: Any] else {
             Logger.log("🛑 LI.FI quote: unexpected response shape")
             throw BridgeError.quoteFailed
         }
@@ -141,6 +220,48 @@ final class BridgeService {
         let toAmountMin = (Decimal(string: toAmountMinRaw) ?? 0) / divisor
         guard toAmount > 0 else { throw BridgeError.noRoute }
 
+        // The transaction request shape depends on the SOURCE chain type:
+        // EVM = calldata to sign, Bitcoin = deposit address + sat amount,
+        // Solana = base64 transaction to re-sign.
+        var txTo = ""
+        var txData = Data()
+        var txValue = BigUInt(0)
+        var gasLimit = BigUInt(0)
+        var bitcoinDepositAddress: String?
+        var bitcoinDepositSats: Int64?
+        var solanaTransaction: String?
+
+        switch fromToken.blockchain {
+        case .bitcoin:
+            guard let depositAddress = txRequest["to"] as? String,
+                  let sats = (txRequest["value"] as? NSNumber)?.int64Value
+                    ?? (txRequest["value"] as? String).flatMap({ Int64($0) }),
+                  sats > 0 else {
+                Logger.log("🛑 LI.FI quote: missing Bitcoin deposit info")
+                throw BridgeError.quoteFailed
+            }
+            bitcoinDepositAddress = depositAddress
+            bitcoinDepositSats = sats
+            txTo = depositAddress
+        case .solana:
+            guard let encodedTx = txRequest["data"] as? String, !encodedTx.isEmpty else {
+                Logger.log("🛑 LI.FI quote: missing Solana transaction")
+                throw BridgeError.quoteFailed
+            }
+            solanaTransaction = encodedTx
+        default:
+            guard let to = txRequest["to"] as? String,
+                  let txDataHex = txRequest["data"] as? String,
+                  let parsedData = Data(hexString: txDataHex) else {
+                Logger.log("🛑 LI.FI quote: unexpected response shape")
+                throw BridgeError.quoteFailed
+            }
+            txTo = to
+            txData = parsedData
+            txValue = hexToBigUInt(txRequest["value"] as? String) ?? BigUInt(0)
+            gasLimit = hexToBigUInt(txRequest["gasLimit"] as? String) ?? BigUInt(500_000)
+        }
+
         return BridgeQuote(
             fromAmount: amount,
             toAmount: toAmount,
@@ -151,8 +272,11 @@ final class BridgeService {
             approvalAddress: estimate["approvalAddress"] as? String,
             txTo: txTo,
             txData: txData,
-            txValue: hexToBigUInt(txRequest["value"] as? String) ?? BigUInt(0),
-            gasLimit: hexToBigUInt(txRequest["gasLimit"] as? String) ?? BigUInt(500_000)
+            txValue: txValue,
+            gasLimit: gasLimit,
+            bitcoinDepositAddress: bitcoinDepositAddress,
+            bitcoinDepositSats: bitcoinDepositSats,
+            solanaTransaction: solanaTransaction
         )
     }
 
@@ -166,6 +290,26 @@ final class BridgeService {
         feeEstimate: BridgeNetworkFeeEstimate? = nil
     ) async throws -> String {
         let blockchain = fromToken.blockchain
+
+        switch blockchain {
+        case .bitcoin:
+            guard let depositAddress = quote.bitcoinDepositAddress,
+                  let sats = quote.bitcoinDepositSats else {
+                throw BridgeError.quoteFailed
+            }
+            let result = try await BitcoinService.shared.sendTransaction(
+                to: depositAddress,
+                amount: Decimal(sats) / swapPow(Decimal(10), 8)
+            )
+            return result.hash
+        case .solana:
+            guard let encodedTx = quote.solanaTransaction else {
+                throw BridgeError.quoteFailed
+            }
+            return try await sendSolanaTransaction(encodedTx)
+        default:
+            break // EVM path below
+        }
 
         guard let privateKey = try SwapService.shared.getPrivateKey(for: blockchain) else {
             throw TransactionError.noPrivateKey
@@ -184,7 +328,7 @@ final class BridgeService {
             )
         }
 
-        return try await SwapService.shared.sendRawTransaction(
+        let hash = try await SwapService.shared.sendRawTransaction(
             from: fromAddress,
             to: quote.txTo,
             value: quote.txValue,
@@ -193,6 +337,58 @@ final class BridgeService {
             blockchain: blockchain,
             privateKey: privateKey
         )
+        await SwapService.shared.collectPlatformFee(
+            for: quote.fromAmount,
+            token: fromToken
+        )
+        return hash
+    }
+
+    // MARK: - Solana source
+
+    /// Re-sign LI.FI's prepared Solana transaction with a fresh blockhash and
+    /// broadcast it. Returns the transaction signature (Solana's tx hash).
+    private func sendSolanaTransaction(_ encodedTx: String) async throws -> String {
+        guard let privateKey = try SwapService.shared.getPrivateKey(for: .solana) else {
+            throw TransactionError.noPrivateKey
+        }
+
+        // The quote's embedded blockhash may already be stale — fetch a fresh
+        // one; WalletCore swaps it in while re-signing.
+        let blockhashResult = try await SwapService.shared.rpcRequest(
+            method: "getLatestBlockhash",
+            params: [["commitment": "confirmed"]],
+            blockchain: .solana
+        )
+        guard let blockhashValue = (blockhashResult as? [String: Any])?["value"] as? [String: Any],
+              let blockhash = blockhashValue["blockhash"] as? String else {
+            throw BridgeError.solanaSendFailed
+        }
+
+        let privateKeys = DataVector()
+        privateKeys.add(data: privateKey)
+        let outputData = SolanaTransaction.updateBlockhashAndSign(
+            encodedTx: encodedTx,
+            recentBlockhash: blockhash,
+            privateKeys: privateKeys
+        )
+        guard let output = try? SolanaSigningOutput(serializedData: outputData),
+              output.errorMessage.isEmpty,
+              !output.encoded.isEmpty else {
+            Logger.log("🛑 Solana signing failed: \((try? SolanaSigningOutput(serializedData: outputData))?.errorMessage ?? "?")")
+            throw BridgeError.solanaSendFailed
+        }
+
+        let sendResult = try await SwapService.shared.rpcRequest(
+            method: "sendTransaction",
+            params: [output.encoded, ["encoding": "base64"]],
+            blockchain: .solana
+        )
+        guard let signature = sendResult as? String, !signature.isEmpty else {
+            throw BridgeError.solanaSendFailed
+        }
+        Logger.log("✅ Solana bridge tx sent: \(signature)")
+        return signature
     }
 
     // MARK: - Destination tracking
@@ -252,6 +448,42 @@ final class BridgeService {
         fromToken: Token
     ) async throws -> BridgeNetworkFeeEstimate {
         let blockchain = fromToken.blockchain
+
+        switch blockchain {
+        case .bitcoin:
+            // Typical deposit spend: 2 P2WPKH inputs + payout & change outputs
+            // ≈ 208 vB. The real fee comes from WalletCore's plan at send time.
+            let feeRates = try await BitcoinService.shared.fetchFeeRates()
+            let sats = Decimal(208 * feeRates.halfHourFee)
+            return BridgeNetworkFeeEstimate(
+                bridgeGasLimit: 0,
+                approvalGasLimit: 0,
+                approvalRequired: false,
+                feeNative: sats / swapPow(Decimal(10), 8),
+                availableNativeBalance: Decimal(fromToken.balance)
+            )
+        case .solana:
+            // Base fee is 5000 lamports per signature; add the priority fee
+            // when the prepared transaction sets a compute budget.
+            var lamports = Decimal(5_000)
+            if let encodedTx = quote.solanaTransaction,
+               let priceString = SolanaTransaction.getComputeUnitPrice(encodedTx: encodedTx),
+               let limitString = SolanaTransaction.getComputeUnitLimit(encodedTx: encodedTx),
+               let microLamportsPerUnit = Decimal(string: priceString),
+               let unitLimit = Decimal(string: limitString) {
+                lamports += microLamportsPerUnit * unitLimit / swapPow(Decimal(10), 6)
+            }
+            return BridgeNetworkFeeEstimate(
+                bridgeGasLimit: 0,
+                approvalGasLimit: 0,
+                approvalRequired: false,
+                feeNative: lamports / swapPow(Decimal(10), 9),
+                availableNativeBalance: Decimal(fromToken.balance)
+            )
+        default:
+            break // EVM estimation below
+        }
+
         guard let privateKey = try SwapService.shared.getPrivateKey(for: blockchain) else {
             throw TransactionError.noPrivateKey
         }
@@ -271,6 +503,13 @@ final class BridgeService {
             try await SwapService.shared.rpcRequest(
                 method: "eth_gasPrice",
                 params: [],
+                blockchain: blockchain
+            )
+        }
+        let nativeBalanceTask = Task {
+            try await SwapService.shared.rpcRequest(
+                method: "eth_getBalance",
+                params: [owner, "latest"],
                 blockchain: blockchain
             )
         }
@@ -314,15 +553,25 @@ final class BridgeService {
         guard let gasPriceWei = hexQuantity(gasPriceResult) else {
             throw TransactionError.networkError("Invalid gas price response")
         }
-        let totalGas = BigUInt(bridgeGasLimit + approvalGasLimit)
+        let nativeBalanceResult = try await nativeBalanceTask.value
+        guard let nativeBalanceWei = hexQuantity(nativeBalanceResult) else {
+            throw TransactionError.networkError("Invalid native balance response")
+        }
+        let platformFeeGas = AppConfig.platformFeeEnabled
+            ? (fromToken.isNative ? 21_000 : 65_000)
+            : 0
+        let totalGas = BigUInt(bridgeGasLimit + approvalGasLimit + platformFeeGas)
         let feeWei = totalGas * gasPriceWei
         let feeNative = (Decimal(string: feeWei.description) ?? 0) / swapPow(Decimal(10), 18)
+        let availableNativeBalance = (Decimal(string: nativeBalanceWei.description) ?? 0)
+            / swapPow(Decimal(10), 18)
 
         return BridgeNetworkFeeEstimate(
             bridgeGasLimit: bridgeGasLimit,
             approvalGasLimit: approvalGasLimit,
             approvalRequired: approvalRequired,
-            feeNative: feeNative
+            feeNative: feeNative,
+            availableNativeBalance: availableNativeBalance
         )
     }
 

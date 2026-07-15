@@ -215,6 +215,7 @@ struct TransactionDetailView: View {
     private var formattedDate: String {
         let formatter = DateFormatter()
         formatter.locale = Locale(identifier: settingsManager.selectedLanguage.rawValue)
+        formatter.timeZone = settingsManager.resolvedTimeZone
         formatter.dateStyle = .medium
         formatter.timeStyle = .short
         return formatter.string(from: transaction.timestamp)

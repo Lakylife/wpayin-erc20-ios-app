@@ -16,6 +16,8 @@ struct AddTokenView: View {
     @State private var tokenSymbol = ""
     @State private var tokenName = ""
     @State private var decimals = ""
+    @State private var tokenIconUrl: String?
+    @State private var tokenPrice: Double = 0
     @State private var isLoading = false
     @State private var isFetching = false
     @State private var showError = false
@@ -23,6 +25,7 @@ struct AddTokenView: View {
     @State private var autoFetched = false
     @State private var selectedBlockchain: BlockchainPlatform = .ethereum
     @State private var showBlockchainPicker = false
+    @State private var metadataFetchTask: Task<Void, Never>?
 
     var body: some View {
         NavigationView {
@@ -56,15 +59,16 @@ struct AddTokenView: View {
                                 isRequired: true
                             )
 
-                            // Auto-fetch button
-                            if isValidContractAddress && !autoFetched {
-                                WpayinButton(
-                                    title: isFetching ? "Fetching...".localized : "Auto-Fetch Token Info".localized,
-                                    style: .secondary
-                                ) {
-                                    fetchTokenInfo()
+                            if isFetching {
+                                HStack(spacing: 9) {
+                                    ProgressView()
+                                        .tint(WpayinColors.primary)
+
+                                    Text("Fetching token details...".localized)
+                                        .font(.wpayinCaption)
+                                        .foregroundColor(WpayinColors.textSecondary)
                                 }
-                                .disabled(isFetching)
+                                .frame(maxWidth: .infinity, alignment: .leading)
                             }
 
                             TokenInputField(
@@ -109,7 +113,8 @@ struct AddTokenView: View {
                             TokenPreview(
                                 symbol: tokenSymbol,
                                 name: tokenName,
-                                contractAddress: contractAddress
+                                contractAddress: contractAddress,
+                                iconUrl: tokenIconUrl
                             )
                         }
                     }
@@ -141,6 +146,26 @@ struct AddTokenView: View {
         } message: {
             Text(errorMessage)
         }
+        .onAppear {
+            if !availableEVMBlockchains.contains(selectedBlockchain),
+               let first = availableEVMBlockchains.first {
+                selectedBlockchain = first
+            }
+            scheduleMetadataFetch()
+        }
+        .onChange(of: contractAddress) { _ in
+            if autoFetched {
+                clearFetchedMetadata()
+            }
+            scheduleMetadataFetch()
+        }
+        .onChange(of: selectedBlockchain) { _ in
+            clearFetchedMetadata()
+            scheduleMetadataFetch()
+        }
+        .onDisappear {
+            metadataFetchTask?.cancel()
+        }
     }
 
     private var isValidContractAddress: Bool {
@@ -168,31 +193,42 @@ struct AddTokenView: View {
     }
 
     private func fetchTokenInfo() {
-        guard isValidContractAddress else { return }
+        guard isValidContractAddress, !isFetching else { return }
 
+        let requestedAddress = contractAddress.lowercased()
+        let requestedBlockchain = selectedBlockchain
         isFetching = true
 
         Task {
             do {
                 // Get the config for the selected blockchain
                 guard let config = walletManager.availableBlockchains.first(where: { 
-                    $0.platform == selectedBlockchain && $0.network == .mainnet 
+                    $0.platform == requestedBlockchain && $0.network == .mainnet
                 }) else {
                     throw NSError(domain: "AddToken", code: -1, userInfo: [NSLocalizedDescriptionKey: "Network not available".localized])
                 }
                 
-                let tokenInfo = try await APIService.shared.getTokenInfo(contractAddress: contractAddress, config: config)
+                let tokenInfo = try await APIService.shared.getTokenInfo(
+                    contractAddress: requestedAddress,
+                    config: config
+                )
 
                 await MainActor.run {
+                    guard contractAddress.lowercased() == requestedAddress,
+                          selectedBlockchain == requestedBlockchain else { return }
                     isFetching = false
                     tokenName = tokenInfo.name
                     tokenSymbol = tokenInfo.symbol
                     decimals = String(tokenInfo.decimals)
+                    tokenIconUrl = tokenInfo.imageUrl
+                    tokenPrice = tokenInfo.price
                     autoFetched = true
-                    Logger.log("✅ Auto-fetched token: \(tokenInfo.name) (\(tokenInfo.symbol)) on \(selectedBlockchain.name)")
+                    Logger.log("✅ Auto-fetched token: \(tokenInfo.name) (\(tokenInfo.symbol)) on \(requestedBlockchain.name)")
                 }
             } catch {
                 await MainActor.run {
+                    guard contractAddress.lowercased() == requestedAddress,
+                          selectedBlockchain == requestedBlockchain else { return }
                     isFetching = false
                     errorMessage = "Failed to fetch token information. Please enter manually.\n\nError: %@".localized(error.localizedDescription)
                     showError = true
@@ -203,10 +239,31 @@ struct AddTokenView: View {
     }
 
     private func resetForm() {
+        metadataFetchTask?.cancel()
+        clearFetchedMetadata()
+    }
+
+    private func clearFetchedMetadata() {
         tokenName = ""
         tokenSymbol = ""
         decimals = ""
+        tokenIconUrl = nil
+        tokenPrice = 0
         autoFetched = false
+        isFetching = false
+    }
+
+    private func scheduleMetadataFetch() {
+        metadataFetchTask?.cancel()
+        guard isValidContractAddress else { return }
+
+        metadataFetchTask = Task {
+            try? await Task.sleep(nanoseconds: 350_000_000)
+            guard !Task.isCancelled else { return }
+            await MainActor.run {
+                fetchTokenInfo()
+            }
+        }
     }
 
     private func addToken() {
@@ -241,9 +298,21 @@ struct AddTokenView: View {
                     isLoading = false
 
                     if let token = tokenWithBalance {
+                        let enrichedToken = Token(
+                            contractAddress: token.contractAddress,
+                            name: token.name,
+                            symbol: token.symbol,
+                            decimals: token.decimals,
+                            balance: token.balance,
+                            price: tokenPrice > 0 ? tokenPrice : token.price,
+                            iconUrl: tokenIconUrl ?? token.iconUrl,
+                            blockchain: token.blockchain,
+                            isNative: token.isNative,
+                            receivingAddress: token.receivingAddress
+                        )
                         // Add token to wallet manager
-                        walletManager.addCustomToken(token)
-                        Logger.log("✅ Token added: \(token.name) (\(token.symbol)) on \(selectedBlockchain.name) - Balance: \(token.balance)")
+                        walletManager.addCustomToken(enrichedToken)
+                        Logger.log("✅ Token added: \(enrichedToken.name) (\(enrichedToken.symbol)) on \(selectedBlockchain.name) - Balance: \(enrichedToken.balance)")
                         dismiss()
                     } else {
                         errorMessage = "Failed to add token. Please try again.".localized
@@ -309,6 +378,7 @@ struct TokenPreview: View {
     let symbol: String
     let name: String
     let contractAddress: String
+    let iconUrl: String?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
@@ -317,14 +387,23 @@ struct TokenPreview: View {
                 .foregroundColor(WpayinColors.text)
 
             HStack(spacing: 16) {
-                Circle()
-                    .fill(WpayinColors.primary)
-                    .frame(width: 44, height: 44)
-                    .overlay(
-                        Text(symbol.prefix(1))
-                            .font(.wpayinSubheadline)
-                            .foregroundColor(.white)
-                    )
+                AsyncImage(url: iconUrl.flatMap(URL.init(string:))) { phase in
+                    if case .success(let image) = phase {
+                        image
+                            .resizable()
+                            .scaledToFit()
+                    } else {
+                        Circle()
+                            .fill(WpayinColors.primary)
+                            .overlay(
+                                Text(symbol.prefix(1))
+                                    .font(.wpayinSubheadline)
+                                    .foregroundColor(.white)
+                            )
+                    }
+                }
+                .frame(width: 44, height: 44)
+                .clipShape(Circle())
 
                 VStack(alignment: .leading, spacing: 4) {
                     Text(name)

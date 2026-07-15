@@ -1,5 +1,5 @@
 {
-  "originHash" : "380a6fc8af91a24c2c3edb3bef4107d68005dec0d8eb58d20f012fa983214ec9",
+  "originHash" : "327646b4f676899021439505d5051274185135abd43d7bf818652b5ed91dc45b",
   "pins" : [
     {
       "identity" : "bigint",
@@ -20,12 +20,57 @@
       }
     },
     {
+      "identity" : "qrcode",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/WalletConnect/QRCode",
+      "state" : {
+        "revision" : "263f280d2c8144adfb0b6676109846cfc8dd552b",
+        "version" : "14.3.1"
+      }
+    },
+    {
+      "identity" : "reown-swift",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/reown-com/reown-swift",
+      "state" : {
+        "revision" : "e2e42a0bf41e90545b0c233a4d8ddacbee01b1d9",
+        "version" : "2.3.0"
+      }
+    },
+    {
       "identity" : "secp256k1.swift",
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/GigaBitcoin/secp256k1.swift",
       "state" : {
         "revision" : "48fb20fce4ca3aad89180448a127d5bc16f0e44c",
         "version" : "0.10.0"
+      }
+    },
+    {
+      "identity" : "starscream",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/daltoniam/Starscream",
+      "state" : {
+        "revision" : "a063fda2b8145a231953c20e7a646be254365396",
+        "version" : "3.1.2"
+      }
+    },
+    {
+      "identity" : "swift-qrcode-generator",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/dagronf/swift-qrcode-generator",
+      "state" : {
+        "revision" : "5ca09b6a2ad190f94aa3d6ddef45b187f8c0343b",
+        "version" : "1.0.3"
+      }
+    },
+    {
+      "identity" : "swiftimagereadwrite",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/dagronf/SwiftImageReadWrite",
+      "state" : {
+        "revision" : "5596407d1cf61b953b8e658fa8636a471df3c509",
+        "version" : "1.1.6"
       }
     },
     {
@@ -38,12 +83,30 @@
       }
     },
     {
+      "identity" : "wallet-mobile-sdk",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/MobileWalletProtocol/wallet-mobile-sdk",
+      "state" : {
+        "revision" : "4293df51d3500b8e876ca4bf0d7548adf097569a",
+        "version" : "1.1.2"
+      }
+    },
+    {
       "identity" : "web3swift",
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/skywinder/web3swift",
       "state" : {
         "revision" : "b9c771bf3b94983d2f9b22096b4a267a72c16006",
         "version" : "3.3.2"
+      }
+    },
+    {
+      "identity" : "yttrium",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/reown-com/yttrium",
+      "state" : {
+        "revision" : "e2175fd8456599f18acc7e9a7bf29d5d534f7232",
+        "version" : "0.10.57"
       }
     }
   ],

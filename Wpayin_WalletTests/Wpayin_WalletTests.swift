@@ -66,6 +66,74 @@ struct Wpayin_WalletTests {
         #expect(P2PTradeService.shared.decode("Wpayin private offer:\n\(code)\nOpen in Wpayin") == offer)
     }
 
+    @Test func erc20PaymentRequestUsesEIP681AndRoundTrips() throws {
+        let request = PaymentRequest(
+            address: "0x1111111111111111111111111111111111111111",
+            symbol: "USDC",
+            blockchain: .base,
+            contractAddress: "0x2222222222222222222222222222222222222222",
+            tokenDecimals: 6,
+            amount: Decimal(string: "12.5"),
+            note: "Invoice 42",
+            expiresAt: Date(timeIntervalSince1970: 1_800_000_000)
+        )
+
+        let uri = try #require(PaymentRequestCodec.encode(request))
+        #expect(uri.hasPrefix("ethereum:0x2222222222222222222222222222222222222222@8453/transfer"))
+
+        let decoded = try #require(PaymentRequestCodec.decode(uri))
+        #expect(decoded.address == request.address)
+        #expect(decoded.symbol == request.symbol)
+        #expect(decoded.blockchain == .base)
+        #expect(decoded.contractAddress == request.contractAddress)
+        #expect(decoded.tokenDecimals == 6)
+        #expect(decoded.amount == request.amount)
+        #expect(decoded.note == request.note)
+        #expect(decoded.expiresAt == request.expiresAt)
+    }
+
+    @Test func bitcoinPaymentRequestUsesBIP21AndRoundTrips() throws {
+        let request = PaymentRequest(
+            address: "bc1qexampleaddress",
+            symbol: "BTC",
+            blockchain: .bitcoin,
+            contractAddress: nil,
+            tokenDecimals: 8,
+            amount: Decimal(string: "0.00125"),
+            note: "Coffee",
+            expiresAt: nil
+        )
+
+        let uri = try #require(PaymentRequestCodec.encode(request))
+        #expect(uri.hasPrefix("bitcoin:bc1qexampleaddress"))
+
+        let decoded = try #require(PaymentRequestCodec.decode(uri))
+        #expect(decoded.address == request.address)
+        #expect(decoded.blockchain == .bitcoin)
+        #expect(decoded.amount == request.amount)
+        #expect(decoded.note == request.note)
+    }
+
+    @Test func nonEVMRequestUsesSafeWpayinPayload() throws {
+        let request = PaymentRequest(
+            address: "solanaPublicAddress",
+            symbol: "SOL",
+            blockchain: .solana,
+            contractAddress: nil,
+            tokenDecimals: 9,
+            amount: nil,
+            note: nil,
+            expiresAt: nil
+        )
+
+        let uri = try #require(PaymentRequestCodec.encode(request))
+        #expect(uri.hasPrefix("WPAYIN-PAY:"))
+        let decoded = try #require(PaymentRequestCodec.decode("Pay me with Wpayin:\n\(uri)"))
+        #expect(decoded.address == request.address)
+        #expect(decoded.blockchain == .solana)
+        #expect(decoded.amount == nil)
+    }
+
     private func token(address: String?, symbol: String, isNative: Bool) -> Token {
         Token(
             contractAddress: address,

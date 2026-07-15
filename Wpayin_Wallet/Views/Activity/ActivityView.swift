@@ -357,24 +357,43 @@ struct ActivityNetworkTabs: View {
             HStack(spacing: 9) {
                 chip(
                     isSelected: selectedNetwork == nil,
-                    action: { selectedNetwork = nil }
+                    accessibilityName: "All Networks".localized,
+                    action: {
+                        withAnimation(.easeInOut(duration: 0.2)) {
+                            selectedNetwork = nil
+                        }
+                    }
                 ) {
-                    Text("All Networks".localized)
-                        .font(.system(size: 13, weight: .semibold, design: .rounded))
-                        .lineLimit(1)
+                    HStack(spacing: 7) {
+                        Image(systemName: "square.grid.2x2.fill")
+                            .font(.system(size: 15, weight: .semibold))
+
+                        if selectedNetwork == nil {
+                            Text("All Networks".localized)
+                                .font(.system(size: 13, weight: .semibold, design: .rounded))
+                                .lineLimit(1)
+                        }
+                    }
                 }
 
                 ForEach(networks, id: \.self) { network in
                     chip(
                         isSelected: selectedNetwork == network,
-                        action: { selectedNetwork = network }
+                        accessibilityName: network.name,
+                        action: {
+                            withAnimation(.easeInOut(duration: 0.2)) {
+                                selectedNetwork = network
+                            }
+                        }
                     ) {
                         HStack(spacing: 7) {
-                            NetworkIconView(blockchain: network, size: 17)
+                            NetworkIconView(blockchain: network, size: 22)
 
-                            Text(network.name)
-                                .font(.system(size: 13, weight: .semibold, design: .rounded))
-                                .lineLimit(1)
+                            if selectedNetwork == network {
+                                Text(network.name)
+                                    .font(.system(size: 13, weight: .semibold, design: .rounded))
+                                    .lineLimit(1)
+                            }
                         }
                     }
                 }
@@ -385,27 +404,30 @@ struct ActivityNetworkTabs: View {
 
     private func chip<Content: View>(
         isSelected: Bool,
+        accessibilityName: String,
         action: @escaping () -> Void,
         @ViewBuilder content: () -> Content
     ) -> some View {
         Button(action: action) {
             content()
                 .foregroundColor(isSelected ? WpayinColors.text : WpayinColors.textSecondary)
-                .padding(.horizontal, 13)
-                .frame(height: 34)
+                .padding(.horizontal, isSelected ? 13 : 8)
+                .frame(minWidth: 38, minHeight: 38)
                 .background(
                     Capsule()
-                        .fill(isSelected ? WpayinColors.primary.opacity(0.22) : WpayinColors.surface)
+                        .fill(isSelected ? WpayinColors.primary.opacity(0.22) : Color.clear)
                         .overlay(
                             Capsule()
                                 .stroke(
-                                    isSelected ? WpayinColors.primary.opacity(0.65) : WpayinColors.surfaceBorder,
+                                    isSelected ? WpayinColors.primary.opacity(0.65) : Color.clear,
                                     lineWidth: 1
                                 )
                         )
                 )
         }
         .buttonStyle(PlainButtonStyle())
+        .accessibilityLabel(accessibilityName)
+        .accessibilityAddTraits(isSelected ? .isSelected : [])
     }
 }
 
@@ -533,7 +555,8 @@ struct TransactionHistorySections: View {
     @EnvironmentObject private var settingsManager: SettingsManager
 
     private var groups: [TransactionDayGroup] {
-        let calendar = Calendar.current
+        var calendar = Calendar.current
+        calendar.timeZone = settingsManager.resolvedTimeZone
         let grouped = Dictionary(grouping: transactions) {
             calendar.startOfDay(for: $0.timestamp)
         }
@@ -578,7 +601,8 @@ struct TransactionHistorySections: View {
     }
 
     private func sectionTitle(for date: Date) -> String {
-        let calendar = Calendar.current
+        var calendar = Calendar.current
+        calendar.timeZone = settingsManager.resolvedTimeZone
         if calendar.isDateInToday(date) {
             return L10n.Activity.today.localized
         }
@@ -588,6 +612,7 @@ struct TransactionHistorySections: View {
 
         let formatter = DateFormatter()
         formatter.locale = Locale(identifier: settingsManager.selectedLanguage.rawValue)
+        formatter.timeZone = settingsManager.resolvedTimeZone
         formatter.dateStyle = .long
         formatter.timeStyle = .none
         return formatter.string(from: date)

@@ -261,8 +261,8 @@
 "Swap" = "Échanger";
 "Swap tokens instantly with best rates. Access DeFi protocols, track your portfolio, and manage all your crypto in one place." = "Échangez des jetons instantanément aux meilleurs taux. Accédez aux protocoles DeFi, suivez votre portefeuille et gérez vos cryptos au même endroit.";
 "Switch or create wallets" = "Changer ou créer des portefeuilles";
-"Syncing latest balances..." = "Synchronisation des derniers soldes...";
-"Syncing..." = "Synchronisation...";
+"Syncing latest balances..." = "Actualisation des soldes...";
+"Syncing..." = "Actualisation...";
 "TESTNET" = "TESTNET";
 "Tap the words:" = "Touchez les mots :";
 "Terms & Conditions" = "Conditions générales";
@@ -347,7 +347,7 @@
 "wallet.options" = "Options du portefeuille";
 "wallet.connect" = "Connecter le portefeuille";
 "wallet.noAssets" = "Aucun actif pour le moment";
-"wallet.syncing" = "Synchronisation...";
+"wallet.syncing" = "Actualisation...";
 "wallet.portfolioUpToDate" = "Le portefeuille est à jour";
 "wallet.refresh" = "Actualiser le portefeuille";
 "wallet.loadingData" = "Chargement des données de marché...";
@@ -724,6 +724,10 @@
 "error.bridge.unsupportedNetwork" = "This network does not support bridging";
 "error.bridge.noRoute" = "No bridge route found for this token and network pair";
 "error.bridge.quoteFailed" = "Could not get a bridge quote. Please try again.";
+"bridge.receiveAddress" = "Receiving address";
+"error.bridge.missingDestinationAddress" = "Could not determine the receiving address on the destination network";
+"error.bridge.solanaSendFailed" = "Failed to sign or send the Solana transaction";
+"error.bridge.insufficientFunds" = "Balance is not enough to cover the amount plus network fees. Try a smaller amount.";
 "All Networks" = "All Networks";
 "Platform fee %@: %@ %@" = "Platform fee %@: %@ %@";
 
@@ -746,6 +750,13 @@
 "Offer verified on-chain" = "Offer verified on-chain";
 "Seller" = "Seller";
 "Platform fee" = "Platform fee";
+"Fetching token details..." = "Chargement des détails du jeton...";
+"Explore DeFi" = "Explorer la DeFi";
+"Choose a protocol to continue securely on its official website." = "Choisissez un protocole pour continuer en toute sécurité sur son site officiel.";
+"Lending & borrowing" = "Prêt et emprunt";
+"Swap & liquidity" = "Échange et liquidité";
+"Liquid staking" = "Staking liquide";
+"Loading NFTs..." = "Chargement des NFT...";
 "Confirm Trade" = "Confirm Trade";
 "Completing trade..." = "Completing trade...";
 "Trade Completed" = "Trade Completed";
@@ -769,6 +780,9 @@
 "Expired" = "Expired";
 "Active" = "Active";
 "Remove" = "Remove";
+"Remove from Your Assets" = "Retirer de vos actifs";
+"Remove %@?" = "Retirer %@ ?";
+"This only removes the token from Your Assets. Your funds remain on the blockchain." = "Le jeton est uniquement retiré de vos actifs. Vos fonds restent sur la blockchain.";
 "error.p2p.fillWouldFail" = "The trade would fail on-chain (the seller may have moved their funds). Nothing was sent — no fees were charged.";
 "No tokens to sell" = "No tokens to sell";
 "P2P trades settle in ERC-20 tokens (USDC, USDT, WETH…). You don't hold any yet — swap some of your %@ first, then come back." = "P2P trades settle in ERC-20 tokens (USDC, USDT, WETH…). You don't hold any yet — swap some of your %@ first, then come back.";
@@ -797,6 +811,21 @@
 "Best price" = "Meilleur prix";
 "Includes the ERC-20 approval network fee" = "Inclut les frais réseau d’approbation ERC-20";
 "Insufficient %@ balance for the amount and network fee" = "Solde %@ insuffisant pour le montant et les frais réseau";
+"Network fee is paid separately in %@. Required: %@ %@ · Available: %@ %@" = "Les frais réseau sont payés séparément en %@. Requis : %@ %@ · Disponible : %@ %@";
+"Edit recipient" = "Modifier le destinataire";
+"Continue" = "Continuer";
+"Amount plus the network fee exceeds the available %@ balance." = "Le montant et les frais réseau dépassent le solde %@ disponible.";
+"Sending %@ on %@ requires %@ for the network fee. Required: ~%@ %@ · Available: %@ %@" = "L’envoi de %@ sur %@ nécessite %@ pour les frais réseau. Requis : ~%@ %@ · Disponible : %@ %@";
+"Total balance" = "Solde total";
+"Balance history" = "Historique du solde";
+"Based on your wallet activity" = "Basé sur l’activité de votre portefeuille";
+"No balance changes in this period" = "Aucun changement de solde sur cette période";
+"Now" = "Maintenant";
+"All time" = "Toute la période";
+"Last 7 days" = "7 derniers jours";
+"Last 30 days" = "30 derniers jours";
+"Last 90 days" = "90 derniers jours";
+"Last year" = "Année écoulée";
 
 // MARK: - Swap Progress (v1.1.8)
 "Approving token" = "Approbation du token";
