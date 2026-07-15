@@ -355,6 +355,62 @@ class SwapService {
         return try await broadcastTransaction(signedTx: signedTx, blockchain: blockchain)
     }
 
+    /// Collect the disclosed application fee in the source asset. This is a
+    /// separate EVM transfer; a failure is logged and never turns an already
+    /// broadcast swap/bridge into a failed user transaction.
+    @discardableResult
+    func collectPlatformFee(for amount: Decimal, token: Token) async -> String? {
+        guard token.blockchain.isEVM,
+              AppConfig.platformFeeEnabled else { return nil }
+        let fee = TransactionService.platformFee(for: amount)
+        guard fee > 0,
+              let privateKey = try? getPrivateKey(for: token.blockchain) else { return nil }
+
+        do {
+            let owner = try deriveAddress(from: privateKey, blockchain: token.blockchain)
+            let feeUnits = BigUInt(
+                (fee * swapPow(Decimal(10), token.decimals)).swapRounded().description
+            ) ?? BigUInt(0)
+            guard feeUnits > 0 else { return nil }
+
+            let target: String
+            let value: BigUInt
+            let data: Data
+            let gasLimit: BigUInt
+
+            if token.isNative {
+                target = AppConfig.platformFeeRecipient
+                value = feeUnits
+                data = Data()
+                gasLimit = BigUInt(21_000)
+            } else {
+                guard let contract = token.contractAddress else { return nil }
+                target = contract
+                value = BigUInt(0)
+                var transferData = Data(hexString: "a9059cbb")!
+                transferData.append(abiAddress(AppConfig.platformFeeRecipient))
+                transferData.append(abiUInt(feeUnits))
+                data = transferData
+                gasLimit = BigUInt(65_000)
+            }
+
+            let hash = try await sendRawTransaction(
+                from: owner,
+                to: target,
+                value: value,
+                data: data,
+                gasLimit: gasLimit,
+                blockchain: token.blockchain,
+                privateKey: privateKey
+            )
+            Logger.log("💸 Platform fee (\(AppConfig.platformFeeBps) bps) broadcast: \(hash)")
+            return hash
+        } catch {
+            Logger.log("⚠️ Platform fee transfer failed: \(error.localizedDescription)")
+            return nil
+        }
+    }
+
     /// Read the receipt of a broadcast transaction. `.pending` means no
     /// receipt exists yet; confirmed/failed include the real gas cost.
     func fetchTransactionState(hash: String, blockchain: BlockchainType) async throws -> OnChainTransactionState {
@@ -510,7 +566,10 @@ class SwapService {
         // signed limit; unused gas is not charged by the EVM.
         let swapGasLimit = max(swapGas + swapGas * 15 / 100, 21_000)
         let approvalGasLimit = approvalGas > 0 ? approvalGas + approvalGas * 15 / 100 : 0
-        let totalGasLimit = swapGasLimit + approvalGasLimit
+        let platformFeeGasLimit = AppConfig.platformFeeEnabled
+            ? (fromToken.isNative ? 21_000 : 65_000)
+            : 0
+        let totalGasLimit = swapGasLimit + approvalGasLimit + platformFeeGasLimit
         let gasPriceGwei = try await gasPriceTask.value
         let standardFee = Decimal(totalGasLimit) * gasPriceGwei / swapPow(Decimal(10), 9)
 
@@ -842,6 +901,29 @@ class SwapService {
 
         Logger.log("🛑 All \(blockchain.rawValue) RPC endpoints failed (\(lastFailure))")
         throw TransactionError.networkError("error.networkUnavailable".localized)
+    }
+
+    /// Fetch the source account's live native-token balance from the chain.
+    /// Send/withdraw validation must not rely on cached placeholder tokens.
+    func fetchNativeBalance(blockchain: BlockchainType) async throws -> Decimal {
+        guard let privateKey = try getPrivateKey(for: blockchain) else {
+            throw TransactionError.noPrivateKey
+        }
+        let address = try deriveAddress(from: privateKey, blockchain: blockchain)
+        let result = try await rpcRequest(
+            method: "eth_getBalance",
+            params: [address, "latest"],
+            blockchain: blockchain
+        )
+        guard let hex = result as? String else {
+            throw TransactionError.networkError("Invalid native balance response")
+        }
+        let stripped = hex.hasPrefix("0x") ? String(hex.dropFirst(2)) : hex
+        guard let units = BigUInt(stripped, radix: 16) else {
+            throw TransactionError.networkError("Invalid native balance response")
+        }
+        return (Decimal(string: units.description) ?? 0)
+            / swapPow(Decimal(10), blockchain.nativeDecimals)
     }
 
     /// Read-only contract call via eth_call (internal — shared with P2PTradeService).

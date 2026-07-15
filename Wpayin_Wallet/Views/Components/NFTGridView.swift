@@ -11,6 +11,7 @@ import SwiftUI
 
 struct NFTGridView: View {
     let nfts: [NFT]
+    var showsSpamWarning = false
     let onNFTTap: (NFT) -> Void
 
     let columns = [
@@ -21,7 +22,11 @@ struct NFTGridView: View {
     var body: some View {
         LazyVGrid(columns: columns, spacing: 16) {
             ForEach(nfts) { nft in
-                NFTCard(nft: nft, onTap: { onNFTTap(nft) })
+                NFTCard(
+                    nft: nft,
+                    showsSpamWarning: showsSpamWarning,
+                    onTap: { onNFTTap(nft) }
+                )
             }
         }
         .padding(.horizontal, 20)
@@ -30,6 +35,7 @@ struct NFTGridView: View {
 
 struct NFTCard: View {
     let nft: NFT
+    let showsSpamWarning: Bool
     let onTap: () -> Void
 
     var body: some View {
@@ -111,6 +117,17 @@ struct NFTCard: View {
                             .stroke(WpayinColors.surfaceBorder, lineWidth: 1)
                     )
             )
+            .overlay(alignment: .topTrailing) {
+                if showsSpamWarning {
+                    Label("Suspicious".localized, systemImage: "exclamationmark.shield.fill")
+                        .font(.system(size: 9, weight: .bold, design: .rounded))
+                        .foregroundColor(.white)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 5)
+                        .background(Capsule().fill(WpayinColors.error))
+                        .padding(8)
+                }
+            }
         }
         .buttonStyle(PlainButtonStyle())
     }
@@ -182,6 +199,9 @@ struct NFTCard: View {
 
 struct NFTDetailView: View {
     let nft: NFT
+    let isInSpamFolder: Bool
+    let onHide: () -> Void
+    let onRestore: () -> Void
     @Environment(\.dismiss) private var dismiss
 
     var body: some View {
@@ -228,6 +248,36 @@ struct NFTDetailView: View {
                     }
                     .clipShape(RoundedRectangle(cornerRadius: 20))
                     .shadow(color: Color.black.opacity(0.1), radius: 8, x: 0, y: 4)
+
+                    if isInSpamFolder {
+                        HStack(alignment: .top, spacing: 12) {
+                            Image(systemName: "exclamationmark.shield.fill")
+                                .font(.system(size: 20, weight: .semibold))
+                                .foregroundColor(WpayinColors.warning)
+
+                            VStack(alignment: .leading, spacing: 5) {
+                                Text("Suspicious NFT".localized)
+                                    .font(.wpayinSubheadline)
+                                    .foregroundColor(WpayinColors.text)
+
+                                Text("Do not open links or connect your wallet to claim rewards from unknown NFTs.".localized)
+                                    .font(.wpayinCaption)
+                                    .foregroundColor(WpayinColors.textSecondary)
+                                    .fixedSize(horizontal: false, vertical: true)
+                            }
+
+                            Spacer(minLength: 0)
+                        }
+                        .padding(16)
+                        .background(
+                            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                                .fill(WpayinColors.warning.opacity(0.1))
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 14, style: .continuous)
+                                        .stroke(WpayinColors.warning.opacity(0.28), lineWidth: 1)
+                                )
+                        )
+                    }
 
                     // NFT Details
                     VStack(alignment: .leading, spacing: 16) {
@@ -298,6 +348,38 @@ struct NFTDetailView: View {
                                     .fill(WpayinColors.surface)
                             )
                         }
+
+                        Button {
+                            if isInSpamFolder {
+                                onRestore()
+                            } else {
+                                onHide()
+                            }
+                            dismiss()
+                        } label: {
+                            Label(
+                                isInSpamFolder ? "Show in NFT Gallery".localized : "Hide as Spam".localized,
+                                systemImage: isInSpamFolder ? "checkmark.shield.fill" : "eye.slash.fill"
+                            )
+                            .font(.system(size: 15, weight: .semibold, design: .rounded))
+                            .foregroundColor(isInSpamFolder ? WpayinColors.primary : WpayinColors.error)
+                            .frame(maxWidth: .infinity)
+                            .frame(height: 48)
+                            .background(
+                                RoundedRectangle(cornerRadius: 13, style: .continuous)
+                                    .fill(
+                                        (isInSpamFolder ? WpayinColors.primary : WpayinColors.error)
+                                            .opacity(0.11)
+                                    )
+                            )
+                        }
+                        .buttonStyle(PlainButtonStyle())
+
+                        Text("Hiding an NFT only changes this app. It does not transfer or burn the NFT.".localized)
+                            .font(.wpayinSmall)
+                            .foregroundColor(WpayinColors.textTertiary)
+                            .multilineTextAlignment(.center)
+                            .frame(maxWidth: .infinity)
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
                 }

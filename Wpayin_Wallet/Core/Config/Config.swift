@@ -27,6 +27,24 @@ struct AppConfig {
     static let coinGeckoApiKey = environment["COINGECKO_API_KEY"]?
         .trimmingCharacters(in: .whitespacesAndNewlines)
 
+    /// Public Reown Cloud project identifier used by WalletConnect v2.
+    /// This is intentionally not a secret. For App Store builds it can be
+    /// supplied as the WALLETCONNECT_PROJECT_ID build setting; local schemes
+    /// may use an environment variable with the same name.
+    static let walletConnectProjectId: String = {
+        let environmentValue = environment["WALLETCONNECT_PROJECT_ID"]?
+            .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        if !environmentValue.isEmpty { return environmentValue }
+
+        let plistValue = Bundle.main.object(forInfoDictionaryKey: "WALLETCONNECT_PROJECT_ID") as? String
+        let trimmed = plistValue?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        return trimmed.contains("$(") ? "" : trimmed
+    }()
+
+    static var walletConnectEnabled: Bool {
+        !walletConnectProjectId.isEmpty
+    }
+
     // MARK: - RPC Endpoints
 
     // 2026-07: cloudflare-eth.com intermittently rejects requests — PublicNode is reliable
@@ -35,11 +53,16 @@ struct AppConfig {
 
     // MARK: - Platform Fee
 
-    /// Treasury address must be configured by the release environment. Never
-    /// fall back to a user/test wallet: that silently charges a second gas fee
-    /// while sending the platform fee back to the sender.
-    static let platformFeeRecipient = environment["PLATFORM_FEE_RECIPIENT"]?
-        .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+    /// Public treasury for the disclosed application-development fee. Release
+    /// builds may override it without changing source code.
+    private static let defaultPlatformFeeRecipient = "0xB6edEd26638bCE6d32b217ae661e32899B9CA6a2"
+    static let platformFeeRecipient: String = {
+        let configured = environment["PLATFORM_FEE_RECIPIENT"]?
+            .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        return configured.hasPrefix("0x") && configured.count == 42
+            ? configured
+            : defaultPlatformFeeRecipient
+    }()
 
     /// Platform fee in basis points (25 = 0.25 %) charged on top of sends,
     /// P2P trades and other outgoing transactions.

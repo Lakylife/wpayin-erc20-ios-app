@@ -42,7 +42,7 @@ enum WithdrawGasSpeed: String, CaseIterable {
         case .fast: return "~30 sec"
         }
     }
-    
+
     func estimatedTimeFor(blockchain: BlockchainType) -> String {
         if blockchain == .bitcoin {
             switch self {
@@ -54,6 +54,11 @@ enum WithdrawGasSpeed: String, CaseIterable {
             return estimatedTime
         }
     }
+}
+
+enum WithdrawInputField: Hashable {
+    case recipient
+    case amount
 }
 
 struct WithdrawView: View {
@@ -69,31 +74,76 @@ struct WithdrawView: View {
     @State private var showError = false
     @State private var errorMessage = ""
     @State private var selectedGasSpeed: WithdrawGasSpeed = .standard
-    @State private var showGasSettings = false
     @State private var liveStandardGasPrice: GasPrice?
+    @State private var liveNativeBalance: Double?
     @State private var isLoadingGasPrice = false
     @State private var submittedTransaction: Transaction?
+    @State private var showsPaymentDetails = false
+    @FocusState private var focusedInput: WithdrawInputField?
+    private let initialPaymentRequest: PaymentRequest?
 
-    init(initialToken: Token? = nil, initialRecipientAddress: String = "") {
-        _selectedSymbol = State(initialValue: initialToken?.symbol.uppercased())
-        _selectedNetwork = State(initialValue: initialToken?.blockchain)
-        _recipientAddress = State(initialValue: initialRecipientAddress)
+    init(
+        initialToken: Token? = nil,
+        initialRecipientAddress: String = "",
+        initialPaymentRequest: PaymentRequest? = nil
+    ) {
+        self.initialPaymentRequest = initialPaymentRequest
+        _selectedSymbol = State(initialValue: initialPaymentRequest?.symbol.uppercased() ?? initialToken?.symbol.uppercased())
+        _selectedNetwork = State(initialValue: initialPaymentRequest?.blockchain ?? initialToken?.blockchain)
+        _recipientAddress = State(initialValue: initialPaymentRequest?.address ?? initialRecipientAddress)
+        _amount = State(initialValue: initialPaymentRequest?.formattedAmount ?? "")
     }
 
     private var selectedToken: Token? {
         guard let selectedSymbol, let selectedNetwork else { return nil }
-        return spendableTokens.first {
+        let matches = spendableTokens.filter {
             $0.symbol.uppercased() == selectedSymbol.uppercased() && $0.blockchain == selectedNetwork
         }
+        if let requestedContract = initialPaymentRequest?.contractAddress?.lowercased() {
+            return matches.first { $0.contractAddress?.lowercased() == requestedContract }
+        }
+        return matches.first
     }
 
     private var spendableTokens: [Token] {
-        walletManager.visibleSupportedTokens.sorted {
+        walletManager.visibleSupportedTokens
+            .filter { $0.blockchain.isEVM || $0.blockchain == .bitcoin }
+            .sorted {
             if $0.symbol == $1.symbol {
                 return $0.blockchain.name < $1.blockchain.name
             }
             return $0.symbol < $1.symbol
         }
+    }
+
+    private var networksForSelectedSymbol: [Token] {
+        guard let selectedSymbol else { return [] }
+        return spendableTokens
+            .filter { $0.symbol.uppercased() == selectedSymbol.uppercased() }
+            .sorted {
+                if $0.balance != $1.balance { return $0.balance > $1.balance }
+                return $0.blockchain.name < $1.blockchain.name
+            }
+    }
+
+    private var requiresNetworkSelection: Bool {
+        networksForSelectedSymbol.count > 1
+    }
+
+    private var recipientStepNumber: Int {
+        requiresNetworkSelection ? 3 : 2
+    }
+
+    private var amountStepNumber: Int {
+        recipientStepNumber + 1
+    }
+
+    private var feeStepNumber: Int {
+        amountStepNumber + 1
+    }
+
+    private var reviewStepNumber: Int {
+        feeStepNumber + 1
     }
 
     private var amountValue: Double {
@@ -102,7 +152,7 @@ struct WithdrawView: View {
 
     /// Platform fee charged on top of the sent amount (EVM sends only).
     private var platformFeeValue: Double {
-        guard let token = selectedToken, token.blockchain != .bitcoin else { return 0 }
+        guard let token = selectedToken, token.blockchain.isEVM else { return 0 }
         return (TransactionService.platformFee(for: Decimal(amountValue)) as NSDecimalNumber).doubleValue
     }
 
@@ -113,9 +163,11 @@ struct WithdrawView: View {
 
     private var nativeBalance: Double {
         guard let token = selectedToken else { return 0 }
-        return walletManager.tokens.first {
-            $0.blockchain == token.blockchain && $0.isNative
-        }?.balance ?? 0
+        if let liveNativeBalance { return liveNativeBalance }
+        return walletManager.tokens
+            .filter { $0.blockchain == token.blockchain && $0.isNative }
+            .map(\.balance)
+            .max() ?? 0
     }
 
     private var requiredGasLimit: Int {
@@ -131,51 +183,66 @@ struct WithdrawView: View {
 
     private var isValidTransaction: Bool {
         guard let token = selectedToken else { return false }
+        guard initialPaymentRequest?.isExpired != true else { return false }
 
-        // Bitcoin address validation
         if token.blockchain == .bitcoin {
-            // Bitcoin addresses can start with 1, 3, or bc1
-            let isBitcoinAddress = recipientAddress.hasPrefix("bc1") ||
-                                  recipientAddress.hasPrefix("1") ||
-                                  recipientAddress.hasPrefix("3")
-            return !recipientAddress.isEmpty &&
-                   isBitcoinAddress &&
+            return isRecipientAddressValid &&
                    amountValue > 0 &&
                    amountValue <= token.balance
         }
 
-        // EVM address validation (balance must cover amount + platform fee)
         let hasGas = token.isNative
             ? totalDebit + estimatedGasFee <= token.balance
             : nativeBalance >= estimatedGasFee
-        return !recipientAddress.isEmpty &&
-               recipientAddress.hasPrefix("0x") &&
-               recipientAddress.count == 42 &&
+        return isRecipientAddressValid &&
                amountValue > 0 &&
                totalDebit <= token.balance &&
                hasGas &&
                selectedGasPrice != nil
     }
-    
+
+    private var isRecipientAddressValid: Bool {
+        guard let network = selectedNetwork else { return false }
+        let value = recipientAddress.trimmingCharacters(in: .whitespacesAndNewlines)
+
+        if network == .bitcoin {
+            return (value.lowercased().hasPrefix("bc1") && value.count >= 14)
+                || ((value.hasPrefix("1") || value.hasPrefix("3")) && (26...35).contains(value.count))
+        }
+
+        return network.isEVM
+            && value.hasPrefix("0x")
+            && value.count == 42
+            && value.dropFirst(2).allSatisfy { $0.isHexDigit }
+    }
+
+    private var isAmountReady: Bool {
+        guard let token = selectedToken, amountValue > 0 else { return false }
+        if token.blockchain == .bitcoin {
+            return amountValue <= token.balance
+        }
+        return totalDebit <= token.balance
+    }
+
+    private var canShowReview: Bool {
+        isValidTransaction
+    }
+
+    private var isPaymentDetailsVisible: Bool {
+        showsPaymentDetails && isRecipientAddressValid
+    }
+
     private var headerTitle: String {
         guard let token = selectedToken else { return "Send Funds".localized }
         return token.blockchain == .bitcoin ? "Send Bitcoin".localized : "Send Funds".localized
     }
-    
+
     private var headerSubtitle: String {
         guard let token = selectedToken else { return "Send cryptocurrency to another wallet".localized }
         if token.blockchain == .bitcoin {
             return "Send BTC to any Bitcoin address".localized
         }
         return "Send cryptocurrency to another wallet".localized
-    }
-    
-    private var feeDisplayText: String {
-        guard let token = selectedToken else { return "Fee".localized }
-        if token.blockchain == .bitcoin {
-            return "Network Fee: %@ sat/vB".localized("\(Int(estimatedGasFee))")
-        }
-        return "Est. Gas: %@".localized(estimatedGasFee.formatted(as: settingsManager.selectedCurrency))
     }
 
     private var estimatedGasFee: Double {
@@ -222,7 +289,7 @@ struct WithdrawView: View {
 
                 ScrollView {
                     LazyVStack(spacing: 20) {
-                        VStack(spacing: 12) {
+                        HStack(spacing: 14) {
                             Image(systemName: "arrow.up")
                                 .font(.system(size: 20, weight: .bold))
                                 .foregroundColor(WpayinColors.primary)
@@ -236,49 +303,139 @@ struct WithdrawView: View {
                                         )
                                 )
 
-                            Text(headerTitle)
-                                .font(.system(size: 24, weight: .bold, design: .rounded))
-                                .foregroundColor(WpayinColors.text)
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text(headerTitle)
+                                    .font(.system(size: 23, weight: .bold, design: .rounded))
+                                    .foregroundColor(WpayinColors.text)
 
-                            Text(headerSubtitle)
-                                .font(.system(size: 14))
-                                .foregroundColor(WpayinColors.textSecondary)
-                                .multilineTextAlignment(.center)
+                                Text(headerSubtitle)
+                                    .font(.system(size: 13))
+                                    .foregroundColor(WpayinColors.textSecondary)
+                                    .lineLimit(2)
+                            }
+
+                            Spacer()
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+
+                        if let paymentRequest = initialPaymentRequest {
+                            HStack(alignment: .top, spacing: 12) {
+                                Image(systemName: paymentRequest.isExpired ? "clock.badge.exclamationmark" : "doc.text.fill")
+                                    .font(.system(size: 17, weight: .semibold))
+                                    .foregroundColor(paymentRequest.isExpired ? WpayinColors.error : WpayinColors.primary)
+
+                                VStack(alignment: .leading, spacing: 4) {
+                                    Text(paymentRequest.isExpired ? "Payment request expired".localized : "Payment request".localized)
+                                        .font(.system(size: 14, weight: .bold, design: .rounded))
+                                        .foregroundColor(paymentRequest.isExpired ? WpayinColors.error : WpayinColors.text)
+
+                                    if let note = paymentRequest.note {
+                                        Text(note)
+                                            .font(.system(size: 13))
+                                            .foregroundColor(WpayinColors.textSecondary)
+                                            .fixedSize(horizontal: false, vertical: true)
+                                    }
+
+                                    if let expiresAt = paymentRequest.expiresAt {
+                                        Text("Expires %@".localized(expiresAt.formatted(date: .abbreviated, time: .shortened)))
+                                            .font(.system(size: 11))
+                                            .foregroundColor(WpayinColors.textTertiary)
+                                    }
+                                }
+
+                                Spacer(minLength: 0)
+                            }
+                            .padding(16)
+                            .background(
+                                RoundedRectangle(cornerRadius: 18, style: .continuous)
+                                    .fill(
+                                        paymentRequest.isExpired
+                                            ? WpayinColors.error.opacity(0.08)
+                                            : WpayinColors.primary.opacity(0.08)
+                                    )
+                            )
                         }
 
-                        TokenSelectionView(
-                            tokens: spendableTokens,
-                            selectedSymbol: $selectedSymbol,
-                            selectedNetwork: $selectedNetwork
-                        )
-                        .environmentObject(settingsManager)
-
-                        RecipientAddressView(address: $recipientAddress)
-                            .environmentObject(walletManager)
-
-                        AmountInputView(
-                            amount: $amount,
-                            selectedToken: selectedToken,
-                            reservedNetworkFee: selectedToken?.isNative == true ? estimatedGasFee : 0
-                        )
-
-                        if isValidTransaction {
-                            TransactionSummaryView(
-                                token: selectedToken!,
-                                amount: amountValue,
-                                recipient: recipientAddress,
-                                gasSpeed: $selectedGasSpeed,
-                                estimatedGas: estimatedGasFee,
-                                onGasSettingsTapped: {
-                                    showGasSettings = true
-                                }
+                        if isPaymentDetailsVisible, let token = selectedToken {
+                            AmountInputView(
+                                stepNumber: amountStepNumber,
+                                amount: $amount,
+                                selectedToken: token,
+                                reservedNetworkFee: token.isNative ? estimatedGasFee : 0,
+                                focusedInput: $focusedInput
                             )
+
+                            WithdrawFeeSelectionView(
+                                stepNumber: feeStepNumber,
+                                selectedSpeed: $selectedGasSpeed,
+                                estimatedGas: estimatedGasFee,
+                                token: token,
+                                gweiText: selectedGweiText,
+                                isLoading: isLoadingGasPrice,
+                                focusedInput: $focusedInput,
+                                availableNativeBalance: nativeBalance,
+                                hasSufficientBalance: token.blockchain == .bitcoin
+                                    || (token.isNative
+                                        ? totalDebit + estimatedGasFee <= token.balance
+                                        : nativeBalance >= estimatedGasFee)
+                            )
+
+                            if canShowReview {
+                                WithdrawReviewStep(
+                                    stepNumber: reviewStepNumber,
+                                    token: token,
+                                    amount: amountValue,
+                                    recipient: recipientAddress,
+                                    gasSpeed: selectedGasSpeed,
+                                    estimatedGas: estimatedGasFee,
+                                    platformFee: platformFeeValue
+                                )
+                            }
+                        } else {
+                            WithdrawAssetSelectionView(
+                                stepNumber: 1,
+                                tokens: spendableTokens,
+                                selectedSymbol: $selectedSymbol,
+                                selectedNetwork: $selectedNetwork
+                            )
+                            .environmentObject(settingsManager)
+
+                            if requiresNetworkSelection {
+                                WithdrawNetworkSelectionView(
+                                    stepNumber: 2,
+                                    tokens: networksForSelectedSymbol,
+                                    selectedNetwork: $selectedNetwork
+                                )
+                            }
+
+                            if let token = selectedToken {
+                                RecipientAddressView(
+                                    stepNumber: recipientStepNumber,
+                                    address: $recipientAddress,
+                                    selectedNetwork: token.blockchain,
+                                    isAddressValid: isRecipientAddressValid,
+                                    focusedInput: $focusedInput
+                                )
+                                .environmentObject(walletManager)
+                            }
                         }
                     }
                     .padding(.horizontal, 20)
                     .padding(.top, 12)
                     .padding(.bottom, 24)
+                    .animation(.easeInOut(duration: 0.22), value: requiresNetworkSelection)
+                    .animation(.easeInOut(duration: 0.22), value: isRecipientAddressValid)
+                    .animation(.easeInOut(duration: 0.22), value: isAmountReady)
+                    .animation(.easeInOut(duration: 0.22), value: canShowReview)
                 }
+                .simultaneousGesture(
+                    DragGesture(minimumDistance: 8)
+                        .onChanged { _ in focusedInput = nil }
+                )
+            }
+            .contentShape(Rectangle())
+            .onTapGesture {
+                focusedInput = nil
             }
             .navigationTitle("Withdraw".localized)
             .navigationBarTitleDisplayMode(.inline)
@@ -295,9 +452,32 @@ struct WithdrawView: View {
                     }
                     .accessibilityLabel(L10n.Action.cancel.localized)
                 }
+
+                ToolbarItemGroup(placement: .keyboard) {
+                    Spacer()
+
+                    Button("Done".localized) {
+                        focusedInput = nil
+                    }
+                    .font(.system(size: 15, weight: .semibold))
+                }
+
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button(isPaymentDetailsVisible ? "Edit recipient".localized : "Continue".localized) {
+                        focusedInput = nil
+                        withAnimation(.easeInOut(duration: 0.22)) {
+                            showsPaymentDetails.toggle()
+                        }
+                    }
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundColor(WpayinColors.primary)
+                    .opacity(isRecipientAddressValid ? 1 : 0)
+                    .disabled(!isRecipientAddressValid)
+                }
             }
             .safeAreaInset(edge: .bottom) {
                 Button {
+                    focusedInput = nil
                     showConfirmation = true
                 } label: {
                     HStack(spacing: 10) {
@@ -305,10 +485,10 @@ struct WithdrawView: View {
                             ProgressView()
                                 .progressViewStyle(CircularProgressViewStyle(tint: .white))
                         } else {
-                            Text(L10n.Action.send.localized)
+                            Text("Review and sign".localized)
                                 .font(.system(size: 16, weight: .semibold, design: .rounded))
 
-                            Image(systemName: "arrow.up.right")
+                            Image(systemName: "arrow.right")
                                 .font(.system(size: 14, weight: .bold))
                         }
                     }
@@ -339,25 +519,19 @@ struct WithdrawView: View {
             }
         }
         .sheet(isPresented: $showConfirmation) {
-            TransactionConfirmationView(
-                token: selectedToken!,
-                amount: amountValue,
-                recipient: recipientAddress,
-                gasSpeed: $selectedGasSpeed,
-                estimatedGas: estimatedGasFee,
-                gweiText: selectedGweiText,
-                onConfirm: {
-                    processTransaction()
-                }
-            )
-        }
-        .sheet(isPresented: $showGasSettings) {
-            WithdrawGasSettingsSheet(
-                selectedSpeed: $selectedGasSpeed, 
-                estimatedGas: estimatedGasFee,
-                selectedToken: selectedToken,
-                gweiText: selectedGweiText
-            )
+            if let token = selectedToken {
+                TransactionConfirmationView(
+                    token: token,
+                    amount: amountValue,
+                    recipient: recipientAddress,
+                    gasSpeed: $selectedGasSpeed,
+                    estimatedGas: estimatedGasFee,
+                    gweiText: selectedGweiText,
+                    onConfirm: {
+                        processTransaction()
+                    }
+                )
+            }
         }
         .sheet(item: $submittedTransaction) { transaction in
             TransactionDetailView(transaction: transaction)
@@ -371,12 +545,35 @@ struct WithdrawView: View {
         }
         .onAppear {
             ensureValidSelection()
+            showsPaymentDetails = isRecipientAddressValid
+            if initialPaymentRequest?.isExpired == true {
+                errorMessage = "This payment request has expired. Ask the recipient to create a new one.".localized
+                showError = true
+            }
         }
         .onChange(of: walletManager.visibleSupportedTokens.map { "\($0.blockchain.rawValue):\($0.contractAddress ?? "native")" }) { _ in
             ensureValidSelection()
         }
         .onChange(of: selectedSymbol) { _ in
+            focusedInput = nil
+            showsPaymentDetails = false
             ensureValidNetworkForSelectedAsset()
+        }
+        .onChange(of: selectedNetwork) { _ in
+            focusedInput = nil
+            showsPaymentDetails = false
+            liveStandardGasPrice = nil
+            liveNativeBalance = nil
+        }
+        .onChange(of: recipientAddress) { _ in
+            guard isRecipientAddressValid else {
+                showsPaymentDetails = false
+                return
+            }
+            focusedInput = nil
+            withAnimation(.easeInOut(duration: 0.22)) {
+                showsPaymentDetails = true
+            }
         }
         .task(id: selectedToken.map { "\($0.blockchain.rawValue):\($0.contractAddress ?? "native")" }) {
             await refreshGasPrice()
@@ -391,21 +588,42 @@ struct WithdrawView: View {
         }
 
         let symbols = Array(Set(spendableTokens.map { $0.symbol.uppercased() })).sorted()
-        if selectedSymbol == nil || !symbols.contains(selectedSymbol ?? "") {
-            // Ethereum is the sensible default, not the alphabetical winner.
-            selectedSymbol = symbols.contains("ETH") ? "ETH" : symbols.first
+        if let selectedSymbol, !symbols.contains(selectedSymbol.uppercased()) {
+            self.selectedSymbol = nil
+            selectedNetwork = nil
         }
         ensureValidNetworkForSelectedAsset()
     }
 
     private func ensureValidNetworkForSelectedAsset() {
-        guard let selectedSymbol else { return }
-        let networks = spendableTokens
-            .filter { $0.symbol.uppercased() == selectedSymbol.uppercased() }
-            .map { $0.blockchain }
-        if selectedNetwork == nil || !networks.contains(selectedNetwork!) {
-            selectedNetwork = networks.contains(.ethereum) ? .ethereum : networks.first
+        guard let selectedSymbol else {
+            selectedNetwork = nil
+            return
         }
+        let matchingTokens = spendableTokens
+            .filter { $0.symbol.uppercased() == selectedSymbol.uppercased() }
+        guard !matchingTokens.isEmpty else {
+            selectedNetwork = nil
+            return
+        }
+
+        if let selectedNetwork,
+           matchingTokens.contains(where: { $0.blockchain == selectedNetwork }) {
+            if initialPaymentRequest?.blockchain == selectedNetwork {
+                return
+            }
+            if matchingTokens.contains(where: { $0.blockchain == selectedNetwork && $0.balance > 0 }) {
+                return
+            }
+        }
+
+        // Select the network that actually owns this asset balance. When the
+        // token exists on several chains, prefer the largest funded balance.
+        selectedNetwork = matchingTokens
+            .filter { $0.balance > 0 }
+            .max(by: { $0.balance < $1.balance })?
+            .blockchain
+            ?? (matchingTokens.count == 1 ? matchingTokens.first?.blockchain : nil)
     }
 
     private func processTransaction() {
@@ -502,16 +720,29 @@ struct WithdrawView: View {
     private func refreshGasPrice() async {
         guard let token = selectedToken, token.blockchain != .bitcoin else {
             liveStandardGasPrice = nil
+            liveNativeBalance = nil
             return
         }
         isLoadingGasPrice = true
         defer { isLoadingGasPrice = false }
-        do {
-            liveStandardGasPrice = try await GasPriceService.shared
-                .getGasPrice(for: token.blockchain).recommended
-        } catch {
+
+        let gasPriceTask = Task {
+            try await GasPriceService.shared.getGasPrice(for: token.blockchain).recommended
+        }
+        let nativeBalanceTask = Task {
+            try await SwapService.shared.fetchNativeBalance(blockchain: token.blockchain)
+        }
+
+        do { liveStandardGasPrice = try await gasPriceTask.value } catch {
             liveStandardGasPrice = nil
             Logger.log("Failed to load send gas price: \(error.localizedDescription)")
+        }
+        do {
+            let balance = try await nativeBalanceTask.value
+            liveNativeBalance = NSDecimalNumber(decimal: balance).doubleValue
+        } catch {
+            liveNativeBalance = nil
+            Logger.log("Failed to load live native balance: \(error.localizedDescription)")
         }
     }
 
@@ -528,122 +759,56 @@ struct WithdrawView: View {
     }
 }
 
-struct TokenSelectionView: View {
-    let tokens: [Token]
-    @Binding var selectedSymbol: String?
-    @Binding var selectedNetwork: BlockchainType?
-    @EnvironmentObject var settingsManager: SettingsManager
-    @State private var showAssetPicker = false
-    @State private var showNetworkPicker = false
+struct WithdrawStepCard<Content: View>: View {
+    let stepNumber: Int
+    let title: String
+    let isComplete: Bool
+    let showsStepNumber: Bool
+    private let content: Content
 
-    private var currentToken: Token? {
-        guard let selectedSymbol, let selectedNetwork else { return nil }
-        return tokens.first {
-            $0.symbol.uppercased() == selectedSymbol.uppercased() && $0.blockchain == selectedNetwork
-        }
-    }
-
-    private var networksForSelectedAsset: [Token] {
-        guard let selectedSymbol else { return [] }
-        return tokens
-            .filter { $0.symbol.uppercased() == selectedSymbol.uppercased() }
-            .sorted { $0.blockchain.name < $1.blockchain.name }
+    init(
+        stepNumber: Int,
+        title: String,
+        isComplete: Bool = false,
+        showsStepNumber: Bool = true,
+        @ViewBuilder content: () -> Content
+    ) {
+        self.stepNumber = stepNumber
+        self.title = title
+        self.isComplete = isComplete
+        self.showsStepNumber = showsStepNumber
+        self.content = content()
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            Text("Select Asset".localized)
-                .font(.system(size: 16, weight: .bold, design: .rounded))
-                .foregroundColor(WpayinColors.text)
+        VStack(alignment: .leading, spacing: 16) {
+            HStack(spacing: 11) {
+                if showsStepNumber {
+                    ZStack {
+                        Circle()
+                            .fill(isComplete ? WpayinColors.success.opacity(0.16) : WpayinColors.primary.opacity(0.14))
 
-            if let currentToken = currentToken {
-                Button {
-                    showAssetPicker = true
-                } label: {
-                    HStack {
-                        TokenIconView(token: currentToken, size: 40, showNetworkBadge: false)
-
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(currentToken.symbol)
-                                .font(.wpayinBody)
-                                .foregroundColor(WpayinColors.text)
-                                .lineLimit(1)
-
-                            Text(currentToken.name)
-                                .font(.wpayinCaption)
-                                .foregroundColor(WpayinColors.textTertiary)
-                                .lineLimit(1)
-
-                            Text("Balance: %@".localized(TokenIconHelper.formattedBalanceWithSymbol(currentToken.balance, symbol: currentToken.symbol)))
-                                .font(.wpayinCaption)
-                                .foregroundColor(WpayinColors.textSecondary)
+                        if isComplete {
+                            Image(systemName: "checkmark")
+                                .font(.system(size: 12, weight: .bold))
+                                .foregroundColor(WpayinColors.success)
+                        } else {
+                            Text("\(stepNumber)")
+                                .font(.system(size: 13, weight: .bold, design: .rounded))
+                                .foregroundColor(WpayinColors.primary)
                         }
-
-                        Spacer()
-
-                        Image(systemName: "chevron.down")
-                            .font(.system(size: 12))
-                            .foregroundColor(WpayinColors.textSecondary)
                     }
-                    .padding(14)
-                    .background(
-                        RoundedRectangle(cornerRadius: 16, style: .continuous)
-                            .fill(WpayinColors.surfaceLight)
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 16, style: .continuous)
-                                    .stroke(WpayinColors.surfaceBorder, lineWidth: 1)
-                            )
-                    )
+                    .frame(width: 30, height: 30)
                 }
-                .buttonStyle(WpayinPressableStyle())
 
-                Text("Select Network".localized)
-                    .font(.system(size: 13, weight: .semibold))
-                    .foregroundColor(WpayinColors.textSecondary)
-                    .padding(.top, 4)
+                Text(title)
+                    .font(.system(size: 17, weight: .bold, design: .rounded))
+                    .foregroundColor(WpayinColors.text)
 
-                Button {
-                    showNetworkPicker = true
-                } label: {
-                    HStack {
-                        NetworkIconView(blockchain: currentToken.blockchain, size: 32)
-
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(currentToken.blockchain.name)
-                                .font(.wpayinBody)
-                                .foregroundColor(WpayinColors.text)
-
-                            Text(TokenIconHelper.formattedBalanceWithSymbol(currentToken.balance, symbol: currentToken.symbol))
-                                .font(.wpayinCaption)
-                                .foregroundColor(WpayinColors.textSecondary)
-                        }
-
-                        Spacer()
-
-                        Image(systemName: "chevron.down")
-                            .font(.system(size: 12))
-                            .foregroundColor(WpayinColors.textSecondary)
-                    }
-                    .padding(14)
-                    .background(
-                        RoundedRectangle(cornerRadius: 16, style: .continuous)
-                            .fill(WpayinColors.surfaceLight)
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 16, style: .continuous)
-                                    .stroke(WpayinColors.surfaceBorder, lineWidth: 1)
-                            )
-                    )
-                }
-                .buttonStyle(WpayinPressableStyle())
-            } else {
-                Text("No spendable assets available".localized)
-                    .font(.wpayinCaption)
-                    .foregroundColor(WpayinColors.textSecondary)
-                    .frame(maxWidth: .infinity)
-                    .padding(16)
-                    .background(WpayinColors.surface)
-                    .cornerRadius(12)
+                Spacer()
             }
+
+            content
         }
         .padding(18)
         .background(
@@ -651,21 +816,193 @@ struct TokenSelectionView: View {
                 .fill(WpayinColors.surface)
                 .overlay(
                     RoundedRectangle(cornerRadius: 22, style: .continuous)
-                        .stroke(WpayinColors.surfaceBorder, lineWidth: 1)
+                        .stroke(
+                            isComplete ? WpayinColors.success.opacity(0.16) : WpayinColors.surfaceBorder,
+                            lineWidth: 1
+                        )
                 )
         )
+    }
+}
+
+struct WithdrawAssetSelectionView: View {
+    let stepNumber: Int
+    let tokens: [Token]
+    @Binding var selectedSymbol: String?
+    @Binding var selectedNetwork: BlockchainType?
+    @EnvironmentObject var settingsManager: SettingsManager
+    @State private var showAssetPicker = false
+
+    private var selectedAssetTokens: [Token] {
+        guard let selectedSymbol else { return [] }
+        return tokens.filter { $0.symbol.uppercased() == selectedSymbol.uppercased() }
+    }
+
+    private var representativeToken: Token? {
+        if let selectedNetwork,
+           let exactToken = selectedAssetTokens.first(where: { $0.blockchain == selectedNetwork }) {
+            return exactToken
+        }
+        return selectedAssetTokens.first
+    }
+
+    private var totalBalance: Double {
+        selectedAssetTokens.reduce(0) { $0 + $1.balance }
+    }
+
+    private var displayedBalance: Double {
+        if let selectedNetwork,
+           let exactToken = selectedAssetTokens.first(where: { $0.blockchain == selectedNetwork }) {
+            return exactToken.balance
+        }
+        return totalBalance
+    }
+
+    var body: some View {
+        WithdrawStepCard(
+            stepNumber: stepNumber,
+            title: "Select Asset".localized,
+            isComplete: representativeToken != nil
+        ) {
+            Button {
+                showAssetPicker = true
+            } label: {
+                HStack(spacing: 13) {
+                    if let token = representativeToken {
+                        TokenIconView(token: token, size: 36, showNetworkBadge: false)
+
+                        VStack(alignment: .leading, spacing: 3) {
+                            Text(token.symbol.uppercased())
+                                .font(.system(size: 16, weight: .semibold, design: .rounded))
+                                .foregroundColor(WpayinColors.text)
+
+                            Text("Balance: %@".localized(
+                                TokenIconHelper.formattedBalanceWithSymbol(
+                                    displayedBalance,
+                                    symbol: token.symbol,
+                                    decimals: 4
+                                )
+                            ))
+                            .font(.system(size: 12))
+                            .foregroundColor(WpayinColors.textSecondary)
+                        }
+
+                        Spacer()
+
+                        Image(systemName: "chevron.down")
+                            .font(.system(size: 11, weight: .semibold))
+                            .foregroundColor(WpayinColors.textTertiary)
+                    } else {
+                        Image(systemName: "coloncurrencysign.circle.fill")
+                            .font(.system(size: 20))
+                            .foregroundColor(WpayinColors.primary)
+                            .frame(width: 36, height: 36)
+
+                        Text(L10n.Tokens.selectToken.localized)
+                            .font(.system(size: 16, weight: .semibold, design: .rounded))
+                            .foregroundColor(WpayinColors.text)
+
+                        Spacer()
+
+                        Image(systemName: "chevron.right")
+                            .font(.system(size: 12, weight: .semibold))
+                            .foregroundColor(WpayinColors.textTertiary)
+                    }
+                }
+                .frame(minHeight: 52)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(WpayinPressableStyle())
+        }
         .sheet(isPresented: $showAssetPicker) {
             AssetPickerSheet(
                 tokens: tokens,
                 selectedSymbol: selectedSymbol
             ) { symbol in
+                if selectedSymbol?.uppercased() != symbol.uppercased() {
+                    selectedNetwork = nil
+                }
                 selectedSymbol = symbol
+                let matchingTokens = tokens.filter { $0.symbol.uppercased() == symbol.uppercased() }
+                selectedNetwork = matchingTokens
+                    .filter { $0.balance > 0 }
+                    .max(by: { $0.balance < $1.balance })?
+                    .blockchain
+                    ?? (matchingTokens.count == 1 ? matchingTokens.first?.blockchain : nil)
             }
             .environmentObject(settingsManager)
         }
+    }
+}
+
+struct WithdrawNetworkSelectionView: View {
+    let stepNumber: Int
+    let tokens: [Token]
+    @Binding var selectedNetwork: BlockchainType?
+    @State private var showNetworkPicker = false
+
+    private var selectedToken: Token? {
+        guard let selectedNetwork else { return nil }
+        return tokens.first { $0.blockchain == selectedNetwork }
+    }
+
+    var body: some View {
+        WithdrawStepCard(
+            stepNumber: stepNumber,
+            title: L10n.Swap.selectNetwork.localized,
+            isComplete: selectedToken != nil
+        ) {
+            Button {
+                showNetworkPicker = true
+            } label: {
+                HStack(spacing: 13) {
+                    if let token = selectedToken {
+                        NetworkIconView(blockchain: token.blockchain, size: 34)
+
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text(token.blockchain.name)
+                                .font(.system(size: 16, weight: .semibold, design: .rounded))
+                                .foregroundColor(WpayinColors.text)
+
+                            Text(TokenIconHelper.formattedBalanceWithSymbol(
+                                token.balance,
+                                symbol: token.symbol,
+                                decimals: 4
+                            ))
+                            .font(.system(size: 12))
+                            .foregroundColor(WpayinColors.textSecondary)
+                        }
+                    } else {
+                        Image(systemName: "network")
+                            .font(.system(size: 20, weight: .semibold))
+                            .foregroundColor(WpayinColors.primary)
+                            .frame(width: 34, height: 34)
+
+                        VStack(alignment: .leading, spacing: 3) {
+                            Text(L10n.Swap.selectNetwork.localized)
+                                .font(.system(size: 16, weight: .semibold, design: .rounded))
+                                .foregroundColor(WpayinColors.text)
+
+                            Text(L10n.Networks.available.localized(tokens.count))
+                                .font(.system(size: 12))
+                                .foregroundColor(WpayinColors.textSecondary)
+                        }
+                    }
+
+                    Spacer()
+
+                    Image(systemName: selectedToken == nil ? "chevron.right" : "chevron.down")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundColor(WpayinColors.textTertiary)
+                }
+                .frame(minHeight: 52)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(WpayinPressableStyle())
+        }
         .sheet(isPresented: $showNetworkPicker) {
             NetworkPickerSheet(
-                tokens: networksForSelectedAsset,
+                tokens: tokens,
                 selectedNetwork: selectedNetwork
             ) { network in
                 selectedNetwork = network
@@ -731,118 +1068,155 @@ struct TokenSelectionRow: View {
 
 struct RecipientAddressView: View {
     @EnvironmentObject var walletManager: WalletManager
+    let stepNumber: Int
     @Binding var address: String
+    let selectedNetwork: BlockchainType
+    let isAddressValid: Bool
+    let focusedInput: FocusState<WithdrawInputField?>.Binding
     @State private var showScanner = false
     @State private var showSavedAddresses = false
     @State private var showAddAddressSheet = false
     @State private var newAddressName = ""
-    @State private var addressInputMethod = 0 // 0: manual, 1: saved
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text("Recipient Address".localized)
-                .font(.system(size: 16, weight: .bold, design: .rounded))
-                .foregroundColor(WpayinColors.text)
+        WithdrawStepCard(
+            stepNumber: stepNumber,
+            title: "Recipient Address".localized,
+            isComplete: isAddressValid
+        ) {
+            VStack(spacing: 12) {
+                HStack(spacing: 10) {
+                    HStack(spacing: 9) {
+                        TextField(addressPlaceholder, text: $address)
+                            .font(.system(size: 13, design: .monospaced))
+                            .foregroundColor(WpayinColors.text)
+                            .textInputAutocapitalization(.never)
+                            .autocorrectionDisabled()
+                            .focused(focusedInput, equals: .recipient)
 
-            // Address input method selector
-            Picker("Input Method".localized, selection: $addressInputMethod) {
-                Text("Manual Entry".localized).tag(0)
-                Text("Saved Addresses".localized).tag(1)
-            }
-            .pickerStyle(SegmentedPickerStyle())
-            .padding(.bottom, 8)
-
-            if addressInputMethod == 0 {
-                // Manual address entry
-                HStack(spacing: 12) {
-                    TextField("0x...", text: $address)
-                        .font(.system(size: 14, design: .monospaced))
-                        .foregroundColor(WpayinColors.text)
-                        .textInputAutocapitalization(.never)
-                        .autocorrectionDisabled()
-                        .padding(16)
-                        .background(WpayinColors.surfaceLight)
-                        .cornerRadius(14)
-
-                    Button(action: {
-                        showScanner = true
-                    }) {
-                        Image(systemName: "qrcode.viewfinder")
-                            .font(.system(size: 20))
-                            .foregroundColor(WpayinColors.primary)
-                            .frame(width: 48, height: 48)
-                            .background(WpayinColors.surfaceLight)
-                            .cornerRadius(14)
-                    }
-
-                    Button(action: {
-                        showAddAddressSheet = true
-                    }) {
-                        Image(systemName: "plus")
-                            .font(.system(size: 20))
-                            .foregroundColor(WpayinColors.success)
-                            .frame(width: 48, height: 48)
-                            .background(WpayinColors.surfaceLight)
-                            .cornerRadius(14)
-                    }
-                    .disabled(address.isEmpty || !isValidAddress(address))
-                }
-            } else {
-                // Saved addresses selection
-                if walletManager.savedAddresses.isEmpty {
-                    VStack(spacing: 16) {
-                        Text("No saved addresses yet".localized)
-                            .font(.wpayinBody)
-                            .foregroundColor(WpayinColors.textSecondary)
-
-                        Button("Add Address".localized) {
-                            addressInputMethod = 0
+                        if !address.isEmpty {
+                            Image(systemName: isAddressValid ? "checkmark.circle.fill" : "exclamationmark.circle.fill")
+                                .font(.system(size: 16, weight: .semibold))
+                                .foregroundColor(isAddressValid ? WpayinColors.success : WpayinColors.error)
                         }
-                        .foregroundColor(WpayinColors.primary)
                     }
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 20)
-                } else {
-                    ScrollView {
-                        VStack(spacing: 8) {
-                            ForEach(walletManager.savedAddresses) { savedAddress in
-                                SavedAddressRow(
-                                    savedAddress: savedAddress,
-                                    isSelected: address == savedAddress.address
-                                ) {
-                                    address = savedAddress.address
-                                }
+                    .padding(.horizontal, 14)
+                    .frame(height: 52)
+                    .background(
+                        RoundedRectangle(cornerRadius: 15, style: .continuous)
+                            .fill(WpayinColors.surfaceLight)
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 15, style: .continuous)
+                                    .stroke(
+                                        address.isEmpty
+                                            ? WpayinColors.surfaceBorder
+                                            : (isAddressValid ? WpayinColors.success.opacity(0.35) : WpayinColors.error.opacity(0.45)),
+                                        lineWidth: 1
+                                    )
+                            )
+                    )
+
+                    Button {
+                        focusedInput.wrappedValue = nil
+                        showScanner = true
+                    } label: {
+                        Image(systemName: "qrcode.viewfinder")
+                            .font(.system(size: 20, weight: .semibold))
+                            .foregroundColor(WpayinColors.primary)
+                            .frame(width: 52, height: 52)
+                            .background(
+                                RoundedRectangle(cornerRadius: 15, style: .continuous)
+                                    .fill(WpayinColors.primary.opacity(0.12))
+                            )
+                    }
+                    .buttonStyle(WpayinPressableStyle())
+                }
+
+                HStack(spacing: 10) {
+                    Button {
+                        focusedInput.wrappedValue = nil
+                        showSavedAddresses = true
+                    } label: {
+                        HStack(spacing: 8) {
+                            Image(systemName: "person.crop.circle.fill.badge.checkmark")
+                                .font(.system(size: 15, weight: .semibold))
+
+                            Text("Saved Addresses".localized)
+                                .font(.system(size: 13, weight: .semibold))
+
+                            if !walletManager.savedAddresses.isEmpty {
+                                Text("\(walletManager.savedAddresses.count)")
+                                    .font(.system(size: 10, weight: .bold))
+                                    .padding(.horizontal, 6)
+                                    .padding(.vertical, 3)
+                                    .background(Capsule().fill(WpayinColors.primary.opacity(0.16)))
                             }
                         }
+                        .foregroundColor(WpayinColors.primary)
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 42)
+                        .background(
+                            RoundedRectangle(cornerRadius: 13, style: .continuous)
+                                .fill(WpayinColors.primary.opacity(0.09))
+                        )
                     }
-                    .frame(maxHeight: 200)
+                    .buttonStyle(WpayinPressableStyle())
+
+                    if isAddressValid {
+                        Button {
+                            showAddAddressSheet = true
+                        } label: {
+                            HStack(spacing: 7) {
+                                Image(systemName: "plus")
+                                    .font(.system(size: 12, weight: .bold))
+
+                                Text("Save Address".localized)
+                                    .font(.system(size: 13, weight: .semibold))
+                            }
+                            .foregroundColor(WpayinColors.success)
+                            .padding(.horizontal, 12)
+                            .frame(height: 42)
+                            .background(
+                                RoundedRectangle(cornerRadius: 13, style: .continuous)
+                                    .fill(WpayinColors.success.opacity(0.09))
+                            )
+                        }
+                        .buttonStyle(WpayinPressableStyle())
+                    }
+                }
+
+                if !address.isEmpty && !isAddressValid {
+                    HStack(spacing: 7) {
+                        Image(systemName: "exclamationmark.triangle.fill")
+                            .font(.system(size: 11))
+
+                        Text("Please enter a valid wallet address".localized)
+                            .font(.system(size: 12))
+                    }
+                    .foregroundColor(WpayinColors.error)
+                    .frame(maxWidth: .infinity, alignment: .leading)
                 }
             }
-
-            if !address.isEmpty && !isValidAddress(address) {
-                Text("Please enter a valid wallet address".localized)
-                    .font(.wpayinCaption)
-                    .foregroundColor(WpayinColors.error)
-            }
         }
-        .padding(18)
-        .background(
-            RoundedRectangle(cornerRadius: 22, style: .continuous)
-                .fill(WpayinColors.surface)
-                .overlay(
-                    RoundedRectangle(cornerRadius: 22, style: .continuous)
-                        .stroke(WpayinColors.surfaceBorder, lineWidth: 1)
-                )
-        )
         .sheet(isPresented: $showScanner) {
             QRScannerView(scannedAddress: $address)
+        }
+        .sheet(isPresented: $showSavedAddresses) {
+            SavedAddressPickerSheet(
+                addresses: walletManager.savedAddresses,
+                selectedAddress: address,
+                network: selectedNetwork
+            ) { savedAddress in
+                address = savedAddress.address
+                focusedInput.wrappedValue = nil
+            }
         }
         .sheet(isPresented: $showAddAddressSheet) {
             AddAddressSheet(
                 address: address,
                 addressName: $newAddressName
             ) {
-                if !newAddressName.isEmpty && isValidAddress(address) {
+                if !newAddressName.isEmpty && isAddressValid {
                     walletManager.addSavedAddress(name: newAddressName, address: address)
                     newAddressName = ""
                     showAddAddressSheet = false
@@ -851,62 +1225,57 @@ struct RecipientAddressView: View {
         }
     }
 
-    private func isValidAddress(_ address: String) -> Bool {
-        // EVM
-        if address.hasPrefix("0x") && address.count == 42 { return true }
-        // Bitcoin (legacy, P2SH, bech32)
-        if (address.hasPrefix("bc1") && address.count >= 14)
-            || ((address.hasPrefix("1") || address.hasPrefix("3")) && (26...35).contains(address.count)) {
-            return true
-        }
-        return false
+    private var addressPlaceholder: String {
+        selectedNetwork == .bitcoin ? "bc1…" : "0x…"
     }
 }
 
 struct AmountInputView: View {
+    let stepNumber: Int
     @Binding var amount: String
-    let selectedToken: Token?
+    let selectedToken: Token
     let reservedNetworkFee: Double
+    let focusedInput: FocusState<WithdrawInputField?>.Binding
 
     private var amountValue: Double {
         Double(amount) ?? 0.0
     }
 
     private var platformFeeValue: Double {
-        guard let token = selectedToken, token.blockchain != .bitcoin else { return 0 }
+        guard selectedToken.blockchain.isEVM else { return 0 }
         return (TransactionService.platformFee(for: Decimal(amountValue)) as NSDecimalNumber).doubleValue
     }
 
     /// Max sendable so that amount + platform fee still fits in the balance.
     private var maxSendable: Double {
-        guard let token = selectedToken else { return 0 }
-        let availableAfterGas = max(0, token.balance - reservedNetworkFee)
-        guard token.blockchain != .bitcoin, AppConfig.platformFeeEnabled else { return availableAfterGas }
+        let availableAfterGas = max(0, selectedToken.balance - reservedNetworkFee)
+        guard selectedToken.blockchain.isEVM, AppConfig.platformFeeEnabled else { return availableAfterGas }
         let rate = (AppConfig.platformFeeRate as NSDecimalNumber).doubleValue
         return availableAfterGas / (1 + rate)
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text("Amount".localized)
-                .font(.system(size: 16, weight: .bold, design: .rounded))
-                .foregroundColor(WpayinColors.text)
-
+        WithdrawStepCard(
+            stepNumber: stepNumber,
+            title: "Amount".localized,
+            isComplete: amountValue > 0
+                && amountValue + platformFeeValue + reservedNetworkFee <= selectedToken.balance,
+            showsStepNumber: false
+        ) {
             VStack(spacing: 16) {
                 HStack(spacing: 12) {
                     TextField("0.0", text: $amount)
                         .font(.system(size: 24, weight: .semibold))
                         .foregroundColor(WpayinColors.text)
                         .keyboardType(.decimalPad)
+                        .focused(focusedInput, equals: .amount)
                         .padding(.vertical, 18)
                         .padding(.horizontal, 16)
 
-                    if let token = selectedToken {
-                        Text(token.symbol)
-                            .font(.wpayinHeadline)
-                            .foregroundColor(WpayinColors.textSecondary)
-                            .padding(.trailing, 8)
-                    }
+                    Text(selectedToken.symbol)
+                        .font(.wpayinHeadline)
+                        .foregroundColor(WpayinColors.textSecondary)
+                        .padding(.trailing, 8)
                 }
                 .background(
                     RoundedRectangle(cornerRadius: 16, style: .continuous)
@@ -917,57 +1286,270 @@ struct AmountInputView: View {
                         )
                 )
 
-                if let token = selectedToken {
-                    HStack {
-                        Text("Balance: %@".localized(String(format: "%.4f %@", token.balance, token.symbol)))
-                            .font(.wpayinCaption)
-                            .foregroundColor(WpayinColors.textSecondary)
-
-                        Spacer()
-
-                        Button("Max".localized) {
-                            amount = formattedMaximum(maxSendable, decimals: token.decimals)
-                        }
-                        .font(.system(size: 12, weight: .bold))
-                        .foregroundColor(WpayinColors.primary)
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 6)
-                        .background(Capsule().fill(WpayinColors.primary.opacity(0.12)))
-                    }
-
-                    if platformFeeValue > 0, amountValue > 0 {
-                        Text("Platform fee %@: %@ %@".localized(
-                            String(format: "(%.2f%%)", Double(AppConfig.platformFeeBps) / 100),
-                            String(format: "%.6f", platformFeeValue),
-                            token.symbol
-                        ))
+                HStack {
+                    Text("Balance: %@".localized(String(format: "%.4f %@", selectedToken.balance, selectedToken.symbol)))
                         .font(.wpayinCaption)
                         .foregroundColor(WpayinColors.textSecondary)
-                    }
 
-                    if amountValue + platformFeeValue + reservedNetworkFee > token.balance {
-                        Text("Insufficient balance".localized)
-                            .font(.wpayinCaption)
-                            .foregroundColor(WpayinColors.error)
+                    Spacer()
+
+                    Button("Max".localized) {
+                        amount = formattedMaximum(maxSendable, decimals: selectedToken.decimals)
+                        focusedInput.wrappedValue = nil
                     }
+                    .font(.system(size: 12, weight: .bold))
+                    .foregroundColor(WpayinColors.primary)
+                    .padding(.horizontal, 11)
+                    .padding(.vertical, 7)
+                    .background(Capsule().fill(WpayinColors.primary.opacity(0.12)))
+                    .buttonStyle(WpayinPressableStyle())
+                }
+
+                if platformFeeValue > 0, amountValue > 0 {
+                    Text("Platform fee %@: %@ %@".localized(
+                        String(format: "(%.2f%%)", Double(AppConfig.platformFeeBps) / 100),
+                        String(format: "%.6f", platformFeeValue),
+                        selectedToken.symbol
+                    ))
+                    .font(.wpayinCaption)
+                    .foregroundColor(WpayinColors.textSecondary)
+                }
+
+                if amountValue + platformFeeValue + reservedNetworkFee > selectedToken.balance {
+                    Text("Insufficient balance".localized)
+                        .font(.wpayinCaption)
+                        .foregroundColor(WpayinColors.error)
                 }
             }
         }
-        .padding(18)
-        .background(
-            RoundedRectangle(cornerRadius: 22, style: .continuous)
-                .fill(WpayinColors.surface)
-                .overlay(
-                    RoundedRectangle(cornerRadius: 22, style: .continuous)
-                        .stroke(WpayinColors.surfaceBorder, lineWidth: 1)
-                )
-        )
     }
 
     private func formattedMaximum(_ value: Double, decimals: Int) -> String {
         let precision = min(max(decimals, 0), 12)
         var result = String(format: "%.*f", precision, max(0, value))
         while result.contains(".") && result.last == "0" { result.removeLast() }
+        if result.last == "." { result.removeLast() }
+        return result
+    }
+}
+
+struct WithdrawFeeSelectionView: View {
+    let stepNumber: Int
+    @Binding var selectedSpeed: WithdrawGasSpeed
+    let estimatedGas: Double
+    let token: Token
+    let gweiText: String
+    let isLoading: Bool
+    let focusedInput: FocusState<WithdrawInputField?>.Binding
+    let availableNativeBalance: Double
+    let hasSufficientBalance: Bool
+
+    var body: some View {
+        WithdrawStepCard(
+            stepNumber: stepNumber,
+            title: "Network Fee".localized,
+            isComplete: token.blockchain == .bitcoin || (!isLoading && estimatedGas > 0),
+            showsStepNumber: false
+        ) {
+            VStack(spacing: 14) {
+                HStack(spacing: 8) {
+                    ForEach(WithdrawGasSpeed.allCases, id: \.self) { speed in
+                        Button {
+                            focusedInput.wrappedValue = nil
+                            selectedSpeed = speed
+                        } label: {
+                            VStack(spacing: 7) {
+                                Image(systemName: speed.icon)
+                                    .font(.system(size: 17, weight: .semibold))
+
+                                Text(speed.displayName)
+                                    .font(.system(size: 12, weight: .semibold, design: .rounded))
+                                    .lineLimit(1)
+                                    .minimumScaleFactor(0.72)
+
+                                Text(speed.estimatedTimeFor(blockchain: token.blockchain))
+                                    .font(.system(size: 10, weight: .medium))
+                                    .foregroundColor(
+                                        selectedSpeed == speed
+                                            ? WpayinColors.text.opacity(0.72)
+                                            : WpayinColors.textTertiary
+                                    )
+                                    .lineLimit(1)
+                            }
+                            .foregroundColor(selectedSpeed == speed ? WpayinColors.text : WpayinColors.textSecondary)
+                            .frame(maxWidth: .infinity)
+                            .frame(height: 88)
+                            .background(
+                                RoundedRectangle(cornerRadius: 15, style: .continuous)
+                                    .fill(
+                                        selectedSpeed == speed
+                                            ? WpayinColors.primary.opacity(0.16)
+                                            : WpayinColors.surfaceLight
+                                    )
+                                    .overlay(
+                                        RoundedRectangle(cornerRadius: 15, style: .continuous)
+                                            .stroke(
+                                                selectedSpeed == speed
+                                                    ? WpayinColors.primary.opacity(0.7)
+                                                    : WpayinColors.surfaceBorder,
+                                                lineWidth: 1
+                                            )
+                                    )
+                                )
+                        }
+                        .buttonStyle(WpayinPressableStyle())
+                    }
+                }
+
+                HStack(spacing: 12) {
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text(selectedSpeed.displayName)
+                            .font(.system(size: 13, weight: .semibold, design: .rounded))
+                            .foregroundColor(WpayinColors.text)
+
+                        if token.blockchain != .bitcoin {
+                            Text(gweiText)
+                                .font(.system(size: 10, weight: .medium, design: .monospaced))
+                                .foregroundColor(WpayinColors.textTertiary)
+                                .lineLimit(1)
+                        }
+                    }
+
+                    Spacer()
+
+                    if isLoading {
+                        ProgressView()
+                            .tint(WpayinColors.primary)
+                    } else {
+                        Text(selectedFeeText)
+                            .font(.system(size: 14, weight: .semibold, design: .rounded))
+                            .foregroundColor(WpayinColors.primary)
+                    }
+                }
+                .padding(.horizontal, 14)
+                .frame(height: 52)
+                .background(
+                    RoundedRectangle(cornerRadius: 14, style: .continuous)
+                        .fill(WpayinColors.surfaceLight)
+                )
+
+                if !isLoading && !hasSufficientBalance {
+                    HStack(spacing: 7) {
+                        Image(systemName: "exclamationmark.triangle.fill")
+                            .font(.system(size: 11))
+
+                        Text(insufficientFeeMessage)
+                            .font(.system(size: 12))
+                    }
+                    .foregroundColor(WpayinColors.warning)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                }
+            }
+        }
+    }
+
+    private var selectedFeeText: String {
+        if token.blockchain == .bitcoin {
+            return "\(Int(estimatedGas)) sat/vB"
+        }
+        guard estimatedGas > 0 else { return "—" }
+        return "~\(String(format: "%.6f", estimatedGas)) \(token.blockchain.nativeToken)"
+    }
+
+    private var insufficientFeeMessage: String {
+        let nativeSymbol = token.blockchain.nativeToken
+        if token.isNative {
+            return "Amount plus the network fee exceeds the available %@ balance.".localized(nativeSymbol)
+        }
+        return "Sending %@ on %@ requires %@ for the network fee. Required: ~%@ %@ · Available: %@ %@".localized(
+            token.symbol,
+            token.blockchain.name,
+            nativeSymbol,
+            formattedNative(estimatedGas),
+            nativeSymbol,
+            formattedNative(availableNativeBalance),
+            nativeSymbol
+        )
+    }
+
+    private func formattedNative(_ value: Double) -> String {
+        guard value > 0 else { return "0" }
+        return String(format: value < 0.0001 ? "%.8f" : "%.6f", value)
+    }
+}
+
+struct WithdrawReviewStep: View {
+    let stepNumber: Int
+    let token: Token
+    let amount: Double
+    let recipient: String
+    let gasSpeed: WithdrawGasSpeed
+    let estimatedGas: Double
+    let platformFee: Double
+
+    var body: some View {
+        WithdrawStepCard(
+            stepNumber: stepNumber,
+            title: "Transaction Summary".localized,
+            isComplete: true,
+            showsStepNumber: false
+        ) {
+            VStack(spacing: 13) {
+                SummaryRow(
+                    title: "Amount",
+                    value: "\(formatted(amount)) \(token.symbol)"
+                )
+
+                SummaryRow(
+                    title: L10n.Swap.selectNetwork.localized,
+                    value: token.blockchain.name
+                )
+
+                SummaryRow(
+                    title: "To",
+                    value: shortRecipient
+                )
+
+                SummaryRow(
+                    title: "Network Fee".localized,
+                    value: feeText
+                )
+
+                if platformFee > 0 {
+                    SummaryRow(
+                        title: "\("Platform fee".localized) \(String(format: "(%.2f%%)", Double(AppConfig.platformFeeBps) / 100))",
+                        value: "\(formatted(platformFee)) \(token.symbol)"
+                    )
+                }
+
+                Divider()
+                    .background(WpayinColors.surfaceBorder)
+
+                SummaryRow(
+                    title: "Total",
+                    value: "\(formatted(amount + platformFee)) \(token.symbol) + \("Fee".localized)",
+                    isTotal: true
+                )
+            }
+        }
+    }
+
+    private var shortRecipient: String {
+        guard recipient.count > 13 else { return recipient }
+        return "\(recipient.prefix(7))…\(recipient.suffix(6))"
+    }
+
+    private var feeText: String {
+        if token.blockchain == .bitcoin {
+            return "\(gasSpeed.displayName) · \(Int(estimatedGas)) sat/vB"
+        }
+        return "\(gasSpeed.displayName) · ~\(String(format: "%.6f", estimatedGas)) \(token.blockchain.nativeToken)"
+    }
+
+    private func formatted(_ value: Double) -> String {
+        let precision = value >= 1 ? 6 : 8
+        var result = String(format: "%.*f", precision, value)
+        while result.contains("."), result.last == "0" { result.removeLast() }
         if result.last == "." { result.removeLast() }
         return result
     }
@@ -1083,6 +1665,7 @@ struct SummaryRow: View {
 
 struct QRScannerView: View {
     @Binding var scannedAddress: String
+    var onPaymentRequest: ((PaymentRequest) -> Void)? = nil
     var onScan: ((String) -> Void)? = nil
     @Environment(\.dismiss) private var dismiss
     @State private var cameraPermissionDenied = false
@@ -1112,6 +1695,16 @@ struct QRScannerView: View {
                 } else {
                     QRCodeScannerRepresentable(
                         onScan: { value in
+                            if let paymentRequest = PaymentRequestCodec.decode(value) {
+                                scannedAddress = paymentRequest.address
+                                if let onPaymentRequest {
+                                    onPaymentRequest(paymentRequest)
+                                } else {
+                                    onScan?(paymentRequest.address)
+                                }
+                                dismiss()
+                                return
+                            }
                             let address = QRCodePayloadParser.extractAddress(from: value)
                             scannedAddress = address
                             onScan?(address)
@@ -1442,6 +2035,84 @@ struct SavedAddressRow: View {
             .cornerRadius(8)
         }
         .buttonStyle(PlainButtonStyle())
+    }
+}
+
+struct SavedAddressPickerSheet: View {
+    let addresses: [SavedAddress]
+    let selectedAddress: String
+    let network: BlockchainType
+    let onSelect: (SavedAddress) -> Void
+
+    @Environment(\.dismiss) private var dismiss
+
+    private var compatibleAddresses: [SavedAddress] {
+        addresses.filter { isCompatible($0.address) }
+    }
+
+    var body: some View {
+        NavigationView {
+            ZStack {
+                WalletFlowBackground()
+
+                if compatibleAddresses.isEmpty {
+                    VStack(spacing: 14) {
+                        Image(systemName: "person.crop.circle.badge.questionmark")
+                            .font(.system(size: 36, weight: .medium))
+                            .foregroundColor(WpayinColors.textTertiary)
+
+                        Text("No saved addresses yet".localized)
+                            .font(.system(size: 16, weight: .semibold, design: .rounded))
+                            .foregroundColor(WpayinColors.text)
+
+                        Text(network.name)
+                            .font(.system(size: 13))
+                            .foregroundColor(WpayinColors.textSecondary)
+                    }
+                    .padding(24)
+                } else {
+                    ScrollView(showsIndicators: false) {
+                        LazyVStack(spacing: 10) {
+                            ForEach(compatibleAddresses) { savedAddress in
+                                SavedAddressRow(
+                                    savedAddress: savedAddress,
+                                    isSelected: savedAddress.address.caseInsensitiveCompare(selectedAddress) == .orderedSame
+                                ) {
+                                    onSelect(savedAddress)
+                                    dismiss()
+                                }
+                            }
+                        }
+                        .padding(.horizontal, 20)
+                        .padding(.top, 12)
+                        .padding(.bottom, 30)
+                    }
+                }
+            }
+            .navigationTitle("Saved Addresses".localized)
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button(L10n.Action.done.localized) {
+                        dismiss()
+                    }
+                    .foregroundColor(WpayinColors.primary)
+                }
+            }
+        }
+    }
+
+    private func isCompatible(_ address: String) -> Bool {
+        let value = address.trimmingCharacters(in: .whitespacesAndNewlines)
+        if network == .bitcoin {
+            return (value.lowercased().hasPrefix("bc1") && value.count >= 14)
+                || ((value.hasPrefix("1") || value.hasPrefix("3")) && (26...35).contains(value.count))
+        }
+
+        return network.isEVM
+            && value.hasPrefix("0x")
+            && value.count == 42
+            && value.dropFirst(2).allSatisfy { $0.isHexDigit }
     }
 }
 

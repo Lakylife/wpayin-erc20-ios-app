@@ -805,12 +805,18 @@ final class APIService: ObservableObject, @unchecked Sendable {
             throw APIError.invalidURL
         }
 
-        // Fetch name, symbol, and decimals in parallel
+        // Contract calls are authoritative. CoinGecko enrichment is optional
+        // and only supplies market data / artwork when the token is indexed.
         async let name = fetchTokenName(contractAddress: contractAddress, rpcURL: rpcURL)
         async let symbol = fetchTokenSymbol(contractAddress: contractAddress, rpcURL: rpcURL)
         async let decimals = fetchTokenDecimals(contractAddress: contractAddress, rpcURL: rpcURL)
+        async let marketMetadata = fetchContractMarketMetadata(
+            contractAddress: contractAddress,
+            blockchain: blockchainConfig.blockchainType ?? .ethereum
+        )
 
         let (tokenName, tokenSymbol, tokenDecimals) = try await (name, symbol, decimals)
+        let metadata = try? await marketMetadata
 
         Logger.log("✅ Token info: \(tokenName) (\(tokenSymbol)) - \(tokenDecimals) decimals")
 
@@ -820,8 +826,32 @@ final class APIService: ObservableObject, @unchecked Sendable {
             symbol: tokenSymbol,
             decimals: tokenDecimals,
             totalSupply: "0", // Not fetching total supply for now
-            price: 0.0 // Price will be fetched separately if needed
+            price: metadata?.marketData?.currentPrice["usd"] ?? 0,
+            imageUrl: metadata?.image.large ?? metadata?.image.small
         )
+    }
+
+    private func fetchContractMarketMetadata(
+        contractAddress: String,
+        blockchain: BlockchainType
+    ) async throws -> ContractCoinMetadata {
+        guard let platformId = blockchain.coinGeckoPlatformId else {
+            throw APIError.unsupportedFeature
+        }
+
+        let endpoint = "https://api.coingecko.com/api/v3/coins/\(platformId)/contract/\(contractAddress.lowercased())"
+        guard let url = URL(string: endpoint) else { throw APIError.invalidURL }
+
+        var request = URLRequest(url: url)
+        request.setValue("application/json", forHTTPHeaderField: "Accept")
+        request.timeoutInterval = 15
+        let (data, response) = try await session.data(for: request)
+
+        guard let http = response as? HTTPURLResponse,
+              (200..<300).contains(http.statusCode) else {
+            throw APIError.invalidResponse
+        }
+        return try JSONDecoder().decode(ContractCoinMetadata.self, from: data)
     }
 
     private func fetchTokenName(contractAddress: String, rpcURL: URL) async throws -> String {
@@ -927,12 +957,47 @@ final class APIService: ObservableObject, @unchecked Sendable {
 
     // MARK: - NFT Methods
 
-    func fetchNFTs(for address: String) async throws -> [NFT] {
+    func fetchNFTs(
+        for address: String,
+        blockchains: [BlockchainType] = [.ethereum]
+    ) async throws -> [NFT] {
+        let requested = Array(Set(blockchains.filter(\.isEVM)))
+        let resolved = requested.isEmpty ? [.ethereum] : requested
+        let hasAlchemyKey = !AppConfig.alchemyApiKey.isEmpty
+
+        return await withTaskGroup(of: [NFT].self) { group in
+            for blockchain in resolved {
+                group.addTask { [self] in
+                    if blockchain == .ethereum, hasAlchemyKey {
+                        let alchemy = (try? await fetchAlchemyNFTs(for: address)) ?? []
+                        if !alchemy.isEmpty { return alchemy }
+                    }
+                    return await fetchBlockscoutNFTs(for: address, blockchain: blockchain)
+                }
+            }
+
+            var result: [NFT] = []
+            for await chainNFTs in group {
+                result.append(contentsOf: chainNFTs)
+            }
+            return result.sorted {
+                if $0.blockchain != $1.blockchain {
+                    return $0.blockchain.name < $1.blockchain.name
+                }
+                return $0.displayName.localizedCaseInsensitiveCompare($1.displayName) == .orderedAscending
+            }
+        }
+    }
+
+    private func fetchAlchemyNFTs(
+        for address: String,
+        excludesKnownSpam: Bool = true
+    ) async throws -> [NFT] {
         Logger.log("🎨 Fetching NFTs for address: \(address)")
 
         let alchemyApiKey = AppConfig.alchemyApiKey
         guard !alchemyApiKey.isEmpty else {
-            Logger.log("ℹ️ NFT loading skipped: optional Alchemy API key is not configured")
+            Logger.log("ℹ️ Alchemy NFT provider skipped: API key is not configured")
             return []
         }
 
@@ -943,11 +1008,15 @@ final class APIService: ObservableObject, @unchecked Sendable {
             throw APIError.invalidURL
         }
 
-        urlComponents.queryItems = [
+        var queryItems = [
             URLQueryItem(name: "owner", value: address),
             URLQueryItem(name: "withMetadata", value: "true"),
             URLQueryItem(name: "pageSize", value: "100")
         ]
+        if excludesKnownSpam {
+            queryItems.append(URLQueryItem(name: "excludeFilters[]", value: "SPAM"))
+        }
+        urlComponents.queryItems = queryItems
 
         guard let url = urlComponents.url else {
             Logger.log("❌ Failed to construct URL")
@@ -970,6 +1039,13 @@ final class APIService: ObservableObject, @unchecked Sendable {
             Logger.log("📡 NFT API Response status: \(httpResponse.statusCode)")
 
             if httpResponse.statusCode != 200 {
+                // Alchemy's provider-side SPAM exclusion may not be included
+                // in every API tier. Retry once without it and let the local
+                // classifier protect the gallery instead of losing all NFTs.
+                if excludesKnownSpam {
+                    Logger.log("ℹ️ Alchemy spam exclusion unavailable; retrying with local protection")
+                    return try await fetchAlchemyNFTs(for: address, excludesKnownSpam: false)
+                }
                 if let responseString = String(data: data, encoding: .utf8) {
                     Logger.log("❌ API Error Response: \(responseString)")
                 }
@@ -1000,7 +1076,8 @@ final class APIService: ObservableObject, @unchecked Sendable {
                         imageUrl: imageUrl,
                         collectionName: collectionName,
                         blockchain: .ethereum,
-                        ownerAddress: address
+                        ownerAddress: address,
+                        providerMarkedSpam: nft.contract.isSpam
                     )
                 }
 
@@ -1017,6 +1094,93 @@ final class APIService: ObservableObject, @unchecked Sendable {
             Logger.log("❌ Network error fetching NFTs: \(error)")
             return []
         }
+    }
+
+    private func fetchBlockscoutNFTs(
+        for address: String,
+        blockchain: BlockchainType
+    ) async -> [NFT] {
+        let baseURL: String
+        switch blockchain {
+        case .ethereum: baseURL = "https://eth.blockscout.com"
+        case .polygon: baseURL = "https://polygon.blockscout.com"
+        case .arbitrum: baseURL = "https://arbitrum.blockscout.com"
+        case .optimism: baseURL = "https://optimism.blockscout.com"
+        case .base: baseURL = "https://base.blockscout.com"
+        case .gnosis: baseURL = "https://gnosis.blockscout.com"
+        default:
+            return []
+        }
+
+        guard var components = URLComponents(
+            string: "\(baseURL)/api/v2/addresses/\(address)/nft"
+        ) else { return [] }
+        components.queryItems = [
+            URLQueryItem(name: "type", value: "ERC-721,ERC-1155")
+        ]
+        guard let url = components.url else { return [] }
+
+        var request = URLRequest(url: url)
+        request.timeoutInterval = 20
+        request.setValue("application/json", forHTTPHeaderField: "Accept")
+
+        do {
+            let (data, response) = try await session.data(for: request)
+            guard let http = response as? HTTPURLResponse,
+                  (200..<300).contains(http.statusCode) else {
+                Logger.log("⚠️ Blockscout NFT request failed for \(blockchain.name)")
+                return []
+            }
+
+            let decoded = try JSONDecoder().decode(BlockscoutNFTResponse.self, from: data)
+            let items = decoded.items.compactMap { item -> NFT? in
+                guard !item.token.addressHash.isEmpty else { return nil }
+
+                let image = normalizedNFTURL(
+                    item.imageUrl ?? item.metadata?.imageUrl
+                )
+                let name = item.metadata?.name
+                    ?? item.token.name
+                    ?? "NFT #\(item.id)"
+                let collection = item.token.name
+                    ?? item.token.symbol
+                    ?? "Unknown Collection"
+
+                return NFT(
+                    contractAddress: item.token.addressHash,
+                    tokenId: item.id,
+                    name: name,
+                    description: item.metadata?.description ?? "",
+                    imageUrl: image,
+                    collectionName: collection,
+                    blockchain: blockchain,
+                    ownerAddress: address,
+                    metadata: NFTMetadata(
+                        attributes: nil,
+                        externalUrl: item.metadata?.externalUrl,
+                        animationUrl: normalizedNFTURL(
+                            item.animationUrl ?? item.metadata?.animationUrl
+                        )
+                    )
+                )
+            }
+            Logger.log("✅ Blockscout loaded \(items.count) NFTs on \(blockchain.name)")
+            return items
+        } catch {
+            Logger.log("⚠️ Blockscout NFT decode failed on \(blockchain.name): \(error.localizedDescription)")
+            return []
+        }
+    }
+
+    private func normalizedNFTURL(_ value: String?) -> String? {
+        guard let value, !value.isEmpty else { return nil }
+        if value.hasPrefix("ipfs://") {
+            return "https://ipfs.io/ipfs/" + value.dropFirst("ipfs://".count)
+        }
+        if value.hasPrefix("http://") || value.hasPrefix("https://") {
+            return value
+        }
+        return "https://" + value
     }
 
     // MARK: - CoinGecko API Methods
@@ -1592,6 +1756,30 @@ struct TokenInfo: Codable {
     let decimals: Int
     let totalSupply: String
     let price: Double
+    let imageUrl: String?
+}
+
+private struct ContractCoinMetadata: Decodable {
+    struct ImageSet: Decodable {
+        let small: String?
+        let large: String?
+    }
+
+    struct MarketData: Decodable {
+        let currentPrice: [String: Double]
+
+        enum CodingKeys: String, CodingKey {
+            case currentPrice = "current_price"
+        }
+    }
+
+    let image: ImageSet
+    let marketData: MarketData?
+
+    enum CodingKeys: String, CodingKey {
+        case image
+        case marketData = "market_data"
+    }
 }
 
 // MARK: - CoinGecko Models
@@ -1739,6 +1927,50 @@ struct ReservoirCollection: Codable {
     let name: String?
 }
 
+private struct BlockscoutNFTResponse: Decodable {
+    let items: [BlockscoutNFTItem]
+}
+
+private struct BlockscoutNFTItem: Decodable {
+    struct TokenData: Decodable {
+        let name: String?
+        let symbol: String?
+        let addressHash: String
+
+        enum CodingKeys: String, CodingKey {
+            case name, symbol
+            case addressHash = "address_hash"
+        }
+    }
+
+    struct Metadata: Decodable {
+        let name: String?
+        let description: String?
+        let imageUrl: String?
+        let externalUrl: String?
+        let animationUrl: String?
+
+        enum CodingKeys: String, CodingKey {
+            case name, description
+            case imageUrl = "image_url"
+            case externalUrl = "external_url"
+            case animationUrl = "animation_url"
+        }
+    }
+
+    let id: String
+    let imageUrl: String?
+    let animationUrl: String?
+    let token: TokenData
+    let metadata: Metadata?
+
+    enum CodingKeys: String, CodingKey {
+        case id, token, metadata
+        case imageUrl = "image_url"
+        case animationUrl = "animation_url"
+    }
+}
+
 // MARK: - Alchemy NFT Response Models (v3 API)
 struct AlchemyNFTResponse: Codable {
     let ownedNfts: [AlchemyNFT]
@@ -1768,6 +2000,8 @@ struct AlchemyNFTContract: Codable {
     let address: String
     let name: String?
     let symbol: String?
+    let isSpam: Bool?
+    let spamClassifications: [String]?
 }
 
 struct AlchemyNFTImage: Codable {

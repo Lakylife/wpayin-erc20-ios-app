@@ -261,8 +261,8 @@
 "Swap" = "Intercambiar";
 "Swap tokens instantly with best rates. Access DeFi protocols, track your portfolio, and manage all your crypto in one place." = "Intercambia tokens al instante con las mejores tasas. Accede a DeFi, sigue tu portafolio y gestiona tus criptos en un solo lugar.";
 "Switch or create wallets" = "Cambiar o crear billeteras";
-"Syncing latest balances..." = "Sincronizando saldos recientes...";
-"Syncing..." = "Sincronizando...";
+"Syncing latest balances..." = "Actualizando saldos...";
+"Syncing..." = "Actualizando...";
 "TESTNET" = "TESTNET";
 "Tap the words:" = "Toca las palabras:";
 "Terms & Conditions" = "Términos y condiciones";
@@ -347,7 +347,7 @@
 "wallet.options" = "Opciones de billetera";
 "wallet.connect" = "Conectar billetera";
 "wallet.noAssets" = "Aún no hay activos";
-"wallet.syncing" = "Sincronizando...";
+"wallet.syncing" = "Actualizando...";
 "wallet.portfolioUpToDate" = "El portafolio está actualizado";
 "wallet.refresh" = "Actualizar portafolio";
 "wallet.loadingData" = "Cargando datos de mercado...";
@@ -724,6 +724,10 @@
 "error.bridge.unsupportedNetwork" = "This network does not support bridging";
 "error.bridge.noRoute" = "No bridge route found for this token and network pair";
 "error.bridge.quoteFailed" = "Could not get a bridge quote. Please try again.";
+"bridge.receiveAddress" = "Receiving address";
+"error.bridge.missingDestinationAddress" = "Could not determine the receiving address on the destination network";
+"error.bridge.solanaSendFailed" = "Failed to sign or send the Solana transaction";
+"error.bridge.insufficientFunds" = "Balance is not enough to cover the amount plus network fees. Try a smaller amount.";
 "All Networks" = "All Networks";
 "Platform fee %@: %@ %@" = "Platform fee %@: %@ %@";
 
@@ -746,6 +750,13 @@
 "Offer verified on-chain" = "Offer verified on-chain";
 "Seller" = "Seller";
 "Platform fee" = "Platform fee";
+"Fetching token details..." = "Obteniendo detalles del token...";
+"Explore DeFi" = "Explorar DeFi";
+"Choose a protocol to continue securely on its official website." = "Elige un protocolo para continuar de forma segura en su sitio web oficial.";
+"Lending & borrowing" = "Préstamos";
+"Swap & liquidity" = "Intercambio y liquidez";
+"Liquid staking" = "Staking líquido";
+"Loading NFTs..." = "Cargando NFTs...";
 "Confirm Trade" = "Confirm Trade";
 "Completing trade..." = "Completing trade...";
 "Trade Completed" = "Trade Completed";
@@ -769,6 +780,9 @@
 "Expired" = "Expired";
 "Active" = "Active";
 "Remove" = "Remove";
+"Remove from Your Assets" = "Eliminar de Tus activos";
+"Remove %@?" = "¿Eliminar %@?";
+"This only removes the token from Your Assets. Your funds remain on the blockchain." = "Esto solo elimina el token de Tus activos. Tus fondos permanecen en la blockchain.";
 "error.p2p.fillWouldFail" = "The trade would fail on-chain (the seller may have moved their funds). Nothing was sent — no fees were charged.";
 "No tokens to sell" = "No tokens to sell";
 "P2P trades settle in ERC-20 tokens (USDC, USDT, WETH…). You don't hold any yet — swap some of your %@ first, then come back." = "P2P trades settle in ERC-20 tokens (USDC, USDT, WETH…). You don't hold any yet — swap some of your %@ first, then come back.";
@@ -797,6 +811,21 @@
 "Best price" = "Mejor precio";
 "Includes the ERC-20 approval network fee" = "Incluye la comisión de red por la aprobación ERC-20";
 "Insufficient %@ balance for the amount and network fee" = "Saldo de %@ insuficiente para el importe y la comisión de red";
+"Network fee is paid separately in %@. Required: %@ %@ · Available: %@ %@" = "La comisión de red se paga por separado en %@. Necesario: %@ %@ · Disponible: %@ %@";
+"Edit recipient" = "Editar destinatario";
+"Continue" = "Continuar";
+"Amount plus the network fee exceeds the available %@ balance." = "El importe más la comisión de red supera el saldo disponible de %@.";
+"Sending %@ on %@ requires %@ for the network fee. Required: ~%@ %@ · Available: %@ %@" = "Enviar %@ en %@ requiere %@ para la comisión de red. Necesario: ~%@ %@ · Disponible: %@ %@";
+"Total balance" = "Saldo total";
+"Balance history" = "Historial de saldo";
+"Based on your wallet activity" = "Basado en la actividad de tu cartera";
+"No balance changes in this period" = "No hubo cambios de saldo en este período";
+"Now" = "Ahora";
+"All time" = "Todo el período";
+"Last 7 days" = "Últimos 7 días";
+"Last 30 days" = "Últimos 30 días";
+"Last 90 days" = "Últimos 90 días";
+"Last year" = "Último año";
 
 // MARK: - Swap Progress (v1.1.8)
 "Approving token" = "Aprobando token";

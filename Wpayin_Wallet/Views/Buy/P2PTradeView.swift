@@ -1075,6 +1075,11 @@ private struct P2PSellContent: View {
         cancellingNonce = offer.nonce
 
         Task {
+            guard await settingsManager.authorizeSpending(reason: "auth.confirmPayment".localized) else {
+                await MainActor.run { cancellingNonce = nil }
+                return
+            }
+
             do {
                 let txHash = try await P2PTradeService.shared.cancelOffer(offer)
                 Logger.log("✅ P2P offer cancelled: \(txHash)")

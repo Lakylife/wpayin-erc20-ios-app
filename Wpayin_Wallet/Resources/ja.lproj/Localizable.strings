@@ -261,8 +261,8 @@
 "Swap" = "スワップ";
 "Swap tokens instantly with best rates. Access DeFi protocols, track your portfolio, and manage all your crypto in one place." = "最良レートで即時にトークンを交換。DeFiプロトコルにアクセスし、ポートフォリオを追跡して暗号資産を一元管理できます。";
 "Switch or create wallets" = "ウォレットを切替または作成";
-"Syncing latest balances..." = "最新残高を同期中...";
-"Syncing..." = "同期中...";
+"Syncing latest balances..." = "残高を更新中...";
+"Syncing..." = "更新中...";
 "TESTNET" = "TESTNET";
 "Tap the words:" = "単語をタップ:";
 "Terms & Conditions" = "利用規約";
@@ -347,7 +347,7 @@
 "wallet.options" = "ウォレットオプション";
 "wallet.connect" = "ウォレットを接続";
 "wallet.noAssets" = "まだ資産はありません";
-"wallet.syncing" = "同期中...";
+"wallet.syncing" = "更新中...";
 "wallet.portfolioUpToDate" = "ポートフォリオは最新です";
 "wallet.refresh" = "ポートフォリオを更新";
 "wallet.loadingData" = "市場データを読み込み中...";
@@ -724,6 +724,10 @@
 "error.bridge.unsupportedNetwork" = "This network does not support bridging";
 "error.bridge.noRoute" = "No bridge route found for this token and network pair";
 "error.bridge.quoteFailed" = "Could not get a bridge quote. Please try again.";
+"bridge.receiveAddress" = "Receiving address";
+"error.bridge.missingDestinationAddress" = "Could not determine the receiving address on the destination network";
+"error.bridge.solanaSendFailed" = "Failed to sign or send the Solana transaction";
+"error.bridge.insufficientFunds" = "Balance is not enough to cover the amount plus network fees. Try a smaller amount.";
 "All Networks" = "All Networks";
 "Platform fee %@: %@ %@" = "Platform fee %@: %@ %@";
 
@@ -746,6 +750,13 @@
 "Offer verified on-chain" = "Offer verified on-chain";
 "Seller" = "Seller";
 "Platform fee" = "Platform fee";
+"Fetching token details..." = "トークン情報を取得中...";
+"Explore DeFi" = "DeFiを探す";
+"Choose a protocol to continue securely on its official website." = "プロトコルを選択し、公式サイトで安全に続行してください。";
+"Lending & borrowing" = "レンディングと借入";
+"Swap & liquidity" = "スワップと流動性";
+"Liquid staking" = "リキッドステーキング";
+"Loading NFTs..." = "NFTを読み込み中...";
 "Confirm Trade" = "Confirm Trade";
 "Completing trade..." = "Completing trade...";
 "Trade Completed" = "Trade Completed";
@@ -769,6 +780,9 @@
 "Expired" = "Expired";
 "Active" = "Active";
 "Remove" = "Remove";
+"Remove from Your Assets" = "保有資産から削除";
+"Remove %@?" = "%@を削除しますか？";
+"This only removes the token from Your Assets. Your funds remain on the blockchain." = "トークンは保有資産の一覧からのみ削除されます。資金はブロックチェーン上に残ります。";
 "error.p2p.fillWouldFail" = "The trade would fail on-chain (the seller may have moved their funds). Nothing was sent — no fees were charged.";
 "No tokens to sell" = "No tokens to sell";
 "P2P trades settle in ERC-20 tokens (USDC, USDT, WETH…). You don't hold any yet — swap some of your %@ first, then come back." = "P2P trades settle in ERC-20 tokens (USDC, USDT, WETH…). You don't hold any yet — swap some of your %@ first, then come back.";
@@ -797,6 +811,21 @@
 "Best price" = "最良価格";
 "Includes the ERC-20 approval network fee" = "ERC-20承認のネットワーク手数料を含みます";
 "Insufficient %@ balance for the amount and network fee" = "金額とネットワーク手数料に必要な%@残高が不足しています";
+"Network fee is paid separately in %@. Required: %@ %@ · Available: %@ %@" = "ネットワーク手数料は別途%@で支払います。必要：%@ %@ · 利用可能：%@ %@";
+"Edit recipient" = "受取人を編集";
+"Continue" = "続ける";
+"Amount plus the network fee exceeds the available %@ balance." = "金額とネットワーク手数料が利用可能な%@残高を超えています。";
+"Sending %@ on %@ requires %@ for the network fee. Required: ~%@ %@ · Available: %@ %@" = "%@を%@で送信するには、ネットワーク手数料として%@が必要です。必要：~%@ %@ · 利用可能：%@ %@";
+"Total balance" = "合計残高";
+"Balance history" = "残高履歴";
+"Based on your wallet activity" = "ウォレットのアクティビティに基づく";
+"No balance changes in this period" = "この期間に残高の変化はありません";
+"Now" = "現在";
+"All time" = "全期間";
+"Last 7 days" = "過去7日間";
+"Last 30 days" = "過去30日間";
+"Last 90 days" = "過去90日間";
+"Last year" = "過去1年間";
 
 // MARK: - Swap Progress (v1.1.8)
 "Approving token" = "トークンを承認中";

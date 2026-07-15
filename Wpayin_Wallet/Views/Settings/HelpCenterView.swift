@@ -310,19 +310,28 @@ struct HelpCategory: Identifiable {
             title: "Getting Started",
             icon: "play.circle.fill",
             color: .blue,
-            articles: HelpArticle.gettingStartedArticles
+            articles: HelpArticle.gettingStartedArticles + [
+                HelpArticle.additionalFeatureArticles[4]
+            ]
         ),
         HelpCategory(
             title: "Wallet Security",
             icon: "lock.shield.fill",
             color: .green,
-            articles: HelpArticle.securityArticles
+            articles: HelpArticle.securityArticles + [
+                HelpArticle.additionalFeatureArticles[1],
+                HelpArticle.additionalFeatureArticles[5]
+            ]
         ),
         HelpCategory(
             title: "Sending & Receiving",
             icon: "arrow.left.arrow.right.circle.fill",
             color: .purple,
-            articles: HelpArticle.transactionArticles
+            articles: HelpArticle.transactionArticles + [
+                HelpArticle.additionalFeatureArticles[0],
+                HelpArticle.additionalFeatureArticles[2],
+                HelpArticle.additionalFeatureArticles[3]
+            ]
         ),
         HelpCategory(
             title: "Blockchain Networks",
@@ -360,6 +369,89 @@ struct HelpArticle: Identifiable {
         self.steps = steps
         self.relatedArticles = relatedArticles
     }
+
+    // MARK: - Additional Help Topics
+
+    static let additionalFeatureArticles: [HelpArticle] = [
+        HelpArticle(
+            title: "How to Request a Payment",
+            preview: "Create a QR code or link with the correct asset, network and amount",
+            content: "Request Payment creates a shareable QR code or link with an asset, network, amount, note and expiry. It never moves funds by itself; the sender still reviews and confirms the transaction in their own wallet.",
+            steps: [
+                "Open Deposit and choose Request Payment",
+                "Select the asset and the network where you want to receive it",
+                "Enter an optional amount, note and expiry",
+                "Show the QR code or share the payment link",
+                "Always verify the selected network with the sender"
+            ],
+            relatedArticles: ["How to Receive Crypto", "Why Do I Have Different Addresses?"]
+        ),
+        HelpArticle(
+            title: "Connecting to dApps with WalletConnect",
+            preview: "Scan a QR code, review requests and manage active sessions",
+            content: "WalletConnect lets a dApp request access without exposing your recovery phrase or private key. Connection does not authorize spending. Every signature or transaction request is shown separately and must be approved on this device.",
+            steps: [
+                "Open Settings and select WalletConnect",
+                "Scan the dApp QR code or open its WalletConnect link",
+                "Check the dApp name, website, networks and requested permissions",
+                "Approve only requests you understand",
+                "Disconnect sessions you no longer use"
+            ],
+            relatedArticles: ["How to Avoid Scams", "How Face ID Protects Transactions"]
+        ),
+        HelpArticle(
+            title: "Swaps, Bridges and Network Fees",
+            preview: "Understand same-network swaps, cross-network bridges and MAX",
+            content: "Swap exchanges assets on a compatible network. Bridge moves value between supported networks. The MAX button reserves any native network fee that must be paid by the same balance. Token transfers can still require the network's native asset for gas, and any Wpayin service contribution is shown separately before confirmation.",
+            steps: [
+                "Choose the source asset and its network",
+                "For Swap, select an asset available on the compatible destination network",
+                "For Bridge, select the destination network and asset",
+                "Review the amount, route, network fee and Wpayin fee",
+                "Confirm only after checking the final amount you receive"
+            ],
+            relatedArticles: ["What are Gas Fees?", "What are Layer 2 Networks?"]
+        ),
+        HelpArticle(
+            title: "How P2P Exchange Works",
+            preview: "Trade tokens wallet-to-wallet without Wpayin holding funds",
+            content: "P2P Exchange shares signed token offers between users. Settlement is atomic on-chain: either both token transfers happen or neither happens. Wpayin does not hold funds and the feature does not process cash, cards, bank transfers or other fiat payments.",
+            steps: [
+                "Create a public or private token offer, or open an existing offer",
+                "Review both assets, amounts, network, expiry and counterparty address",
+                "The app re-checks balances and simulates the trade before confirmation",
+                "Approve with Face ID when transaction protection is enabled",
+                "Track the confirmed transaction in Activity"
+            ],
+            relatedArticles: ["How to Avoid Scams", "How Face ID Protects Transactions"]
+        ),
+        HelpArticle(
+            title: "Managing Assets and Custom Tokens",
+            preview: "Add a token by contract address or remove it from Your Assets",
+            content: "Use the plus button next to All Assets to add a custom token. After you select its network and enter the contract address, Wpayin loads available metadata such as name, symbol, decimals and icon. Removing a token only hides it from Your Assets; it never removes tokens from the blockchain.",
+            steps: [
+                "Tap the plus button next to All Assets",
+                "Select the network that contains the token contract",
+                "Paste and verify the official contract address",
+                "Review the loaded token details before adding it",
+                "Use Remove from Your Assets to hide a token later"
+            ],
+            relatedArticles: ["Why Can't I See My Tokens?", "What are Blockchain Networks?"]
+        ),
+        HelpArticle(
+            title: "How Face ID Protects Transactions",
+            preview: "Require biometric verification before signing or sending",
+            content: "When Face ID or Touch ID is enabled in Settings, Wpayin requires verification before signing Send, Swap, Bridge, P2P and WalletConnect transaction requests. Keys remain on the device. Always review the address, network, amount and fees before authenticating.",
+            steps: [
+                "Open Settings and find Security",
+                "Enable Face ID or Touch ID",
+                "Review every transaction summary before confirming",
+                "Authenticate only when the displayed request matches your intent",
+                "You can also choose your preferred time zone under Preferences"
+            ],
+            relatedArticles: ["How to Secure Your Wallet", "How to Verify Transaction Addresses"]
+        )
+    ]
     
     // MARK: - Getting Started Articles
     
@@ -805,6 +897,19 @@ struct HelpArticle: Identifiable {
                 "NFT will be transferred after confirmation"
             ],
             relatedArticles: ["What are NFTs?", "What are Gas Fees?"]
+        ),
+        HelpArticle(
+            title: "How NFT Spam Protection Works",
+            preview: "Review suspicious collectibles without exposing your wallet",
+            content: "Anyone can send an NFT to a public wallet address. Wpayin hides collectibles marked as spam by the provider and uses conservative local checks for suspicious claim links, rewards and phishing language. Hidden NFTs remain on the blockchain and can be reviewed or restored at any time.",
+            steps: [
+                "Open the NFTs tab and find Spam Protection",
+                "Tap Review to inspect hidden items without opening external links",
+                "Use Show in NFT Gallery if a legitimate NFT was hidden",
+                "Open a normal NFT and choose Hide as Spam to remove it from the main gallery",
+                "Never sign a request or connect your wallet to claim an unknown NFT reward"
+            ],
+            relatedArticles: ["How to Avoid Scams", "Why Can't I See My NFTs?"]
         ),
         HelpArticle(
             title: "Why Can't I See My NFTs?",

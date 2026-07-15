@@ -13,6 +13,8 @@
 		EEE1F2032E90000000737D17 /* BigInt in Frameworks */ = {isa = PBXBuildFile; productRef = EEE1F1032E90000000737D17 /* BigInt */; };
 		EEE1F2042E90000000737D17 /* secp256k1 in Frameworks */ = {isa = PBXBuildFile; productRef = EEE1F1042E90000000737D17 /* secp256k1 */; };
 		EEE1F2052E90500000737D17 /* WalletCore in Frameworks */ = {isa = PBXBuildFile; productRef = EEE1F1052E90500000737D17 /* WalletCore */; };
+		EEE1F2062EA0000000737D17 /* ReownWalletKit in Frameworks */ = {isa = PBXBuildFile; productRef = EEE1F1062EA0000000737D17 /* ReownWalletKit */; };
+		EEE1F2072EA0000000737D17 /* Starscream in Frameworks */ = {isa = PBXBuildFile; productRef = EEE1F1072EA0000000737D17 /* Starscream */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -61,6 +63,8 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				EEE1F2062EA0000000737D17 /* ReownWalletKit in Frameworks */,
+				EEE1F2072EA0000000737D17 /* Starscream in Frameworks */,
 				EEE1F2012E90000000737D17 /* web3swift in Frameworks */,
 				EEE1F2022E90000000737D17 /* CryptoSwift in Frameworks */,
 				EEE1F2032E90000000737D17 /* BigInt in Frameworks */,
@@ -135,6 +139,8 @@
 			);
 			name = Wpayin_Wallet;
 			packageProductDependencies = (
+				EEE1F1062EA0000000737D17 /* ReownWalletKit */,
+				EEE1F1072EA0000000737D17 /* Starscream */,
 				EEE1F1012E90000000737D17 /* web3swift */,
 				EEE1F1022E90000000737D17 /* CryptoSwift */,
 				EEE1F1032E90000000737D17 /* BigInt */,
@@ -235,6 +241,8 @@
 			mainGroup = EEE1E4892E85004200737D17;
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
+				EEE1F3042EA0000000737D17 /* XCRemoteSwiftPackageReference "reown-swift" */,
+				EEE1F3052EA0000000737D17 /* XCRemoteSwiftPackageReference "Starscream" */,
 				EEE1E5052E85326900737D17 /* XCRemoteSwiftPackageReference "web3swift" */,
 				EEE1F3012E90000000737D17 /* XCRemoteSwiftPackageReference "CryptoSwift" */,
 				EEE1F3022E90000000737D17 /* XCRemoteSwiftPackageReference "BigInt" */,
@@ -442,26 +450,29 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = YES;
+				CODE_SIGN_ENTITLEMENTS = Wpayin_Wallet/Wpayin_Wallet.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 5;
+				CURRENT_PROJECT_VERSION = 6;
 				DEVELOPMENT_TEAM = AA9GARUABY;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = Walletpayin;
+				INFOPLIST_KEY_CFBundleURLTypes = "{\n    CFBundleTypeRole = Editor;\n    CFBundleURLName = \"io.noriskservis.standart.Wpayin-Wallet.walletconnect\";\n    CFBundleURLSchemes =     (\n        wpayin\n    );\n}";
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.finance";
 				INFOPLIST_KEY_NSCameraUsageDescription = "Camera is used to scan wallet QR codes for sending cryptocurrency.";
-				INFOPLIST_KEY_NSFaceIDUsageDescription = "Face ID is used to unlock your wallet and protect your funds.";
+				INFOPLIST_KEY_NSFaceIDUsageDescription = "Face ID is used to unlock your wallet and authorize transaction signing.";
 				INFOPLIST_KEY_UIAppFonts = "Inter-Bold.ttf";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				INFOPLIST_KEY_WALLETCONNECT_PROJECT_ID = "$(WALLETCONNECT_PROJECT_ID)";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 1.1.8;
+				MARKETING_VERSION = 1.1.9;
 				PRODUCT_BUNDLE_IDENTIFIER = "io.noriskservis.standart.Wpayin-Wallet";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
@@ -471,6 +482,7 @@
 				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
+				WALLETCONNECT_PROJECT_ID = "";
 			};
 			name = Debug;
 		};
@@ -480,26 +492,29 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = YES;
+				CODE_SIGN_ENTITLEMENTS = Wpayin_Wallet/Wpayin_Wallet.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 5;
+				CURRENT_PROJECT_VERSION = 6;
 				DEVELOPMENT_TEAM = AA9GARUABY;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = Walletpayin;
+				INFOPLIST_KEY_CFBundleURLTypes = "{\n    CFBundleTypeRole = Editor;\n    CFBundleURLName = \"io.noriskservis.standart.Wpayin-Wallet.walletconnect\";\n    CFBundleURLSchemes =     (\n        wpayin\n    );\n}";
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.finance";
 				INFOPLIST_KEY_NSCameraUsageDescription = "Camera is used to scan wallet QR codes for sending cryptocurrency.";
-				INFOPLIST_KEY_NSFaceIDUsageDescription = "Face ID is used to unlock your wallet and protect your funds.";
+				INFOPLIST_KEY_NSFaceIDUsageDescription = "Face ID is used to unlock your wallet and authorize transaction signing.";
 				INFOPLIST_KEY_UIAppFonts = "Inter-Bold.ttf";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				INFOPLIST_KEY_WALLETCONNECT_PROJECT_ID = "$(WALLETCONNECT_PROJECT_ID)";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 1.1.8;
+				MARKETING_VERSION = 1.1.9;
 				PRODUCT_BUNDLE_IDENTIFIER = "io.noriskservis.standart.Wpayin-Wallet";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
@@ -509,6 +524,7 @@
 				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
+				WALLETCONNECT_PROJECT_ID = "";
 			};
 			name = Release;
 		};
@@ -517,11 +533,11 @@
 			buildSettings = {
 				BUNDLE_LOADER = "$(TEST_HOST)";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 5;
+				CURRENT_PROJECT_VERSION = 6;
 				DEVELOPMENT_TEAM = AA9GARUABY;
 				GENERATE_INFOPLIST_FILE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
-				MARKETING_VERSION = 1.1.8;
+				MARKETING_VERSION = 1.1.9;
 				PRODUCT_BUNDLE_IDENTIFIER = "io.noriskservis.standart.Wpayin-WalletTests";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = NO;
@@ -539,11 +555,11 @@
 			buildSettings = {
 				BUNDLE_LOADER = "$(TEST_HOST)";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 5;
+				CURRENT_PROJECT_VERSION = 6;
 				DEVELOPMENT_TEAM = AA9GARUABY;
 				GENERATE_INFOPLIST_FILE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
-				MARKETING_VERSION = 1.1.8;
+				MARKETING_VERSION = 1.1.9;
 				PRODUCT_BUNDLE_IDENTIFIER = "io.noriskservis.standart.Wpayin-WalletTests";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = NO;
@@ -560,10 +576,10 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 5;
+				CURRENT_PROJECT_VERSION = 6;
 				DEVELOPMENT_TEAM = AA9GARUABY;
 				GENERATE_INFOPLIST_FILE = YES;
-				MARKETING_VERSION = 1.1.8;
+				MARKETING_VERSION = 1.1.9;
 				PRODUCT_BUNDLE_IDENTIFIER = "io.noriskservis.standart.Wpayin-WalletUITests";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = NO;
@@ -580,10 +596,10 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 5;
+				CURRENT_PROJECT_VERSION = 6;
 				DEVELOPMENT_TEAM = AA9GARUABY;
 				GENERATE_INFOPLIST_FILE = YES;
-				MARKETING_VERSION = 1.1.8;
+				MARKETING_VERSION = 1.1.9;
 				PRODUCT_BUNDLE_IDENTIFIER = "io.noriskservis.standart.Wpayin-WalletUITests";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = NO;
@@ -678,6 +694,22 @@
 				minimumVersion = 0.10.0;
 			};
 		};
+		EEE1F3042EA0000000737D17 /* XCRemoteSwiftPackageReference "reown-swift" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/reown-com/reown-swift";
+			requirement = {
+				kind = exactVersion;
+				version = 2.3.0;
+			};
+		};
+		EEE1F3052EA0000000737D17 /* XCRemoteSwiftPackageReference "Starscream" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/daltoniam/Starscream";
+			requirement = {
+				kind = exactVersion;
+				version = 3.1.2;
+			};
+		};
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
@@ -710,6 +742,16 @@
 			isa = XCSwiftPackageProductDependency;
 			package = EEE1E7062E853E8200737D17 /* XCRemoteSwiftPackageReference "wallet-core" */;
 			productName = WalletCore;
+		};
+		EEE1F1062EA0000000737D17 /* ReownWalletKit */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = EEE1F3042EA0000000737D17 /* XCRemoteSwiftPackageReference "reown-swift" */;
+			productName = ReownWalletKit;
+		};
+		EEE1F1072EA0000000737D17 /* Starscream */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = EEE1F3052EA0000000737D17 /* XCRemoteSwiftPackageReference "Starscream" */;
+			productName = Starscream;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};

@@ -25,6 +25,7 @@ struct WalletView: View {
     @State private var showWalletSelector = false
     @State private var showQRScanner = false
     @State private var scannedRecipientAddress = ""
+    @State private var scannedPaymentRequest: PaymentRequest?
 
     var body: some View {
         ZStack {
@@ -80,19 +81,37 @@ struct WalletView: View {
                 .environmentObject(walletManager)
                 .environmentObject(settingsManager)
         }
-        .sheet(isPresented: $showWithdrawSheet) {
-            WithdrawView(initialRecipientAddress: scannedRecipientAddress)
+        .sheet(isPresented: $showWithdrawSheet, onDismiss: {
+            scannedPaymentRequest = nil
+            scannedRecipientAddress = ""
+        }) {
+            WithdrawView(
+                initialRecipientAddress: scannedRecipientAddress,
+                initialPaymentRequest: scannedPaymentRequest
+            )
                 .environmentObject(walletManager)
                 .environmentObject(settingsManager)
         }
         .sheet(isPresented: $showQRScanner) {
-            QRScannerView(scannedAddress: $scannedRecipientAddress) { scannedAddress in
-                scannedRecipientAddress = scannedAddress
-                showQRScanner = false
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
-                    showWithdrawSheet = true
+            QRScannerView(
+                scannedAddress: $scannedRecipientAddress,
+                onPaymentRequest: { request in
+                    scannedPaymentRequest = request
+                    scannedRecipientAddress = request.address
+                    showQRScanner = false
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
+                        showWithdrawSheet = true
+                    }
+                },
+                onScan: { scannedAddress in
+                    scannedPaymentRequest = nil
+                    scannedRecipientAddress = scannedAddress
+                    showQRScanner = false
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
+                        showWithdrawSheet = true
+                    }
                 }
-            }
+            )
         }
         .sheet(isPresented: $showAddToken) {
             AddTokenView()
@@ -131,20 +150,25 @@ struct WalletView: View {
             ImportWalletView()
                 .environmentObject(walletManager)
         }
-        .confirmationDialog(
-            walletManager.hasWallet ? "Wallet Options".localized : "Connect Wallet".localized,
-            isPresented: $showMenuSheet,
-            titleVisibility: .visible
-        ) {
-            if walletManager.hasWallet {
-                Button("Add Token".localized) { showAddToken = true }
-                Button("Manage Wallets".localized) { showWalletSelector = true }
-                Button("Cancel".localized, role: .cancel) { }
-            } else {
-                Button("Create New Wallet".localized) { showCreateWallet = true }
-                Button("Import Existing Wallet".localized) { showImportWallet = true }
-                Button("Cancel".localized, role: .cancel) { }
-            }
+        .sheet(isPresented: $showMenuSheet) {
+            WalletOptionsSheet(
+                hasWallet: walletManager.hasWallet,
+                walletName: walletManager.activeWallet?.name ?? L10n.Wallet.mainWallet.localized,
+                walletAddress: walletManager.walletAddress,
+                onAddToken: {
+                    openAfterClosingWalletOptions { showAddToken = true }
+                },
+                onManageWallets: {
+                    openAfterClosingWalletOptions { showWalletSelector = true }
+                },
+                onCreateWallet: {
+                    openAfterClosingWalletOptions { showCreateWallet = true }
+                },
+                onImportWallet: {
+                    openAfterClosingWalletOptions { showImportWallet = true }
+                }
+            )
+            .walletOptionsPresentation()
         }
         .task {
             if walletManager.walletAddress.isEmpty {
@@ -155,6 +179,216 @@ struct WalletView: View {
 
     private var totalPortfolioValue: Double {
         walletManager.visibleGroupedTokens.reduce(0) { $0 + $1.totalValue }
+    }
+
+    private func openAfterClosingWalletOptions(_ action: @escaping () -> Void) {
+        showMenuSheet = false
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.28) {
+            action()
+        }
+    }
+}
+
+private struct WalletOptionsSheet: View {
+    let hasWallet: Bool
+    let walletName: String
+    let walletAddress: String
+    let onAddToken: () -> Void
+    let onManageWallets: () -> Void
+    let onCreateWallet: () -> Void
+    let onImportWallet: () -> Void
+
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        NavigationView {
+            ZStack {
+                WalletFlowBackground()
+
+                VStack(spacing: 18) {
+                    Capsule()
+                        .fill(WpayinColors.textTertiary.opacity(0.7))
+                        .frame(width: 40, height: 5)
+                        .padding(.top, 8)
+
+                    if hasWallet {
+                        walletIdentity
+                    } else {
+                        connectWalletHeader
+                    }
+
+                    VStack(spacing: 10) {
+                        if hasWallet {
+                            WalletOptionRow(
+                                icon: "plus.circle.fill",
+                                title: "Add Token".localized,
+                                subtitle: L10n.Tokens.loadAll.localized,
+                                action: onAddToken
+                            )
+
+                            WalletOptionRow(
+                                icon: "wallet.pass.fill",
+                                title: "Manage Wallets".localized,
+                                subtitle: L10n.Settings.wallet.localized,
+                                action: onManageWallets
+                            )
+                        } else {
+                            WalletOptionRow(
+                                icon: "plus",
+                                title: "Create New Wallet".localized,
+                                subtitle: "welcome.subtitle".localized,
+                                action: onCreateWallet
+                            )
+
+                            WalletOptionRow(
+                                icon: "square.and.arrow.down.fill",
+                                title: "Import Existing Wallet".localized,
+                                subtitle: L10n.Action.importWallet.localized,
+                                action: onImportWallet
+                            )
+                        }
+                    }
+
+                    Spacer(minLength: 10)
+                }
+                .padding(.horizontal, 20)
+            }
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .principal) {
+                    Text(hasWallet ? L10n.Wallet.options.localized : L10n.Wallet.connect.localized)
+                        .font(.system(size: 17, weight: .semibold, design: .rounded))
+                        .foregroundColor(WpayinColors.text)
+                }
+
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button {
+                        dismiss()
+                    } label: {
+                        Image(systemName: "xmark")
+                            .font(.system(size: 13, weight: .bold))
+                            .foregroundColor(WpayinColors.textSecondary)
+                            .frame(width: 34, height: 34)
+                            .background(Circle().fill(WpayinColors.surfaceLight))
+                            .overlay(Circle().stroke(WpayinColors.surfaceBorder, lineWidth: 1))
+                    }
+                    .buttonStyle(PlainButtonStyle())
+                    .accessibilityLabel(L10n.Action.close.localized)
+                }
+            }
+        }
+    }
+
+    private var walletIdentity: some View {
+        HStack(spacing: 14) {
+            WpayinLogoView(size: 42)
+
+            VStack(alignment: .leading, spacing: 4) {
+                Text(walletName.localized)
+                    .font(.system(size: 17, weight: .semibold, design: .rounded))
+                    .foregroundColor(WpayinColors.text)
+                    .lineLimit(1)
+
+                Text(shortAddress)
+                    .font(.system(size: 12, weight: .medium, design: .monospaced))
+                    .foregroundColor(WpayinColors.textSecondary)
+            }
+
+            Spacer()
+
+            Circle()
+                .fill(WpayinColors.success)
+                .frame(width: 8, height: 8)
+                .shadow(color: WpayinColors.success.opacity(0.45), radius: 6)
+        }
+        .wpayinCard(padding: 16, radius: 20)
+    }
+
+    private var connectWalletHeader: some View {
+        VStack(spacing: 10) {
+            Image(systemName: "wallet.pass.fill")
+                .font(.system(size: 24, weight: .semibold))
+                .foregroundColor(WpayinColors.primary)
+                .frame(width: 54, height: 54)
+                .background(Circle().fill(WpayinColors.primary.opacity(0.14)))
+
+            Text(L10n.Wallet.connect.localized)
+                .font(.system(size: 20, weight: .bold, design: .rounded))
+                .foregroundColor(WpayinColors.text)
+        }
+    }
+
+    private var shortAddress: String {
+        guard !walletAddress.isEmpty else { return "—" }
+        guard walletAddress.count > 12 else { return walletAddress }
+        return "\(walletAddress.prefix(7))…\(walletAddress.suffix(5))"
+    }
+}
+
+private struct WalletOptionRow: View {
+    let icon: String
+    let title: String
+    let subtitle: String
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 14) {
+                Image(systemName: icon)
+                    .font(.system(size: 18, weight: .semibold))
+                    .foregroundColor(WpayinColors.primary)
+                    .frame(width: 42, height: 42)
+                    .background(
+                        RoundedRectangle(cornerRadius: 13, style: .continuous)
+                            .fill(WpayinColors.primary.opacity(0.12))
+                    )
+
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(title)
+                        .font(.system(size: 16, weight: .semibold, design: .rounded))
+                        .foregroundColor(WpayinColors.text)
+
+                    Text(subtitle)
+                        .font(.system(size: 12))
+                        .foregroundColor(WpayinColors.textSecondary)
+                        .lineLimit(1)
+                }
+
+                Spacer()
+
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundColor(WpayinColors.textTertiary)
+            }
+            .padding(14)
+            .background(
+                RoundedRectangle(cornerRadius: 18, style: .continuous)
+                    .fill(WpayinColors.surface)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 18, style: .continuous)
+                            .stroke(WpayinColors.surfaceBorder, lineWidth: 1)
+                    )
+            )
+        }
+        .buttonStyle(WpayinPressableStyle())
+    }
+}
+
+private extension View {
+    @ViewBuilder
+    func walletOptionsPresentation() -> some View {
+        if #available(iOS 16.4, *) {
+            self
+                .presentationDetents([.medium])
+                .presentationDragIndicator(.hidden)
+                .presentationCornerRadius(28)
+        } else if #available(iOS 16.0, *) {
+            self
+                .presentationDetents([.medium])
+                .presentationDragIndicator(.hidden)
+        } else {
+            self
+        }
     }
 }
 
@@ -726,17 +960,30 @@ struct ModernTabsView: View {
             LazyVStack(spacing: 16) {
                 if selectedTab == 0 {
                     TokensTabContent(tokens: tokens, onTokenTap: onTokenTap, onViewAllTap: onViewAllTap)
+                } else if selectedTab == 1 {
+                    DeFiTabContent()
                 } else if selectedTab == 2 {
-                    NFTTabContent(nfts: walletManager.nfts, onNFTTap: { nft in selectedNFT = nft })
-                } else {
-                    EmptyTabContent(title: tabs[selectedTab])
+                    NFTTabContent(
+                        nfts: walletManager.visibleNFTs,
+                        spamNFTs: walletManager.suspiciousNFTs,
+                        isLoading: walletManager.isLoadingNFTs,
+                        onNFTTap: { nft in selectedNFT = nft },
+                        onRefresh: {
+                            Task { await walletManager.refreshWalletData() }
+                        }
+                    )
                 }
             }
             .padding(.top, 16)
             .padding(.horizontal, 20)
         }
         .sheet(item: $selectedNFT) { nft in
-            NFTDetailView(nft: nft)
+            NFTDetailView(
+                nft: nft,
+                isInSpamFolder: walletManager.isNFTInSpamFolder(nft),
+                onHide: { walletManager.hideNFT(nft) },
+                onRestore: { walletManager.trustNFT(nft) }
+            )
         }
     }
 }
@@ -898,32 +1145,209 @@ struct TokensTabContent: View {
 }
 
 
+struct DeFiTabContent: View {
+    @Environment(\.openURL) private var openURL
+
+    private let protocols: [(name: String, subtitle: String, icon: String, color: Color, url: String)] = [
+        ("Aave", "Lending & borrowing", "building.columns.fill", .purple, "https://app.aave.com"),
+        ("Uniswap", "Swap & liquidity", "arrow.left.arrow.right", .pink, "https://app.uniswap.org"),
+        ("Lido", "Liquid staking", "drop.fill", .blue, "https://stake.lido.fi")
+    ]
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            VStack(alignment: .leading, spacing: 5) {
+                Text("Explore DeFi".localized)
+                    .font(.system(size: 18, weight: .bold, design: .rounded))
+                    .foregroundColor(WpayinColors.text)
+
+                Text("Choose a protocol to continue securely on its official website.".localized)
+                    .font(.system(size: 12))
+                    .foregroundColor(WpayinColors.textSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
+            VStack(spacing: 9) {
+                ForEach(protocols, id: \.name) { item in
+                    Button {
+                        guard let url = URL(string: item.url) else { return }
+                        openURL(url)
+                    } label: {
+                        HStack(spacing: 13) {
+                            Image(systemName: item.icon)
+                                .font(.system(size: 18, weight: .semibold))
+                                .foregroundColor(item.color)
+                                .frame(width: 42, height: 42)
+                                .background(Circle().fill(item.color.opacity(0.13)))
+
+                            VStack(alignment: .leading, spacing: 3) {
+                                Text(item.name)
+                                    .font(.system(size: 15, weight: .semibold, design: .rounded))
+                                    .foregroundColor(WpayinColors.text)
+
+                                Text(item.subtitle.localized)
+                                    .font(.system(size: 11))
+                                    .foregroundColor(WpayinColors.textSecondary)
+                            }
+
+                            Spacer()
+
+                            Image(systemName: "arrow.up.right")
+                                .font(.system(size: 12, weight: .bold))
+                                .foregroundColor(WpayinColors.primary)
+                        }
+                        .padding(13)
+                        .background(
+                            RoundedRectangle(cornerRadius: 17, style: .continuous)
+                                .fill(WpayinColors.surface)
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 17, style: .continuous)
+                                        .stroke(WpayinColors.surfaceBorder, lineWidth: 1)
+                                )
+                        )
+                    }
+                    .buttonStyle(WpayinPressableStyle())
+                }
+            }
+        }
+    }
+}
+
 struct NFTTabContent: View {
     let nfts: [NFT]
+    let spamNFTs: [NFT]
+    let isLoading: Bool
     let onNFTTap: (NFT) -> Void
+    let onRefresh: () -> Void
+    @State private var showSuspiciousNFTs = false
 
     var body: some View {
         VStack(spacing: 16) {
-            if nfts.isEmpty {
-                EmptyTabContent(title: "NFTs")
+            if isLoading && nfts.isEmpty {
+                VStack(spacing: 14) {
+                    ProgressView()
+                        .scaleEffect(1.15)
+                        .tint(WpayinColors.primary)
+
+                    Text("Loading NFTs...".localized)
+                        .font(.wpayinBody)
+                        .foregroundColor(WpayinColors.textSecondary)
+                }
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 70)
             } else {
-                HStack {
-                    Text("Your NFTs".localized)
-                        .font(.system(size: 16, weight: .bold))
-                        .foregroundColor(WpayinColors.text)
+                if nfts.isEmpty {
+                    VStack(spacing: 18) {
+                        EmptyTabContent(title: "NFTs")
+
+                        Button(action: onRefresh) {
+                            Label("Refresh".localized, systemImage: "arrow.clockwise")
+                                .font(.system(size: 14, weight: .semibold))
+                                .foregroundColor(WpayinColors.primary)
+                                .padding(.horizontal, 16)
+                                .frame(height: 42)
+                                .background(Capsule().fill(WpayinColors.primary.opacity(0.12)))
+                        }
+                        .buttonStyle(WpayinPressableStyle())
+                    }
+                } else {
+                    HStack {
+                        Text("Your NFTs".localized)
+                            .font(.system(size: 16, weight: .bold))
+                            .foregroundColor(WpayinColors.text)
+
+                        Spacer()
+
+                        Text("%d items".localized(nfts.count))
+                            .font(.system(size: 13, weight: .semibold))
+                            .foregroundColor(WpayinColors.textSecondary)
+                    }
+                    .padding(.horizontal, 4)
+
+                    NFTGridView(nfts: nfts, onNFTTap: onNFTTap)
+                        .padding(.horizontal, -20)
+                }
+
+                if !spamNFTs.isEmpty {
+                    spamProtectionSection
+                }
+            }
+        }
+    }
+
+    private var spamProtectionSection: some View {
+        VStack(spacing: 14) {
+            Button {
+                withAnimation(.easeOut(duration: 0.22)) {
+                    showSuspiciousNFTs.toggle()
+                }
+            } label: {
+                HStack(spacing: 12) {
+                    ZStack {
+                        Circle()
+                            .fill(WpayinColors.success.opacity(0.12))
+                            .frame(width: 40, height: 40)
+
+                        Image(systemName: "checkmark.shield.fill")
+                            .font(.system(size: 17, weight: .semibold))
+                            .foregroundColor(WpayinColors.success)
+                    }
+
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text("Spam Protection".localized)
+                            .font(.wpayinSubheadline)
+                            .foregroundColor(WpayinColors.text)
+
+                        Text("%d suspicious NFTs hidden".localized(spamNFTs.count))
+                            .font(.wpayinCaption)
+                            .foregroundColor(WpayinColors.textSecondary)
+                    }
 
                     Spacer()
 
-                    Text("%d items".localized(nfts.count))
-                        .font(.system(size: 13, weight: .semibold))
+                    Text(showSuspiciousNFTs ? "Hide".localized : "Review".localized)
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundColor(WpayinColors.primary)
+
+                    Image(systemName: showSuspiciousNFTs ? "chevron.up" : "chevron.down")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundColor(WpayinColors.textTertiary)
+                }
+                .padding(14)
+                .background(
+                    RoundedRectangle(cornerRadius: 16, style: .continuous)
+                        .fill(WpayinColors.surface)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                                .stroke(WpayinColors.success.opacity(0.22), lineWidth: 1)
+                        )
+                )
+            }
+            .buttonStyle(PlainButtonStyle())
+
+            if showSuspiciousNFTs {
+                HStack(alignment: .top, spacing: 10) {
+                    Image(systemName: "exclamationmark.triangle.fill")
+                        .foregroundColor(WpayinColors.warning)
+
+                    Text("Unknown NFT links may be phishing. Review details without visiting websites or signing requests.".localized)
+                        .font(.wpayinCaption)
                         .foregroundColor(WpayinColors.textSecondary)
+                        .fixedSize(horizontal: false, vertical: true)
+
+                    Spacer(minLength: 0)
                 }
                 .padding(.horizontal, 4)
 
-                NFTGridView(nfts: nfts, onNFTTap: onNFTTap)
-                    .padding(.horizontal, -20) // Counteract parent padding
+                NFTGridView(
+                    nfts: spamNFTs,
+                    showsSpamWarning: true,
+                    onNFTTap: onNFTTap
+                )
+                .padding(.horizontal, -20)
             }
         }
+        .padding(.top, 6)
     }
 }
 

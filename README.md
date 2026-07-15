@@ -1,4 +1,4 @@
-# Wpayin Wallet 1.1.8
+# Wpayin Wallet 1.1.9
 
 Wpayin Wallet is a non-custodial iOS wallet built with SwiftUI and Trust
 Wallet Core. It supports Bitcoin, Ethereum, Solana, EVM-compatible networks,
@@ -20,22 +20,24 @@ bridging, and atomic EVM P2P trading.
   <img src="./screenshots/20260712_v1.1.8/06_settings.png" width="220" alt="Wpayin Wallet settings">
 </p>
 
-## Version 1.1.8
+## Version 1.1.9
 
-- Added a branded launch experience and immediate restoration of last-known
-  wallet balances while live chain data refreshes.
-- Reworked Send with live gas prices, Slow/Standard/Fast selection, accurate
-  Max calculations including gas, and preflight transaction simulation.
-- Newly broadcast sends appear in Activity immediately with their hash,
-  explorer link, pending progress, and automatic confirmed/failed updates.
-- Wallet balances update optimistically after Send and reconcile with the
-  blockchain as soon as the receipt is available.
-- Improved swap, bridge, P2P, transaction history, localization, wallet
-  switching, and multi-network reliability.
-- Removed all service configuration values from source; optional integrations
-  are supplied only through runtime environment variables.
+- Redesigned Deposit, Withdraw, asset details, Swap, Bridge, and multi-network
+  transaction history for clearer network-aware wallet flows.
+- Added Request Payment QR/links and optional WalletConnect support with
+  explicit proposal, signature, and transaction review.
+- Added fee-aware Max calculations, route/status tracking, Face ID protection
+  for transaction signing, and selectable time zones.
+- Added custom-token discovery and removal controls, P2P improvements, and a
+  disclosed application-development fee for supported outgoing operations.
+- Added NFT spam protection with provider filtering, conservative local
+  detection, a reviewable hidden folder, and manual hide/restore controls.
+- Expanded the in-app Help Center and added a selectable version history under
+  About, covering releases 1.1.0 through 1.1.9.
+- Refined and slightly extended the launch experience without restoring the
+  previous dark backing behind the logo.
 
-See [RELEASE_NOTES_v1.1.8.md](RELEASE_NOTES_v1.1.8.md) for the complete
+See [RELEASE_NOTES_v1.1.9.md](RELEASE_NOTES_v1.1.9.md) for the complete
 release notes.
 
 ## Requirements

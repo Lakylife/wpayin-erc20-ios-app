@@ -14,6 +14,7 @@ struct AllAssetsView: View {
     @EnvironmentObject var settingsManager: SettingsManager
     @Environment(\.dismiss) private var dismiss
     @State private var selectedFilter: AssetListFilter = .native
+    @State private var showAddToken = false
 
     private var allAssets: [Token] {
         walletManager.visibleSupportedTokens.sorted(by: assetSort)
@@ -76,11 +77,22 @@ struct AllAssetsView: View {
 
                         Spacer()
 
-                        // Placeholder for balance
-                        Text("")
-                            .font(.system(size: 16, weight: .medium))
-                            .foregroundColor(.clear)
-                            .frame(width: 64)
+                        Button {
+                            showAddToken = true
+                        } label: {
+                            Image(systemName: "plus")
+                                .font(.system(size: 16, weight: .bold))
+                                .foregroundColor(WpayinColors.primary)
+                                .frame(width: 38, height: 38)
+                                .background(Circle().fill(WpayinColors.primary.opacity(0.12)))
+                                .overlay(
+                                    Circle()
+                                        .stroke(WpayinColors.primary.opacity(0.28), lineWidth: 1)
+                                )
+                        }
+                        .buttonStyle(WpayinPressableStyle())
+                        .frame(width: 64, alignment: .trailing)
+                        .accessibilityLabel("Add Token".localized)
                     }
                     .padding(.horizontal, 20)
                     .padding(.top, 20)
@@ -130,6 +142,10 @@ struct AllAssetsView: View {
             }
         }
         .navigationBarHidden(true)
+        .sheet(isPresented: $showAddToken) {
+            AddTokenView()
+                .environmentObject(walletManager)
+        }
         .onAppear {
             ensureAvailableFilter()
         }

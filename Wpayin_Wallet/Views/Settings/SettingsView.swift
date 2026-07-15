@@ -38,12 +38,14 @@ struct SettingsView: View {
     @State private var showAbout = false
     @State private var showCurrencySelection = false
     @State private var showLanguageSelection = false
+    @State private var showTimeZoneSelection = false
     @State private var showAutoLockSelection = false
     @State private var showNetworkManagement = false
     @State private var showHelpCenter = false
     @State private var showExportWalletCompliance = false
     @State private var showContactSupport = false
     @State private var showAppearanceSettings = false
+    @State private var showWalletConnect = false
 
     var body: some View {
         ZStack {
@@ -129,6 +131,13 @@ struct SettingsView: View {
                             )
 
                             SettingsRow(
+                                icon: "clock.badge.checkmark",
+                                title: "Time Zone",
+                                subtitle: settingsManager.timeZoneSummary,
+                                action: { showTimeZoneSelection = true }
+                            )
+
+                            SettingsRow(
                                 icon: "paintbrush.fill",
                                 title: "Appearance",
                                 subtitle: settingsManager.selectedColorTheme.displayName,
@@ -145,6 +154,13 @@ struct SettingsView: View {
                                 title: L10n.Settings.manageNetworks.localized,
                                 subtitle: L10n.Networks.networkCount.localized(walletManager.selectedBlockchains.count),
                                 action: { showNetworkManagement = true }
+                            )
+
+                            SettingsRow(
+                                icon: "link",
+                                title: "WalletConnect",
+                                subtitle: "Connect to dApps and manage active sessions".localized,
+                                action: { showWalletConnect = true }
                             )
                         }
 
@@ -224,6 +240,10 @@ struct SettingsView: View {
             LanguageSelectionView()
                 .environmentObject(settingsManager)
         }
+        .sheet(isPresented: $showTimeZoneSelection) {
+            TimeZoneSelectionView()
+                .environmentObject(settingsManager)
+        }
         .sheet(isPresented: $showAutoLockSelection) {
             AutoLockSelectionView()
                 .environmentObject(settingsManager)
@@ -236,6 +256,9 @@ struct SettingsView: View {
             NetworkManagementView()
                 .environmentObject(walletManager)
                 .environmentObject(networkManager)
+        }
+        .sheet(isPresented: $showWalletConnect) {
+            WalletConnectView()
         }
         .sheet(isPresented: $showAbout) {
             AboutView()
@@ -425,7 +448,9 @@ struct BiometricSettingsRow: View {
         if !settingsManager.isBiometricAvailable {
             return "Not available on this device"
         }
-        return "Use biometry to unlock wallet"
+        return settingsManager.biometricAuthEnabled
+            ? "Required to unlock and sign transactions"
+            : "Protect wallet access and transaction signing"
     }
 }
 
@@ -503,6 +528,48 @@ struct AboutView: View {
                                 title: "Version",
                                 content: AppVersionInfo.versionWithBuild
                             )
+
+                            NavigationLink {
+                                VersionHistoryView()
+                            } label: {
+                                HStack(spacing: 14) {
+                                    ZStack {
+                                        RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                            .fill(WpayinColors.primary.opacity(0.14))
+                                            .frame(width: 46, height: 46)
+
+                                        Image(systemName: "sparkles")
+                                            .font(.system(size: 19, weight: .semibold))
+                                            .foregroundColor(WpayinColors.primary)
+                                    }
+
+                                    VStack(alignment: .leading, spacing: 4) {
+                                        Text("What's New & Version History".localized)
+                                            .font(.wpayinSubheadline)
+                                            .foregroundColor(WpayinColors.text)
+
+                                        Text("See changes in this and earlier releases".localized)
+                                            .font(.wpayinCaption)
+                                            .foregroundColor(WpayinColors.textSecondary)
+                                    }
+
+                                    Spacer(minLength: 8)
+
+                                    Image(systemName: "chevron.right")
+                                        .font(.system(size: 14, weight: .semibold))
+                                        .foregroundColor(WpayinColors.textTertiary)
+                                }
+                                .padding(16)
+                                .background(
+                                    RoundedRectangle(cornerRadius: 16, style: .continuous)
+                                        .fill(WpayinColors.surface)
+                                        .overlay(
+                                            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                                                .stroke(WpayinColors.surfaceBorder, lineWidth: 1)
+                                        )
+                                )
+                            }
+                            .buttonStyle(PlainButtonStyle())
                         }
                     }
                     .padding(.horizontal, 24)

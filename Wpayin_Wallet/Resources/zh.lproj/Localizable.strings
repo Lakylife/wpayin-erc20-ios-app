@@ -261,8 +261,8 @@
 "Swap" = "兑换";
 "Swap tokens instantly with best rates. Access DeFi protocols, track your portfolio, and manage all your crypto in one place." = "以最佳汇率即时兑换代币。访问 DeFi 协议，跟踪投资组合并集中管理加密资产。";
 "Switch or create wallets" = "切换或创建钱包";
-"Syncing latest balances..." = "正在同步最新余额...";
-"Syncing..." = "同步中...";
+"Syncing latest balances..." = "正在更新余额...";
+"Syncing..." = "正在更新...";
 "TESTNET" = "TESTNET";
 "Tap the words:" = "点击单词：";
 "Terms & Conditions" = "条款和条件";
@@ -347,7 +347,7 @@
 "wallet.options" = "钱包选项";
 "wallet.connect" = "连接钱包";
 "wallet.noAssets" = "暂无资产";
-"wallet.syncing" = "同步中...";
+"wallet.syncing" = "正在更新...";
 "wallet.portfolioUpToDate" = "投资组合已是最新";
 "wallet.refresh" = "刷新投资组合";
 "wallet.loadingData" = "正在加载市场数据...";
@@ -724,6 +724,10 @@
 "error.bridge.unsupportedNetwork" = "This network does not support bridging";
 "error.bridge.noRoute" = "No bridge route found for this token and network pair";
 "error.bridge.quoteFailed" = "Could not get a bridge quote. Please try again.";
+"bridge.receiveAddress" = "Receiving address";
+"error.bridge.missingDestinationAddress" = "Could not determine the receiving address on the destination network";
+"error.bridge.solanaSendFailed" = "Failed to sign or send the Solana transaction";
+"error.bridge.insufficientFunds" = "Balance is not enough to cover the amount plus network fees. Try a smaller amount.";
 "All Networks" = "All Networks";
 "Platform fee %@: %@ %@" = "Platform fee %@: %@ %@";
 
@@ -746,6 +750,13 @@
 "Offer verified on-chain" = "Offer verified on-chain";
 "Seller" = "Seller";
 "Platform fee" = "Platform fee";
+"Fetching token details..." = "正在获取代币详情...";
+"Explore DeFi" = "探索 DeFi";
+"Choose a protocol to continue securely on its official website." = "选择协议并在其官方网站上安全继续。";
+"Lending & borrowing" = "借贷";
+"Swap & liquidity" = "兑换与流动性";
+"Liquid staking" = "流动性质押";
+"Loading NFTs..." = "正在加载 NFT...";
 "Confirm Trade" = "Confirm Trade";
 "Completing trade..." = "Completing trade...";
 "Trade Completed" = "Trade Completed";
@@ -769,6 +780,9 @@
 "Expired" = "Expired";
 "Active" = "Active";
 "Remove" = "Remove";
+"Remove from Your Assets" = "从你的资产中移除";
+"Remove %@?" = "移除 %@？";
+"This only removes the token from Your Assets. Your funds remain on the blockchain." = "这只会从你的资产列表中移除该代币。你的资金仍保留在区块链上。";
 "error.p2p.fillWouldFail" = "The trade would fail on-chain (the seller may have moved their funds). Nothing was sent — no fees were charged.";
 "No tokens to sell" = "No tokens to sell";
 "P2P trades settle in ERC-20 tokens (USDC, USDT, WETH…). You don't hold any yet — swap some of your %@ first, then come back." = "P2P trades settle in ERC-20 tokens (USDC, USDT, WETH…). You don't hold any yet — swap some of your %@ first, then come back.";
@@ -797,6 +811,21 @@
 "Best price" = "最优价格";
 "Includes the ERC-20 approval network fee" = "包含 ERC-20 授权网络费用";
 "Insufficient %@ balance for the amount and network fee" = "%@ 余额不足以支付金额和网络费用";
+"Network fee is paid separately in %@. Required: %@ %@ · Available: %@ %@" = "网络费用需使用 %@ 单独支付。需要：%@ %@ · 可用：%@ %@";
+"Edit recipient" = "编辑收款人";
+"Continue" = "继续";
+"Amount plus the network fee exceeds the available %@ balance." = "金额和网络费用超过可用的 %@ 余额。";
+"Sending %@ on %@ requires %@ for the network fee. Required: ~%@ %@ · Available: %@ %@" = "发送 %@（网络：%@）需要 %@ 支付网络费用。需要：~%@ %@ · 可用：%@ %@";
+"Total balance" = "总余额";
+"Balance history" = "余额历史";
+"Based on your wallet activity" = "基于您的钱包活动";
+"No balance changes in this period" = "此期间余额没有变化";
+"Now" = "现在";
+"All time" = "全部时间";
+"Last 7 days" = "最近7天";
+"Last 30 days" = "最近30天";
+"Last 90 days" = "最近90天";
+"Last year" = "过去一年";
 
 // MARK: - Swap Progress (v1.1.8)
 "Approving token" = "正在授权代币";

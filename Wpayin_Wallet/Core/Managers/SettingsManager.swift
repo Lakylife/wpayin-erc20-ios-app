@@ -157,9 +157,12 @@ enum AssetListStyle: String, CaseIterable, Identifiable {
 
 final class SettingsManager: ObservableObject {
 
+    static let automaticTimeZoneIdentifier = "automatic"
+
     // MARK: - Published Properties
     @Published var selectedCurrency: Currency = .usd
     @Published var selectedLanguage: Language = .english
+    @Published var selectedTimeZoneIdentifier: String = SettingsManager.automaticTimeZoneIdentifier
     @Published var biometricAuthEnabled: Bool = false
     @Published var autoLockDuration: AutoLockDuration = .after5min
     // Off until the user opts in (permission is requested at that moment)
@@ -174,11 +177,13 @@ final class SettingsManager: ObservableObject {
     // MARK: - Private Properties
     private let userDefaults = UserDefaults.standard
     private let context = LAContext()
+    private var cancellables = Set<AnyCancellable>()
 
     // MARK: - UserDefaults Keys
     private enum Keys {
         static let currency = "SelectedCurrency"
         static let language = "SelectedLanguage"
+        static let timeZone = "SelectedTimeZone"
         static let biometricAuth = "BiometricAuthEnabled"
         static let autoLock = "AutoLockDuration"
         static let notifications = "NotificationsEnabled"
@@ -189,6 +194,8 @@ final class SettingsManager: ObservableObject {
     // MARK: - Initialization
     init() {
         loadSettings()
+        applyTimeZonePreference()
+        observeSystemTimeZoneChanges()
         setupBiometricAvailability()
         applyLanguagePreference()
         CurrencyConversionService.shared.seedFallbackRatesIfNeeded()
@@ -205,6 +212,11 @@ final class SettingsManager: ObservableObject {
         if let languageRaw = userDefaults.string(forKey: Keys.language),
            let language = Language(rawValue: languageRaw) {
             selectedLanguage = language
+        }
+
+        if let timeZoneIdentifier = userDefaults.string(forKey: Keys.timeZone),
+           timeZoneIdentifier == Self.automaticTimeZoneIdentifier || TimeZone(identifier: timeZoneIdentifier) != nil {
+            selectedTimeZoneIdentifier = timeZoneIdentifier
         }
 
         biometricAuthEnabled = userDefaults.bool(forKey: Keys.biometricAuth)
@@ -272,6 +284,79 @@ final class SettingsManager: ObservableObject {
         NotificationCenter.default.post(name: NSNotification.Name("LanguageChanged"), object: nil)
 
         Logger.log("✅ Language changed to: \(language.name)")
+    }
+
+    // MARK: - Time Zone
+
+    var usesAutomaticTimeZone: Bool {
+        selectedTimeZoneIdentifier == Self.automaticTimeZoneIdentifier
+    }
+
+    /// Automatic follows the iPhone setting, including daylight-saving changes.
+    var resolvedTimeZone: TimeZone {
+        if usesAutomaticTimeZone {
+            return .autoupdatingCurrent
+        }
+        return TimeZone(identifier: selectedTimeZoneIdentifier) ?? .autoupdatingCurrent
+    }
+
+    var timeZoneSummary: String {
+        let timeZone = resolvedTimeZone
+        let name = Self.cityName(for: timeZone.identifier)
+        let offset = Self.utcOffset(for: timeZone)
+        if usesAutomaticTimeZone {
+            return "\("Automatic".localized) · \(name) (\(offset))"
+        }
+        return "\(name) (\(offset))"
+    }
+
+    func updateTimeZone(identifier: String) {
+        guard identifier == Self.automaticTimeZoneIdentifier || TimeZone(identifier: identifier) != nil else {
+            return
+        }
+
+        selectedTimeZoneIdentifier = identifier
+        userDefaults.set(identifier, forKey: Keys.timeZone)
+        applyTimeZonePreference()
+        refreshID = UUID()
+        objectWillChange.send()
+    }
+
+    static func cityName(for identifier: String) -> String {
+        identifier
+            .split(separator: "/")
+            .last
+            .map(String.init)?
+            .replacingOccurrences(of: "_", with: " ") ?? identifier
+    }
+
+    static func utcOffset(for timeZone: TimeZone, date: Date = Date()) -> String {
+        let seconds = timeZone.secondsFromGMT(for: date)
+        let sign = seconds >= 0 ? "+" : "−"
+        let absoluteSeconds = abs(seconds)
+        let hours = absoluteSeconds / 3_600
+        let minutes = (absoluteSeconds % 3_600) / 60
+        return minutes == 0
+            ? "GMT\(sign)\(hours)"
+            : String(format: "GMT%@%d:%02d", sign, hours, minutes)
+    }
+
+    private func applyTimeZonePreference() {
+        // DateFormatter and FormatStyle calls across the app now use the same
+        // preference as SwiftUI's environment.
+        NSTimeZone.default = resolvedTimeZone
+    }
+
+    private func observeSystemTimeZoneChanges() {
+        NotificationCenter.default.publisher(for: NSNotification.Name.NSSystemTimeZoneDidChange)
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in
+                guard let self, self.usesAutomaticTimeZone else { return }
+                self.applyTimeZonePreference()
+                self.refreshID = UUID()
+                self.objectWillChange.send()
+            }
+            .store(in: &cancellables)
     }
 
     func updateBiometricAuth(_ enabled: Bool) {

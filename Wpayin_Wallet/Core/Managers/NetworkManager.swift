@@ -185,6 +185,21 @@ class NetworkManager {
                 isBitcoin: true
             )
 
+        case .solana:
+            return NetworkConfiguration(
+                blockchain: .solana,
+                chainId: 0, // Solana doesn't have an EVM chainId
+                rpcSources: [
+                    RPCSource(name: "Solana Labs", urls: ["https://api.mainnet-beta.solana.com"]),
+                    RPCSource(name: "PublicNode", urls: ["https://solana-rpc.publicnode.com"])
+                ],
+                explorerUrl: "https://explorer.solana.com",
+                supportsEIP1559: false,
+                nativeSymbol: "SOL",
+                nativeDecimals: 9,
+                isBitcoin: false
+            )
+
         default:
             // Default fallback
             return NetworkConfiguration(

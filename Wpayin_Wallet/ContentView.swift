@@ -14,6 +14,7 @@ struct ContentView: View {
     @StateObject private var settingsManager: SettingsManager
     @StateObject private var networkManager = NetworkConfigManager()
     @StateObject private var lockManager = AppLockManager()
+    @StateObject private var walletConnectService = WalletConnectService.shared
     @State private var isShowingLaunchExperience = true
     @Environment(\.scenePhase) private var scenePhase
 
@@ -61,14 +62,28 @@ struct ContentView: View {
         }
         .preferredColorScheme(.dark)
         .environment(\.locale, Locale(identifier: settingsManager.selectedLanguage.rawValue))
+        .environment(\.timeZone, settingsManager.resolvedTimeZone)
+        .sheet(item: $walletConnectService.pendingProposal) { proposal in
+            WalletConnectProposalApprovalView(item: proposal)
+        }
+        .sheet(item: $walletConnectService.pendingRequest) { request in
+            WalletConnectRequestApprovalView(item: request)
+                .environmentObject(settingsManager)
+        }
+        .alert("WalletConnect".localized, isPresented: walletConnectErrorBinding) {
+            Button("OK".localized) { walletConnectService.errorMessage = nil }
+        } message: {
+            Text(walletConnectService.errorMessage ?? "")
+        }
         .task {
             let launchStartedAt = Date()
             lockManager.lockOnLaunchIfNeeded(hasWallet: walletManager.keychain.hasSeedPhrase() || walletManager.keychain.hasPrivateKey())
             await walletManager.checkExistingWallet()
+            walletConnectService.configureIfNeeded()
 
             // Keep the branded launch experience visible long enough to feel
             // intentional, even when the cached wallet restores instantly.
-            let minimumLaunchDuration: TimeInterval = 1.15
+            let minimumLaunchDuration: TimeInterval = 0.9
             let remaining = minimumLaunchDuration - Date().timeIntervalSince(launchStartedAt)
             if remaining > 0 {
                 try? await Task.sleep(nanoseconds: UInt64(remaining * 1_000_000_000))
@@ -85,9 +100,19 @@ struct ContentView: View {
         .onChange(of: scenePhase) { newPhase in
             lockManager.handleScenePhaseChange(newPhase, hasWallet: walletManager.hasWallet)
         }
+        .onOpenURL { url in
+            walletConnectService.handleDeepLink(url)
+        }
         .onDisappear {
             walletManager.stopPriceUpdates()
         }
+    }
+
+    private var walletConnectErrorBinding: Binding<Bool> {
+        Binding(
+            get: { walletConnectService.errorMessage != nil },
+            set: { if !$0 { walletConnectService.errorMessage = nil } }
+        )
     }
 }
 

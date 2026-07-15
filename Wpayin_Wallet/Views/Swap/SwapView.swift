@@ -55,7 +55,6 @@ struct SwapView: View {
     @State private var selectedGasSpeed: GasSpeed = .standard
     @State private var showGasSettings = false
     @State private var selectedNetwork: BlockchainPlatform = .ethereum
-    @State private var showNetworkSelector = false
     @State private var showSwapError = false
     @State private var swapErrorMessage = ""
     @State private var showReviewSwap = false
@@ -74,18 +73,20 @@ struct SwapView: View {
         _selectedFromToken = State(initialValue: initialFromToken)
     }
 
-    private var availableTokens: [Token] {
+    private var selectableTokens: [Token] {
         walletManager.visibleSupportedTokens.filter {
-            $0.blockchain.rawValue == selectedNetwork.rawValue && 
             Self.supportedSwapBlockchains.contains($0.blockchain)
         }
+    }
+
+    private var availableTokens: [Token] {
+        selectableTokens.filter { $0.blockchain.rawValue == selectedNetwork.rawValue }
     }
     
     private var availableNetworks: [BlockchainPlatform] {
         walletManager.availableBlockchains
             .filter { 
                 $0.network == .mainnet && 
-                walletManager.selectedBlockchains.contains($0.platform) &&
                 ($0.blockchainType.map { Self.supportedSwapBlockchains.contains($0) } ?? false)
             }
             .map { $0.platform }
@@ -118,13 +119,28 @@ struct SwapView: View {
         return amount * swapRate
     }
 
+    private var platformFeeValue: Double {
+        guard let token = selectedFromToken,
+              token.blockchain.isEVM,
+              let amount = Decimal(string: fromAmount.replacingOccurrences(of: ",", with: ".")) else {
+            return 0
+        }
+        return NSDecimalNumber(
+            decimal: TransactionService.platformFee(for: amount)
+        ).doubleValue
+    }
+
+    private var totalSourceDebit: Double {
+        (Double(fromAmount) ?? 0) + platformFeeValue
+    }
+
     private var isValidSwap: Bool {
         guard let from = selectedFromToken,
               let to = selectedToToken,
               let amount = Double(fromAmount),
               amount > 0 else { return false }
         return tokenIdentity(from) != tokenIdentity(to)
-            && amount <= from.balance
+            && amount + platformFeeValue <= from.balance
             && hasSufficientSwapGas
     }
 
@@ -142,7 +158,7 @@ struct SwapView: View {
               estimatedGasFee > 0 else { return true }
 
         if from.isNative {
-            return amount + estimatedGasFee <= from.balance
+            return amount + platformFeeValue + estimatedGasFee <= from.balance
         }
         return sourceNativeBalance >= estimatedGasFee
     }
@@ -212,7 +228,7 @@ struct SwapView: View {
                 } else {
                     ScrollView(showsIndicators: false) {
                         VStack(spacing: 16) {
-                            balanceAndNetworkRow
+                            balanceRow
                             swapCard
                             swapDetailsCard
                             Spacer(minLength: 16)
@@ -226,10 +242,15 @@ struct SwapView: View {
         }
         .sheet(isPresented: $showTokenPicker) {
             TokenPickerView(
-                tokens: availableTokens,
-                selectedToken: isSelectingFromToken ? selectedFromToken : selectedToToken
+                tokens: isSelectingFromToken ? selectableTokens : availableTokens,
+                selectedToken: isSelectingFromToken ? selectedFromToken : selectedToToken,
+                initialNetwork: selectedNetwork,
+                availableNetworks: isSelectingFromToken ? availableNetworks : [selectedNetwork]
             ) { token in
                 if isSelectingFromToken {
+                    if let tokenNetwork = BlockchainPlatform(rawValue: token.blockchain.rawValue) {
+                        selectedNetwork = tokenNetwork
+                    }
                     selectedFromToken = token
                 } else {
                     selectedToToken = token
@@ -249,12 +270,6 @@ struct SwapView: View {
             SlippageSettingsSheet(slippage: $slippage)
                 .swapReviewPresentation()
         }
-        .sheet(isPresented: $showNetworkSelector) {
-            NetworkSelectorSheet(
-                selectedNetwork: $selectedNetwork,
-                availableNetworks: availableNetworks
-            )
-        }
         .sheet(isPresented: $showReviewSwap) {
             if let fromToken = selectedFromToken,
                let toToken = selectedToToken,
@@ -268,6 +283,7 @@ struct SwapView: View {
                     rate: swapRate,
                     networkFeeNative: estimatedGasFee,
                     networkFeeUSD: gasFeeInUSD,
+                    platformFee: platformFeeValue,
                     nativeTokenSymbol: fromToken.blockchain.nativeToken,
                     approvalRequired: liveFeeEstimate?.approvalRequired ?? false,
                     isSwapping: isSwapping,
@@ -287,9 +303,12 @@ struct SwapView: View {
             }
         }
         .onChange(of: selectedNetwork) { _ in
-            // Reset token selection when network changes
-            selectedFromToken = availableTokens.first
-            selectedToToken = firstAvailableToken(excluding: selectedFromToken)
+            if selectedFromToken?.blockchain.rawValue != selectedNetwork.rawValue {
+                selectedFromToken = availableTokens.first
+            }
+            if selectedToToken?.blockchain.rawValue != selectedNetwork.rawValue {
+                selectedToToken = firstAvailableToken(excluding: selectedFromToken)
+            }
             fromAmount = ""
         }
         .onChange(of: walletManager.selectedBlockchains) { _ in
@@ -430,30 +449,19 @@ struct SwapView: View {
         .buttonStyle(WpayinPressableStyle())
     }
 
-    private var balanceAndNetworkRow: some View {
-        HStack(spacing: 12) {
-            VStack(alignment: .leading, spacing: 3) {
-                Text(L10n.Tokens.balance.localized)
-                    .font(.system(size: 12, weight: .medium))
-                    .foregroundColor(WpayinColors.textSecondary)
+    private var balanceRow: some View {
+        VStack(alignment: .leading, spacing: 3) {
+            Text(L10n.Tokens.balance.localized)
+                .font(.system(size: 12, weight: .medium))
+                .foregroundColor(WpayinColors.textSecondary)
 
-                Text(portfolioBalance.formatted(as: settingsManager.selectedCurrency))
-                    .font(.system(size: 18, weight: .semibold, design: .rounded))
-                    .foregroundColor(WpayinColors.text)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.75)
-            }
-
-            Spacer(minLength: 8)
-
-            if !availableNetworks.isEmpty {
-                NetworkSelectorButton(
-                    selectedNetwork: $selectedNetwork,
-                    availableNetworks: availableNetworks,
-                    onTap: { showNetworkSelector = true }
-                )
-            }
+            Text(portfolioBalance.formatted(as: settingsManager.selectedCurrency))
+                .font(.system(size: 18, weight: .semibold, design: .rounded))
+                .foregroundColor(WpayinColors.text)
+                .lineLimit(1)
+                .minimumScaleFactor(0.75)
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     private var swapCard: some View {
@@ -548,6 +556,15 @@ struct SwapView: View {
                 showsInfo: true,
                 highlightsValue: minimumReceived > 0
             )
+
+            if platformFeeValue > 0 {
+                detailDivider
+
+                SwapDetailRow(
+                    label: "Platform fee".localized,
+                    value: "\(formattedTokenAmount(platformFeeValue)) \(selectedFromToken?.symbol ?? "")"
+                )
+            }
         }
         .background(
             RoundedRectangle(cornerRadius: WpayinRadius.card, style: .continuous)
@@ -705,7 +722,7 @@ struct SwapView: View {
         if tokenIdentity(from) == tokenIdentity(to) {
             return "Cannot swap the same token".localized
         }
-        if amount > from.balance {
+        if amount + platformFeeValue > from.balance {
             return L10n.Swap.insufficient.localized(from.symbol)
         }
         if !hasSufficientSwapGas {
@@ -728,20 +745,23 @@ struct SwapView: View {
 
         Task {
             isEstimatingNetworkFee = true
+            let feeRate = AppConfig.platformFeeEnabled
+                ? NSDecimalNumber(decimal: AppConfig.platformFeeRate).doubleValue
+                : 0
             if token.isNative {
                 // Start below the full balance so the RPC can simulate where
                 // possible. If it still cannot, SwapService returns the route's
                 // conservative limit specifically for this MAX calculation.
-                fromAmount = editableAmount(token.balance * 0.995)
+                fromAmount = editableAmount(token.balance * 0.995 / (1 + feeRate))
             } else {
-                fromAmount = editableAmount(token.balance)
+                fromAmount = editableAmount(token.balance / (1 + feeRate))
             }
 
             await refreshLiveSwapEstimate(showError: false)
 
             if token.isNative, estimatedGasFee > 0 {
                 let reserve = max(estimatedGasFee * 0.05, 0.00000001)
-                let spendable = max(0, token.balance - estimatedGasFee - reserve)
+                let spendable = max(0, token.balance - estimatedGasFee - reserve) / (1 + feeRate)
                 fromAmount = editableAmount(spendable)
                 await refreshLiveSwapEstimate(showError: false)
             }
@@ -889,6 +909,11 @@ struct SwapView: View {
                 )
 
                 Logger.log("✅ Swap broadcast! TX: \(result.transactionHash)")
+
+                await SwapService.shared.collectPlatformFee(
+                    for: quote.amountIn,
+                    token: fromToken
+                )
 
                 let explorerUrl = URL(
                     string: NetworkManager.shared.getExplorerUrl(
@@ -1586,6 +1611,7 @@ struct SwapReviewSheet: View {
     let rate: Double
     let networkFeeNative: Double
     let networkFeeUSD: Double
+    let platformFee: Double
     let nativeTokenSymbol: String
     let approvalRequired: Bool
     let isSwapping: Bool
@@ -1648,6 +1674,13 @@ struct SwapReviewSheet: View {
                         showsInfo: true,
                         highlightsValue: true
                     )
+
+                    if platformFee > 0 {
+                        SwapDetailRow(
+                            label: "Platform fee".localized,
+                            value: "\(formatted(platformFee)) \(fromToken.symbol)"
+                        )
+                    }
 
                     if approvalRequired {
                         Text("Includes the ERC-20 approval network fee".localized)
@@ -1756,138 +1789,381 @@ extension View {
             self
         }
     }
+
+    @ViewBuilder
+    func swapPickerPresentation() -> some View {
+        if #available(iOS 16.4, *) {
+            self
+                .presentationDetents([.large])
+                .presentationDragIndicator(.hidden)
+                .presentationCornerRadius(28)
+        } else if #available(iOS 16.0, *) {
+            self
+                .presentationDetents([.large])
+                .presentationDragIndicator(.hidden)
+        } else {
+            self
+        }
+    }
 }
 
 struct TokenPickerView: View {
     let tokens: [Token]
     let selectedToken: Token?
+    let initialNetwork: BlockchainPlatform
+    let availableNetworks: [BlockchainPlatform]
     let onSelect: (Token) -> Void
     @Environment(\.dismiss) private var dismiss
     @EnvironmentObject var settingsManager: SettingsManager
+    @EnvironmentObject var walletManager: WalletManager
+    @State private var searchText = ""
+    @State private var selectedNetworkFilter: BlockchainPlatform?
+    @State private var showFavoritesOnly = false
+
+    init(
+        tokens: [Token],
+        selectedToken: Token?,
+        initialNetwork: BlockchainPlatform,
+        availableNetworks: [BlockchainPlatform],
+        onSelect: @escaping (Token) -> Void
+    ) {
+        self.tokens = tokens
+        self.selectedToken = selectedToken
+        self.initialNetwork = initialNetwork
+        self.availableNetworks = availableNetworks
+        self.onSelect = onSelect
+        _selectedNetworkFilter = State(initialValue: initialNetwork)
+    }
+
+    init(
+        tokens: [Token],
+        selectedToken: Token?,
+        onSelect: @escaping (Token) -> Void
+    ) {
+        let tokenNetworks = tokens.compactMap {
+            BlockchainPlatform(rawValue: $0.blockchain.rawValue)
+        }
+        let startingNetwork = selectedToken.flatMap {
+            BlockchainPlatform(rawValue: $0.blockchain.rawValue)
+        } ?? tokenNetworks.first ?? .ethereum
+
+        self.tokens = tokens
+        self.selectedToken = selectedToken
+        self.initialNetwork = startingNetwork
+        self.availableNetworks = Array(Set(tokenNetworks))
+        self.onSelect = onSelect
+        _selectedNetworkFilter = State(initialValue: startingNetwork)
+    }
+
+    private var networkOptions: [BlockchainPlatform] {
+        var networks = availableNetworks
+        for token in tokens {
+            guard let platform = BlockchainPlatform(rawValue: token.blockchain.rawValue),
+                  !networks.contains(platform) else { continue }
+            networks.append(platform)
+        }
+        return networks.sorted { networkRank($0) < networkRank($1) }
+    }
+
+    private var filteredTokens: [Token] {
+        let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        return tokens
+            .filter { token in
+                if showFavoritesOnly, !walletManager.isFavorite(token.symbol) {
+                    return false
+                }
+                if !showFavoritesOnly,
+                   let selectedNetworkFilter,
+                   token.blockchain.rawValue != selectedNetworkFilter.rawValue {
+                    return false
+                }
+                guard !query.isEmpty else { return true }
+                return token.symbol.lowercased().contains(query)
+                    || token.name.lowercased().contains(query)
+                    || (token.contractAddress?.lowercased().contains(query) ?? false)
+                    || token.blockchain.name.lowercased().contains(query)
+            }
+            .sorted { first, second in
+                let firstFavorite = walletManager.isFavorite(first.symbol)
+                let secondFavorite = walletManager.isFavorite(second.symbol)
+                if firstFavorite != secondFavorite { return firstFavorite }
+                if first.totalValue != second.totalValue { return first.totalValue > second.totalValue }
+                return first.symbol < second.symbol
+            }
+    }
 
     var body: some View {
         NavigationView {
-            VStack(spacing: 0) {
-                // Header
-                HStack {
-                    Button(L10n.Action.cancel.localized) {
-                        dismiss()
-                    }
-                    .font(.system(size: 16, weight: .medium))
-                    .foregroundColor(WpayinColors.primary)
-                    .frame(width: 64, alignment: .leading)
+            ZStack {
+                WpayinColors.background.ignoresSafeArea()
 
-                    Spacer()
+                VStack(spacing: 0) {
+                    PickerSearchField(
+                        placeholder: "Token name or contract".localized,
+                        text: $searchText
+                    )
+                    .padding(.horizontal, 20)
+                    .padding(.top, 12)
 
-                    Text(L10n.Tokens.selectToken.localized)
-                        .font(.system(size: 18, weight: .bold))
-                        .foregroundColor(WpayinColors.text)
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.75)
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        HStack(spacing: 9) {
+                            TokenNetworkFilterChip(
+                                title: "Favorites".localized,
+                                systemIcon: "star.fill",
+                                platform: nil,
+                                isSelected: showFavoritesOnly
+                            ) {
+                                withAnimation(.easeOut(duration: 0.18)) {
+                                    showFavoritesOnly = true
+                                    selectedNetworkFilter = nil
+                                }
+                            }
 
-                    Spacer()
-
-                    Text("")
-                        .font(.system(size: 16, weight: .medium))
-                        .foregroundColor(.clear)
-                        .frame(width: 64)
-                }
-                .padding(20)
-
-                // Token List
-                ScrollView {
-                    LazyVStack(spacing: 8) {
-                        ForEach(tokens) { token in
-                            Button(action: {
-                                onSelect(token)
-                                dismiss()
-                            }) {
-                                HStack(spacing: 12) {
-                                    TokenIconView(token: token, size: 34, showNetworkBadge: true)
-
-                                    VStack(alignment: .leading, spacing: 4) {
-                                        let tokenPlatform = BlockchainPlatform(rawValue: token.blockchain.rawValue) ?? .ethereum
-                                        HStack(spacing: 6) {
-                                            Text(token.symbol)
-                                                .font(.system(size: 14, weight: .semibold))
-                                                .foregroundColor(WpayinColors.text)
-                                                .lineLimit(1)
-                                                .minimumScaleFactor(0.75)
-                                            
-                                            if let proto = token.tokenProtocol {
-                                                TokenProtocolBadge(tokenProtocol: proto, size: .small)
-                                            }
-
-                                            // Network badge — real chain icon
-                                            NetworkIconView(blockchain: token.blockchain, size: 14)
-
-                                            Text(tokenPlatform.name)
-                                                .font(.system(size: 11))
-                                                .foregroundColor(WpayinColors.textSecondary)
-                                                .lineLimit(1)
+                            ForEach(networkOptions, id: \.self) { network in
+                                TokenNetworkFilterChip(
+                                    title: network.name,
+                                    systemIcon: nil,
+                                    platform: network,
+                                    isSelected: !showFavoritesOnly && selectedNetworkFilter == network
+                                ) {
+                                    withAnimation(.easeOut(duration: 0.18)) {
+                                        if !walletManager.selectedBlockchains.contains(network) {
+                                            walletManager.toggleBlockchain(network)
                                         }
-
-                                        Text(token.name)
-                                            .font(.system(size: 12))
-                                            .foregroundColor(WpayinColors.textSecondary)
-                                            .lineLimit(1)
-                                    }
-                                    .frame(maxWidth: .infinity, alignment: .leading)
-
-                                    VStack(alignment: .trailing, spacing: 4) {
-                                        Text(TokenIconHelper.formattedBalance(token.balance))
-                                            .font(.system(size: 13, weight: .medium))
-                                            .foregroundColor(WpayinColors.text)
-                                            .lineLimit(1)
-                                            .minimumScaleFactor(0.7)
-
-                                        Text(token.totalValue.formatted(as: settingsManager.selectedCurrency))
-                                            .font(.system(size: 12))
-                                            .foregroundColor(WpayinColors.textSecondary)
-                                            .lineLimit(1)
-                                            .minimumScaleFactor(0.75)
-                                    }
-                                    .frame(width: 78, alignment: .trailing)
-
-                                    if selectedToken?.id == token.id {
-                                        Image(systemName: "checkmark.circle.fill")
-                                            .font(.system(size: 20))
-                                            .foregroundColor(WpayinColors.primary)
+                                        showFavoritesOnly = false
+                                        selectedNetworkFilter = network
                                     }
                                 }
-                                .padding(12)
-                                .background(
-                                    RoundedRectangle(cornerRadius: 12)
-                                        .fill(selectedToken?.id == token.id ? WpayinColors.primary.opacity(0.1) : WpayinColors.surface)
-                                )
                             }
-                            .buttonStyle(PlainButtonStyle())
+                        }
+                        .padding(.horizontal, 20)
+                    }
+                    .padding(.vertical, 14)
+
+                    if filteredTokens.isEmpty {
+                        Spacer()
+                        VStack(spacing: 12) {
+                            Image(systemName: showFavoritesOnly ? "star.slash" : "magnifyingglass")
+                                .font(.system(size: 28, weight: .medium))
+                                .foregroundColor(WpayinColors.textTertiary)
+
+                            Text(showFavoritesOnly ? "No favorite tokens".localized : "No tokens found".localized)
+                                .font(.system(size: 15, weight: .semibold, design: .rounded))
+                                .foregroundColor(WpayinColors.textSecondary)
+                        }
+                        Spacer()
+                    } else {
+                        ScrollView(showsIndicators: false) {
+                            LazyVStack(spacing: 8) {
+                                ForEach(filteredTokens) { token in
+                                    SwapTokenPickerRow(
+                                        token: token,
+                                        isSelected: selectedToken?.id == token.id,
+                                        isFavorite: walletManager.isFavorite(token.symbol),
+                                        onSelect: {
+                                            onSelect(token)
+                                            dismiss()
+                                        },
+                                        onFavorite: {
+                                            walletManager.toggleFavorite(for: token.symbol)
+                                        }
+                                    )
+                                }
+                            }
+                            .padding(.horizontal, 20)
+                            .padding(.bottom, 28)
                         }
                     }
-                    .padding(.horizontal, 20)
                 }
             }
-            .background(WpayinColors.background)
+            .navigationTitle(L10n.Tokens.selectToken.localized)
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button { dismiss() } label: {
+                        Image(systemName: "xmark")
+                            .font(.system(size: 13, weight: .bold))
+                            .foregroundColor(WpayinColors.text)
+                            .frame(width: 32, height: 32)
+                            .background(Circle().fill(WpayinColors.surfaceLight))
+                    }
+                    .accessibilityLabel(L10n.Action.close.localized)
+                }
+            }
         }
+        .swapPickerPresentation()
     }
 
-    private func tokenGradient(for token: Token) -> LinearGradient {
-        let colors: [Color]
-        switch token.symbol.uppercased() {
-        case "ETH":
-            colors = [Color.blue, Color.cyan]
-        case "BTC":
-            colors = [Color.orange, Color.yellow]
-        case "USDT", "USDC":
-            colors = [Color.green, Color.mint]
-        default:
-            colors = [WpayinColors.primary, WpayinColors.primary.opacity(0.7)]
-        }
+    private func networkRank(_ network: BlockchainPlatform) -> Int {
+        let preferred: [BlockchainPlatform] = [
+            .ethereum, .base, .arbitrum, .bsc, .polygon, .optimism,
+            .avalanche, .solana, .bitcoin
+        ]
+        return preferred.firstIndex(of: network)
+            ?? (preferred.count + (BlockchainPlatform.allCases.firstIndex(of: network) ?? 0))
+    }
+}
 
-        return LinearGradient(
-            gradient: Gradient(colors: colors),
-            startPoint: .topLeading,
-            endPoint: .bottomTrailing
+private struct TokenNetworkFilterChip: View {
+    let title: String
+    let systemIcon: String?
+    let platform: BlockchainPlatform?
+    let isSelected: Bool
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 7) {
+                if let platform {
+                    PlatformIconView(platform: platform, size: 24)
+                } else if let systemIcon {
+                    Image(systemName: systemIcon)
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundColor(WpayinColors.warning)
+                        .frame(width: 24, height: 24)
+                }
+
+                if isSelected {
+                    Text(title)
+                        .font(.system(size: 12, weight: .semibold, design: .rounded))
+                        .foregroundColor(WpayinColors.text)
+                        .lineLimit(1)
+                }
+            }
+            .padding(.horizontal, isSelected ? 11 : 8)
+            .frame(height: 42)
+            .background(
+                Capsule()
+                    .fill(isSelected ? WpayinColors.primary.opacity(0.14) : Color.clear)
+                    .overlay(
+                        Capsule()
+                            .stroke(isSelected ? WpayinColors.primary.opacity(0.55) : Color.clear, lineWidth: 1)
+                    )
+            )
+        }
+        .buttonStyle(WpayinPressableStyle())
+        .accessibilityLabel(title)
+    }
+}
+
+private struct SwapTokenPickerRow: View {
+    let token: Token
+    let isSelected: Bool
+    let isFavorite: Bool
+    let onSelect: () -> Void
+    let onFavorite: () -> Void
+    @EnvironmentObject var settingsManager: SettingsManager
+
+    var body: some View {
+        HStack(spacing: 8) {
+            Button(action: onSelect) {
+                HStack(spacing: 12) {
+                    TokenIconView(token: token, size: 38, showNetworkBadge: true)
+
+                    VStack(alignment: .leading, spacing: 4) {
+                        HStack(spacing: 6) {
+                            Text(token.symbol.uppercased())
+                                .font(.system(size: 15, weight: .semibold, design: .rounded))
+                                .foregroundColor(WpayinColors.text)
+
+                            if let tokenProtocol = token.tokenProtocol {
+                                TokenProtocolBadge(tokenProtocol: tokenProtocol, size: .small)
+                            }
+                        }
+
+                        HStack(spacing: 5) {
+                            Text(token.name)
+                                .lineLimit(1)
+
+                            Text("•")
+
+                            Text(token.blockchain.name)
+                                .lineLimit(1)
+                        }
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundColor(WpayinColors.textSecondary)
+                    }
+
+                    Spacer(minLength: 6)
+
+                    VStack(alignment: .trailing, spacing: 4) {
+                        Text(TokenIconHelper.formattedBalance(token.balance, decimals: token.balance < 1 ? 6 : 4))
+                            .font(.system(size: 13, weight: .semibold, design: .rounded))
+                            .foregroundColor(WpayinColors.text)
+                            .lineLimit(1)
+
+                        Text(token.totalValue.formatted(as: settingsManager.selectedCurrency))
+                            .font(.system(size: 11))
+                            .foregroundColor(WpayinColors.textSecondary)
+                    }
+
+                    if isSelected {
+                        Image(systemName: "checkmark.circle.fill")
+                            .font(.system(size: 18))
+                            .foregroundColor(WpayinColors.primary)
+                    }
+                }
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(PlainButtonStyle())
+
+            Button(action: onFavorite) {
+                Image(systemName: isFavorite ? "star.fill" : "star")
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundColor(isFavorite ? WpayinColors.warning : WpayinColors.textTertiary)
+                    .frame(width: 32, height: 38)
+            }
+            .buttonStyle(WpayinPressableStyle())
+            .accessibilityLabel("Favorites".localized)
+        }
+        .padding(.leading, 12)
+        .padding(.trailing, 8)
+        .padding(.vertical, 10)
+        .background(
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .fill(isSelected ? WpayinColors.primary.opacity(0.10) : WpayinColors.surface)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 16, style: .continuous)
+                        .stroke(isSelected ? WpayinColors.primary.opacity(0.45) : WpayinColors.surfaceBorder, lineWidth: 1)
+                )
+        )
+    }
+}
+
+private struct PickerSearchField: View {
+    let placeholder: String
+    @Binding var text: String
+
+    var body: some View {
+        HStack(spacing: 10) {
+            Image(systemName: "magnifyingglass")
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundColor(WpayinColors.textTertiary)
+
+            TextField(placeholder, text: $text)
+                .font(.system(size: 15, weight: .medium))
+                .foregroundColor(WpayinColors.text)
+                .textInputAutocapitalization(.never)
+                .disableAutocorrection(true)
+
+            if !text.isEmpty {
+                Button { text = "" } label: {
+                    Image(systemName: "xmark.circle.fill")
+                        .font(.system(size: 15))
+                        .foregroundColor(WpayinColors.textTertiary)
+                }
+                .buttonStyle(PlainButtonStyle())
+            }
+        }
+        .padding(.horizontal, 14)
+        .frame(height: 46)
+        .background(
+            RoundedRectangle(cornerRadius: 15, style: .continuous)
+                .fill(WpayinColors.surface)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 15, style: .continuous)
+                        .stroke(WpayinColors.surfaceBorder, lineWidth: 1)
+                )
         )
     }
 }
@@ -2173,75 +2449,213 @@ struct NetworkSelectorSheet: View {
     @Binding var selectedNetwork: BlockchainPlatform
     let availableNetworks: [BlockchainPlatform]
     @Environment(\.dismiss) private var dismiss
-    
+    @EnvironmentObject private var walletManager: WalletManager
+    @State private var searchText = ""
+
+    private var networks: [BlockchainPlatform] {
+        Array(Set(availableNetworks)).sorted { networkRank($0) < networkRank($1) }
+    }
+
+    private var trendingNetworks: [BlockchainPlatform] {
+        let trending: [BlockchainPlatform] = [
+            .ethereum, .base, .arbitrum, .solana, .bsc, .polygon, .optimism, .avalanche
+        ]
+        return trending.filter { networks.contains($0) }
+    }
+
+    private var filteredNetworks: [BlockchainPlatform] {
+        let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        guard !query.isEmpty else { return networks }
+        return networks.filter { network in
+            network.name.lowercased().contains(query)
+                || network.symbol.lowercased().contains(query)
+                || network.rawValue.lowercased().contains(query)
+        }
+    }
+
     var body: some View {
         NavigationView {
-            VStack(spacing: 0) {
-                // Header (same style as TokenPickerView)
-                HStack {
-                    Button(L10n.Action.cancel.localized) {
-                        dismiss()
-                    }
-                    .font(.system(size: 16, weight: .medium))
-                    .foregroundColor(WpayinColors.primary)
+            ZStack {
+                WpayinColors.background.ignoresSafeArea()
 
-                    Spacer()
+                ScrollView(showsIndicators: false) {
+                    VStack(alignment: .leading, spacing: 22) {
+                        PickerSearchField(
+                            placeholder: "Search networks".localized,
+                            text: $searchText
+                        )
 
-                    Text(L10n.Swap.selectNetwork.localized)
-                        .font(.system(size: 20, weight: .bold))
-                        .foregroundColor(WpayinColors.text)
+                        if searchText.isEmpty, !trendingNetworks.isEmpty {
+                            VStack(alignment: .leading, spacing: 12) {
+                                NetworkPickerSectionTitle(title: "Trending Networks".localized)
 
-                    Spacer()
-
-                    Text("")
-                        .font(.system(size: 16, weight: .medium))
-                        .foregroundColor(.clear)
-                }
-                .padding(20)
-
-                // Network List
-                ScrollView {
-                    LazyVStack(spacing: 12) {
-                        ForEach(availableNetworks, id: \.self) { network in
-                            Button(action: {
-                                selectedNetwork = network
-                                dismiss()
-                            }) {
-                                HStack(spacing: 16) {
-                                    PlatformIconView(platform: network, size: 36)
-                                    
-                                    VStack(alignment: .leading, spacing: 4) {
-                                        Text(network.name)
-                                            .font(.system(size: 16, weight: .semibold))
-                                            .foregroundColor(WpayinColors.text)
-                                        
-                                        Text(network.symbol)
-                                            .font(.system(size: 14))
-                                            .foregroundColor(WpayinColors.textSecondary)
+                                ScrollView(.horizontal, showsIndicators: false) {
+                                    HStack(spacing: 10) {
+                                        ForEach(trendingNetworks, id: \.self) { network in
+                                            TrendingNetworkButton(
+                                                network: network,
+                                                isSelected: selectedNetwork == network
+                                            ) {
+                                                select(network)
+                                            }
+                                        }
                                     }
-                                    
-                                    Spacer()
-                                    
-                                    if selectedNetwork == network {
-                                        Image(systemName: "checkmark.circle.fill")
-                                            .font(.system(size: 20))
-                                            .foregroundColor(WpayinColors.primary)
+                                    .padding(.horizontal, 20)
+                                }
+                                .padding(.horizontal, -20)
+                            }
+                        }
+
+                        VStack(alignment: .leading, spacing: 12) {
+                            NetworkPickerSectionTitle(title: "All Networks".localized)
+
+                            if filteredNetworks.isEmpty {
+                                VStack(spacing: 12) {
+                                    Image(systemName: "magnifyingglass")
+                                        .font(.system(size: 28, weight: .medium))
+                                        .foregroundColor(WpayinColors.textTertiary)
+
+                                    Text("No networks found".localized)
+                                        .font(.system(size: 15, weight: .semibold, design: .rounded))
+                                        .foregroundColor(WpayinColors.textSecondary)
+                                }
+                                .frame(maxWidth: .infinity)
+                                .padding(.top, 48)
+                            } else {
+                                LazyVStack(spacing: 8) {
+                                    ForEach(filteredNetworks, id: \.self) { network in
+                                        NetworkPickerRow(
+                                            network: network,
+                                            isSelected: selectedNetwork == network
+                                        ) {
+                                            select(network)
+                                        }
                                     }
                                 }
-                                .padding(16)
-                                .background(
-                                    RoundedRectangle(cornerRadius: 12)
-                                        .fill(selectedNetwork == network ? WpayinColors.primary.opacity(0.1) : WpayinColors.surface)
-                                )
                             }
-                            .buttonStyle(PlainButtonStyle())
                         }
                     }
                     .padding(.horizontal, 20)
+                    .padding(.top, 12)
+                    .padding(.bottom, 28)
                 }
             }
-            .background(WpayinColors.background)
+            .navigationTitle(L10n.Swap.selectNetwork.localized)
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button { dismiss() } label: {
+                        Image(systemName: "xmark")
+                            .font(.system(size: 13, weight: .bold))
+                            .foregroundColor(WpayinColors.text)
+                            .frame(width: 32, height: 32)
+                            .background(Circle().fill(WpayinColors.surfaceLight))
+                    }
+                    .accessibilityLabel(L10n.Action.close.localized)
+                }
+            }
         }
+        .swapPickerPresentation()
+    }
+
+    private func select(_ network: BlockchainPlatform) {
+        if !walletManager.selectedBlockchains.contains(network) {
+            walletManager.toggleBlockchain(network)
+        }
+        selectedNetwork = network
+        dismiss()
+    }
+
+    private func networkRank(_ network: BlockchainPlatform) -> Int {
+        let preferred: [BlockchainPlatform] = [
+            .ethereum, .base, .arbitrum, .bsc, .polygon, .optimism,
+            .avalanche, .solana, .bitcoin
+        ]
+        return preferred.firstIndex(of: network)
+            ?? (preferred.count + (BlockchainPlatform.allCases.firstIndex(of: network) ?? 0))
+    }
+}
+
+private struct NetworkPickerSectionTitle: View {
+    let title: String
+
+    var body: some View {
+        Text(title)
+            .font(.system(size: 13, weight: .semibold, design: .rounded))
+            .foregroundColor(WpayinColors.textSecondary)
+            .textCase(.uppercase)
+    }
+}
+
+private struct TrendingNetworkButton: View {
+    let network: BlockchainPlatform
+    let isSelected: Bool
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            VStack(spacing: 9) {
+                PlatformIconView(platform: network, size: 34)
+
+                Text(network.name)
+                    .font(.system(size: 12, weight: .semibold, design: .rounded))
+                    .foregroundColor(WpayinColors.text)
+                    .lineLimit(1)
+            }
+            .frame(width: 94, height: 82)
+            .background(
+                RoundedRectangle(cornerRadius: 17, style: .continuous)
+                    .fill(isSelected ? WpayinColors.primary.opacity(0.12) : WpayinColors.surface)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 17, style: .continuous)
+                            .stroke(isSelected ? WpayinColors.primary.opacity(0.55) : WpayinColors.surfaceBorder, lineWidth: 1)
+                    )
+            )
+        }
+        .buttonStyle(WpayinPressableStyle())
+    }
+}
+
+private struct NetworkPickerRow: View {
+    let network: BlockchainPlatform
+    let isSelected: Bool
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 13) {
+                PlatformIconView(platform: network, size: 38)
+
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(network.name)
+                        .font(.system(size: 15, weight: .semibold, design: .rounded))
+                        .foregroundColor(WpayinColors.text)
+
+                    Text(network.symbol)
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundColor(WpayinColors.textSecondary)
+                }
+
+                Spacer()
+
+                if isSelected {
+                    Image(systemName: "checkmark.circle.fill")
+                        .font(.system(size: 19))
+                        .foregroundColor(WpayinColors.primary)
+                }
+            }
+            .padding(.horizontal, 14)
+            .frame(height: 64)
+            .background(
+                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                    .fill(isSelected ? WpayinColors.primary.opacity(0.10) : WpayinColors.surface)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 16, style: .continuous)
+                            .stroke(isSelected ? WpayinColors.primary.opacity(0.45) : WpayinColors.surfaceBorder, lineWidth: 1)
+                    )
+            )
+        }
+        .buttonStyle(WpayinPressableStyle())
     }
 }
 

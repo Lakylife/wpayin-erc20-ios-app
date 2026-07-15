@@ -273,6 +273,25 @@ enum BlockchainType: String, CaseIterable, Codable, Sendable {
     }
 }
 
+extension BlockchainType {
+    /// CoinGecko asset-platform identifier used by the contract metadata API.
+    var coinGeckoPlatformId: String? {
+        switch self {
+        case .ethereum: return "ethereum"
+        case .polygon: return "polygon-pos"
+        case .bsc: return "binance-smart-chain"
+        case .arbitrum: return "arbitrum-one"
+        case .optimism: return "optimistic-ethereum"
+        case .avalanche: return "avalanche"
+        case .base: return "base"
+        case .gnosis: return "xdai"
+        case .zkSync: return "zksync"
+        case .fantom: return "fantom"
+        default: return nil
+        }
+    }
+}
+
 struct Token: Identifiable, Codable, Sendable {
     let id: UUID
     let contractAddress: String?  // nil for native tokens
