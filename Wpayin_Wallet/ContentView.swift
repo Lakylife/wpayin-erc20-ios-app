@@ -54,6 +54,10 @@ struct ContentView: View {
             .id(settingsManager.refreshID) // Force refresh when currency or language changes
             .animation(.easeOut(duration: 0.3), value: walletManager.isInitializing)
 
+            if scenePhase != .active {
+                WpayinColors.background.ignoresSafeArea().zIndex(2)
+            }
+
             if lockManager.isLocked {
                 LockScreenView(lockManager: lockManager)
                     .transition(.opacity)

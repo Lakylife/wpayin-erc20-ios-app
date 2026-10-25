@@ -13,15 +13,16 @@ struct AllAssetsView: View {
     @EnvironmentObject var walletManager: WalletManager
     @EnvironmentObject var settingsManager: SettingsManager
     @Environment(\.dismiss) private var dismiss
-    @State private var selectedFilter: AssetListFilter = .native
+    @State private var selectedFilter: AssetListFilter = .all
     @State private var showAddToken = false
+    @State private var selectedToken: Token?
 
     private var allAssets: [Token] {
         walletManager.visibleSupportedTokens.sorted(by: assetSort)
     }
 
     private var availableFilters: [AssetListFilter] {
-        var filters: [AssetListFilter] = []
+        var filters: [AssetListFilter] = [.all, .favorites]
 
         if allAssets.contains(where: { $0.isNative }) {
             filters.append(.native)
@@ -31,16 +32,14 @@ struct AllAssetsView: View {
             .sorted { $0.name < $1.name }
         filters.append(contentsOf: tokenBlockchains.map { .blockchain($0) })
 
-        if allAssets.count > 1 {
-            filters.append(.all)
-        }
-
         return filters
     }
 
     private var assets: [Token] {
         let filteredAssets: [Token]
         switch selectedFilter {
+        case .favorites:
+            filteredAssets = allAssets.filter { walletManager.isFavorite($0.symbol) }
         case .native:
             filteredAssets = allAssets.filter { $0.isNative }
         case .blockchain(let blockchain):
@@ -49,7 +48,7 @@ struct AllAssetsView: View {
             filteredAssets = allAssets
         }
 
-        return filteredAssets.isEmpty ? allAssets : filteredAssets.sorted(by: assetSort)
+        return filteredAssets.sorted(by: assetSort)
     }
 
     var body: some View {
@@ -112,11 +111,19 @@ struct AllAssetsView: View {
                                 .font(.system(size: 44))
                                 .foregroundColor(WpayinColors.textTertiary)
 
-                            Text("No assets yet".localized)
+                            Text(
+                                selectedFilter == .favorites
+                                    ? "No favorite tokens".localized
+                                    : "No assets yet".localized
+                            )
                                 .font(.wpayinSubheadline)
                                 .foregroundColor(WpayinColors.text)
 
-                            Text("Connect a wallet or receive funds to populate your portfolio.".localized)
+                            Text(
+                                selectedFilter == .favorites
+                                    ? "Tap the star next to an asset to add it to Favorites.".localized
+                                    : "Connect a wallet or receive funds to populate your portfolio.".localized
+                            )
                                 .font(.wpayinBody)
                                 .foregroundColor(WpayinColors.textSecondary)
                                 .multilineTextAlignment(.center)
@@ -127,11 +134,12 @@ struct AllAssetsView: View {
                         ScrollView {
                             LazyVStack(spacing: 8) {
                                 ForEach(assets) { token in
-                                    NavigationLink(destination: AssetDetailView(token: token)) {
-                                        AllAssetsRowView(token: token)
-                                            .environmentObject(settingsManager)
-                                    }
-                                    .buttonStyle(PlainButtonStyle())
+                                    AllAssetsRowView(
+                                        token: token,
+                                        onSelect: { selectedToken = token },
+                                        onFavorite: { walletManager.toggleFavorite(for: token.symbol) }
+                                    )
+                                    .environmentObject(settingsManager)
                                 }
                             }
                             .padding(.horizontal, 14)
@@ -145,6 +153,11 @@ struct AllAssetsView: View {
         .sheet(isPresented: $showAddToken) {
             AddTokenView()
                 .environmentObject(walletManager)
+        }
+        .sheet(item: $selectedToken) { token in
+            AssetDetailView(token: token)
+                .environmentObject(walletManager)
+                .environmentObject(settingsManager)
         }
         .onAppear {
             ensureAvailableFilter()
@@ -173,12 +186,15 @@ struct AllAssetsView: View {
 }
 
 private enum AssetListFilter: Hashable, Identifiable {
+    case favorites
     case native
     case blockchain(BlockchainType)
     case all
 
     var id: String {
         switch self {
+        case .favorites:
+            return "favorites"
         case .native:
             return "native"
         case .blockchain(let blockchain):
@@ -190,6 +206,8 @@ private enum AssetListFilter: Hashable, Identifiable {
 
     var title: String {
         switch self {
+        case .favorites:
+            return "Favorites".localized
         case .native:
             return "Coins".localized
         case .blockchain(let blockchain):
@@ -201,6 +219,8 @@ private enum AssetListFilter: Hashable, Identifiable {
 
     var icon: String {
         switch self {
+        case .favorites:
+            return "star.fill"
         case .native:
             return "bitcoinsign.circle"
         case .blockchain:
@@ -263,68 +283,89 @@ private struct AssetFilterBar: View {
 struct AllAssetsRowView: View {
     @EnvironmentObject var walletManager: WalletManager
     let token: Token
+    let onSelect: () -> Void
+    let onFavorite: () -> Void
     @EnvironmentObject var settingsManager: SettingsManager
 
     var body: some View {
-        HStack(spacing: 12) {
-            TokenIconView(token: token, size: 40, showNetworkBadge: !token.isNative)
+        HStack(spacing: 6) {
+            Button(action: onSelect) {
+                HStack(spacing: 12) {
+                    TokenIconView(token: token, size: 40, showNetworkBadge: !token.isNative)
 
-            VStack(alignment: .leading, spacing: 4) {
-                Text(token.symbol)
-                    .font(.system(size: 15, weight: .bold))
-                    .foregroundColor(WpayinColors.text)
-                    .lineLimit(1)
-
-                HStack(spacing: 6) {
-                    Text(token.name)
-                        .font(.system(size: 12))
-                        .foregroundColor(WpayinColors.textTertiary)
-                        .lineLimit(1)
-
-                    if !token.isNative {
-                        Text(token.blockchain.name)
-                            .font(.system(size: 10, weight: .semibold))
-                            .foregroundColor(WpayinColors.primary)
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(token.symbol)
+                            .font(.system(size: 15, weight: .bold))
+                            .foregroundColor(WpayinColors.text)
                             .lineLimit(1)
-                            .padding(.horizontal, 6)
-                            .padding(.vertical, 2)
-                            .background(
-                                Capsule()
-                                    .fill(WpayinColors.primary.opacity(0.12))
-                            )
+
+                        HStack(spacing: 6) {
+                            Text(token.name)
+                                .font(.system(size: 12))
+                                .foregroundColor(WpayinColors.textTertiary)
+                                .lineLimit(1)
+
+                            if !token.isNative {
+                                Text(token.blockchain.name)
+                                    .font(.system(size: 10, weight: .semibold))
+                                    .foregroundColor(WpayinColors.primary)
+                                    .lineLimit(1)
+                                    .padding(.horizontal, 6)
+                                    .padding(.vertical, 2)
+                                    .background(
+                                        Capsule()
+                                            .fill(WpayinColors.primary.opacity(0.12))
+                                    )
+                            }
+                        }
+
+                        HStack(spacing: 6) {
+                            Text(token.price.formatted(as: settingsManager.selectedCurrency))
+                                .font(.system(size: 12))
+                                .foregroundColor(WpayinColors.textSecondary)
+                                .lineLimit(1)
+                                .minimumScaleFactor(0.7)
+
+                            PriceChangeLabel(change: walletManager.priceChanges24h[token.symbol.uppercased()])
+                        }
                     }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+
+                    VStack(alignment: .trailing, spacing: 4) {
+                        Text(TokenIconHelper.formattedBalanceWithSymbol(token.balance, symbol: token.symbol))
+                            .font(.system(size: 13, weight: .bold))
+                            .foregroundColor(WpayinColors.text)
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.6)
+
+                        Text(token.totalValue.formatted(as: settingsManager.selectedCurrency))
+                            .font(.system(size: 12))
+                            .foregroundColor(WpayinColors.textTertiary)
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.75)
+                    }
+                    .frame(width: 86, alignment: .trailing)
                 }
-
-                HStack(spacing: 6) {
-                    Text(token.price.formatted(as: settingsManager.selectedCurrency))
-                        .font(.system(size: 12))
-                        .foregroundColor(WpayinColors.textSecondary)
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.7)
-
-                    PriceChangeLabel(change: walletManager.priceChanges24h[token.symbol.uppercased()])
-                }
+                .contentShape(Rectangle())
             }
-            .frame(maxWidth: .infinity, alignment: .leading)
+            .buttonStyle(PlainButtonStyle())
 
-            VStack(alignment: .trailing, spacing: 4) {
-                Text(TokenIconHelper.formattedBalanceWithSymbol(token.balance, symbol: token.symbol))
-                    .font(.system(size: 13, weight: .bold))
-                    .foregroundColor(WpayinColors.text)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.6)
-
-                Text(token.totalValue.formatted(as: settingsManager.selectedCurrency))
-                    .font(.system(size: 12))
-                    .foregroundColor(WpayinColors.textTertiary)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.75)
+            Button(action: onFavorite) {
+                Image(systemName: walletManager.isFavorite(token.symbol) ? "star.fill" : "star")
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundColor(
+                        walletManager.isFavorite(token.symbol)
+                            ? WpayinColors.warning
+                            : WpayinColors.textSecondary
+                    )
+                    .frame(width: 34, height: 44)
             }
-            .frame(width: 86, alignment: .trailing)
-
-            Image(systemName: "chevron.right")
-                .font(.system(size: 12))
-                .foregroundColor(WpayinColors.textSecondary)
+            .buttonStyle(WpayinPressableStyle())
+            .accessibilityLabel(
+                walletManager.isFavorite(token.symbol)
+                    ? "Remove from Favorites".localized
+                    : "Add to Favorites".localized
+            )
         }
         .padding(14)
         .background(

@@ -124,7 +124,9 @@ struct DerivationPaths {
     }
 
     static func solana(accountIndex: Int = 0) -> String {
-        return "m/44'/501'/\(accountIndex)'/0'"
+        // Keep in sync with MnemonicService.derivationPath — account 0 is
+        // WalletCore's default Solana path (no trailing /0').
+        return accountIndex == 0 ? "m/44'/501'/0'" : "m/44'/501'/\(accountIndex)'/0'"
     }
 
     static func polygon(accountIndex: Int = 0) -> String {

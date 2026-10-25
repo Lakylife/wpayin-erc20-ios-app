@@ -21,98 +21,104 @@ struct ExpandableTokenCard: View {
     var body: some View {
         VStack(spacing: 0) {
             // Main token row
-            Button(action: {
-                if networksForToken.count > 1 {
-                    withAnimation(.easeInOut(duration: 0.3)) {
-                        isExpanded.toggle()
-                    }
-                } else {
+            HStack(spacing: 4) {
+                Button {
                     onTokenTap(token)
-                }
-            }) {
-                HStack(spacing: 13) {
-                    TokenIconView(token: token, size: 44, showNetworkBadge: false)
+                } label: {
+                    HStack(spacing: 13) {
+                        TokenIconView(token: token, size: 44, showNetworkBadge: false)
 
-                    VStack(alignment: .leading, spacing: 4) {
-                        HStack(spacing: 8) {
-                            Text(token.symbol)
-                                .font(.system(size: 16, weight: .semibold))
-                                .foregroundColor(WpayinColors.text)
+                        VStack(alignment: .leading, spacing: 4) {
+                            HStack(spacing: 8) {
+                                Text(token.symbol)
+                                    .font(.system(size: 16, weight: .semibold))
+                                    .foregroundColor(WpayinColors.text)
 
-                            Text(token.name)
-                                .font(.system(size: 13))
-                                .foregroundColor(WpayinColors.textTertiary)
-                        }
+                                Text(token.name)
+                                    .font(.system(size: 13))
+                                    .foregroundColor(WpayinColors.textTertiary)
+                            }
 
-                        HStack(spacing: 8) {
-                            Text(token.price.formatted(as: settingsManager.selectedCurrency))
-                                .font(.system(size: 13))
-                                .foregroundColor(WpayinColors.textSecondary)
-                                .lineLimit(1)
-                                .minimumScaleFactor(0.7)
+                            HStack(spacing: 8) {
+                                Text(token.price.formatted(as: settingsManager.selectedCurrency))
+                                    .font(.system(size: 13))
+                                    .foregroundColor(WpayinColors.textSecondary)
+                                    .lineLimit(1)
+                                    .minimumScaleFactor(0.7)
 
-                            PriceChangeLabel(change: walletManager.priceChanges24h[token.symbol.uppercased()])
+                                PriceChangeLabel(change: walletManager.priceChanges24h[token.symbol.uppercased()])
 
-                            if networksForToken.count > 1 {
-                                HStack(spacing: -4) {
-                                    ForEach(Array(networksForToken.prefix(3)), id: \.self) { network in
-                                        NetworkIconView(blockchain: network, size: 16)
-                                            .overlay(
-                                                Circle()
-                                                    .stroke(WpayinColors.surface, lineWidth: 1)
-                                            )
+                                if networksForToken.count > 1 {
+                                    HStack(spacing: -4) {
+                                        ForEach(Array(networksForToken.prefix(3)), id: \.self) { network in
+                                            NetworkIconView(blockchain: network, size: 16)
+                                                .overlay(
+                                                    Circle()
+                                                        .stroke(WpayinColors.surface, lineWidth: 1)
+                                                )
+                                        }
+                                        if networksForToken.count > 3 {
+                                            Circle()
+                                                .fill(WpayinColors.textTertiary)
+                                                .frame(width: 16, height: 16)
+                                                .overlay(
+                                                    Text("+\(networksForToken.count - 3)")
+                                                        .font(.system(size: 8, weight: .bold))
+                                                        .foregroundColor(.white)
+                                                )
+                                        }
                                     }
-                                    if networksForToken.count > 3 {
-                                        Circle()
-                                            .fill(WpayinColors.textTertiary)
-                                            .frame(width: 16, height: 16)
-                                            .overlay(
-                                                Text("+\(networksForToken.count - 3)")
-                                                    .font(.system(size: 8, weight: .bold))
-                                                    .foregroundColor(.white)
-                                            )
-                                    }
-
-                                    Image(systemName: "chevron.down")
-                                        .font(.system(size: 9, weight: .bold))
-                                        .foregroundColor(WpayinColors.textSecondary)
-                                        .frame(width: 16, height: 16)
-                                        .rotationEffect(.degrees(isExpanded ? 180 : 0))
-                                        .animation(.easeInOut(duration: 0.3), value: isExpanded)
                                 }
                             }
                         }
+
+                        Spacer()
+
+                        VStack(alignment: .trailing, spacing: 4) {
+                            Text(TokenIconHelper.formattedBalanceWithSymbol(totalBalanceAcrossNetworks, symbol: token.symbol))
+                                .font(.system(size: 14, weight: .bold))
+                                .foregroundColor(WpayinColors.text)
+                                .lineLimit(1)
+                                .minimumScaleFactor(0.6)
+
+                            Text(totalValueAcrossNetworks.formatted(as: settingsManager.selectedCurrency))
+                                .font(.system(size: 12))
+                                .foregroundColor(WpayinColors.textTertiary)
+                                .lineLimit(1)
+                                .minimumScaleFactor(0.75)
+                        }
+                        .frame(width: 92, alignment: .trailing)
                     }
-
-                    Spacer()
-
-                    VStack(alignment: .trailing, spacing: 4) {
-                        Text(TokenIconHelper.formattedBalanceWithSymbol(totalBalanceAcrossNetworks, symbol: token.symbol))
-                            .font(.system(size: 14, weight: .bold))
-                            .foregroundColor(WpayinColors.text)
-                            .lineLimit(1)
-                            .minimumScaleFactor(0.6)
-
-                        Text(totalValueAcrossNetworks.formatted(as: settingsManager.selectedCurrency))
-                            .font(.system(size: 12))
-                            .foregroundColor(WpayinColors.textTertiary)
-                            .lineLimit(1)
-                            .minimumScaleFactor(0.75)
-                    }
-                    .frame(width: 92, alignment: .trailing)
                 }
-                .padding(.horizontal, 16)
-                .padding(.vertical, 14)
-                .background(
-                    RoundedRectangle(cornerRadius: 18, style: .continuous)
-                        .fill(WpayinColors.surface)
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 18, style: .continuous)
-                                .stroke(WpayinColors.surfaceBorder, lineWidth: 1)
-                        )
-                )
+                .buttonStyle(PlainButtonStyle())
+                .accessibilityHint("Open asset details".localized)
+
+                if networksForToken.count > 1 {
+                    Button {
+                        withAnimation(.easeInOut(duration: 0.3)) {
+                            isExpanded.toggle()
+                        }
+                    } label: {
+                        Image(systemName: "chevron.down")
+                            .font(.system(size: 11, weight: .bold))
+                            .foregroundColor(WpayinColors.textSecondary)
+                            .frame(width: 30, height: 44)
+                            .rotationEffect(.degrees(isExpanded ? 180 : 0))
+                    }
+                    .buttonStyle(WpayinPressableStyle())
+                    .accessibilityLabel(isExpanded ? "Hide networks".localized : "Show networks".localized)
+                }
             }
-            .buttonStyle(PlainButtonStyle())
+            .padding(.horizontal, 16)
+            .padding(.vertical, 14)
+            .background(
+                RoundedRectangle(cornerRadius: 18, style: .continuous)
+                    .fill(WpayinColors.surface)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 18, style: .continuous)
+                            .stroke(WpayinColors.surfaceBorder, lineWidth: 1)
+                    )
+            )
             .contextMenu {
                 FavoriteToggleButton(symbol: token.symbol)
 
@@ -247,13 +253,13 @@ struct ExpandableTokenCard: View {
 /// Context-menu button that adds/removes a token from Favorites.
 struct FavoriteToggleButton: View {
     let symbol: String
-    @EnvironmentObject var settingsManager: SettingsManager
+    @EnvironmentObject var walletManager: WalletManager
 
     var body: some View {
         Button {
-            settingsManager.toggleFavoriteToken(symbol)
+            walletManager.toggleFavorite(for: symbol)
         } label: {
-            if settingsManager.isFavoriteToken(symbol) {
+            if walletManager.isFavorite(symbol) {
                 Label("Remove from Favorites".localized, systemImage: "star.slash")
             } else {
                 Label("Add to Favorites".localized, systemImage: "star")

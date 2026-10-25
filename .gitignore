@@ -144,3 +144,18 @@ screenshots/*
 Network Trash Folder
 Temporary Items
 .apdisk
+
+# Android / Gradle
+.gradle/
+**/local.properties
+**/.idea/
+**/*.iml
+**/captures/
+**/.externalNativeBuild/
+**/.cxx/
+**/app/release/
+**/*.apk
+**/*.aab
+
+# Kept as a separate Git repository
+Wpayin_Wallet_Android/

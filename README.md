@@ -1,9 +1,16 @@
-# Wpayin Wallet 1.1.9
+# Wpayin Wallet 1.1.10 — release candidate
+
+Release preparation and verification status: [1.1.10 release notes](RELEASE_NOTES_v1.1.10.md).
 
 Wpayin Wallet is a non-custodial iOS wallet built with SwiftUI and Trust
 Wallet Core. It supports Bitcoin, Ethereum, Solana, EVM-compatible networks,
 tokens, network-aware transaction history, NFTs, DEX swaps, cross-chain
 bridging, and atomic EVM P2P trading.
+
+An independently structured native Android port now lives in
+[the Android repository](https://github.com/Lakylife/wpayin-erc20-android-app). Its README records
+the build variants, implemented foundation, and remaining security-gated parity
+work; the existing iOS target is unchanged by the Android project.
 
 > This project has not received a professional security audit. Use test
 > accounts and small amounts only. You are responsible for protecting your
@@ -20,7 +27,17 @@ bridging, and atomic EVM P2P trading.
   <img src="./screenshots/20260712_v1.1.8/06_settings.png" width="220" alt="Wpayin Wallet settings">
 </p>
 
-## Version 1.1.9
+## Version 1.1.10 (candidate)
+
+- Added fresh device authentication for recovery-phrase and private-key export.
+- Limited secret clipboard copies to this device with a 30-second expiry.
+- Corrected Auto-Lock timing and active-account private-key export.
+- Prevented delayed balance, history and NFT responses from changing another wallet.
+- Improved fee-aware swap/bridge flows, P2P review, asset lists and notification settings.
+
+The iOS build and on-device checks must pass before publishing a stable release.
+
+## Previous version 1.1.9
 
 - Redesigned Deposit, Withdraw, asset details, Swap, Bridge, and multi-network
   transaction history for clearer network-aware wallet flows.

@@ -10,8 +10,9 @@ Security fixes are maintained for the latest release:
 
 | Version | Supported |
 | --- | --- |
-| 1.1.7 | Yes |
-| 1.1.6 and older | No |
+| 1.1.10 | Release candidate; validation pending |
+| 1.1.9 | Latest local release tag |
+| 1.1.8 and older | No |
 
 ## Reporting a vulnerability
 
@@ -73,4 +74,4 @@ funds to a newly generated wallet when wallet material is involved, rotate
 provider credentials, remove the data from the current tree, and review Git
 history and release assets for copies.
 
-Last reviewed: 2026-07-06
+Last reviewed: 2026-10-25

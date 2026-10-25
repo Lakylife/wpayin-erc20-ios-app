@@ -9,21 +9,41 @@
 
 import SwiftUI
 
+private enum HomeSheet: Identifiable {
+    case deposit
+    case withdraw
+    case qrScanner
+    case addToken
+    case p2p
+    case swap
+    case allAssets
+    case asset(Token)
+    case walletSelector
+    case createWallet
+    case importWallet
+
+    var id: String {
+        switch self {
+        case .deposit: return "deposit"
+        case .withdraw: return "withdraw"
+        case .qrScanner: return "qrScanner"
+        case .addToken: return "addToken"
+        case .p2p: return "p2p"
+        case .swap: return "swap"
+        case .allAssets: return "allAssets"
+        case .asset(let token): return "asset-\(token.id)"
+        case .walletSelector: return "walletSelector"
+        case .createWallet: return "createWallet"
+        case .importWallet: return "importWallet"
+        }
+    }
+}
+
 struct WalletView: View {
     @EnvironmentObject var walletManager: WalletManager
     @EnvironmentObject var settingsManager: SettingsManager
-    @State private var showDepositSheet = false
-    @State private var showWithdrawSheet = false
-    @State private var showSwapSheet = false
-    @State private var showAddToken = false
-    @State private var showBuy = false
-    @State private var showCreateWallet = false
-    @State private var showImportWallet = false
-    @State private var showMenuSheet = false
-    @State private var showAllAssets = false
-    @State private var selectedToken: Token?
-    @State private var showWalletSelector = false
-    @State private var showQRScanner = false
+    @State private var activeSheet: HomeSheet?
+    @State private var showMenuDialog = false
     @State private var scannedRecipientAddress = ""
     @State private var scannedPaymentRequest: PaymentRequest?
 
@@ -34,9 +54,9 @@ struct WalletView: View {
             VStack(spacing: 0) {
                 ModernHeaderView(
                     walletManager: walletManager,
-                    onMenuTap: { showMenuSheet = true },
-                    onQRTap: { showQRScanner = true },
-                    onWalletTap: { showWalletSelector = true }
+                    onMenuTap: { showMenuDialog = true },
+                    onQRTap: { activeSheet = .qrScanner },
+                    onWalletTap: { activeSheet = .walletSelector }
                 )
                 .zIndex(1)
 
@@ -50,19 +70,23 @@ struct WalletView: View {
                         .environmentObject(settingsManager)
 
                         ModernQuickActionsView(
-                            onSend: { showWithdrawSheet = true },
-                            onReceive: { showDepositSheet = true },
-                            onBuy: { showBuy = true },
-                            onSwap: { showSwapSheet = true }
+                            onSend: {
+                                scannedPaymentRequest = nil
+                                scannedRecipientAddress = ""
+                                activeSheet = .withdraw
+                            },
+                            onReceive: { activeSheet = .deposit },
+                            onBuy: { activeSheet = .p2p },
+                            onSwap: { activeSheet = .swap }
                         )
 
                         ModernTabsView(
                             tokens: walletManager.visibleGroupedTokens,
                             isLoading: walletManager.isLoading,
                             onTokenTap: { token in
-                                selectedToken = token
+                                activeSheet = .asset(token)
                             },
-                            onViewAllTap: { showAllAssets = true }
+                            onViewAllTap: { activeSheet = .allAssets }
                         )
                         .environmentObject(walletManager)
                         .environmentObject(settingsManager)
@@ -76,99 +100,23 @@ struct WalletView: View {
             }
         }
         .navigationBarHidden(true)
-        .sheet(isPresented: $showDepositSheet) {
-            DepositView()
-                .environmentObject(walletManager)
-                .environmentObject(settingsManager)
+        .sheet(item: $activeSheet) { sheet in
+            sheetContent(for: sheet)
         }
-        .sheet(isPresented: $showWithdrawSheet, onDismiss: {
-            scannedPaymentRequest = nil
-            scannedRecipientAddress = ""
-        }) {
-            WithdrawView(
-                initialRecipientAddress: scannedRecipientAddress,
-                initialPaymentRequest: scannedPaymentRequest
-            )
-                .environmentObject(walletManager)
-                .environmentObject(settingsManager)
-        }
-        .sheet(isPresented: $showQRScanner) {
-            QRScannerView(
-                scannedAddress: $scannedRecipientAddress,
-                onPaymentRequest: { request in
-                    scannedPaymentRequest = request
-                    scannedRecipientAddress = request.address
-                    showQRScanner = false
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
-                        showWithdrawSheet = true
-                    }
-                },
-                onScan: { scannedAddress in
-                    scannedPaymentRequest = nil
-                    scannedRecipientAddress = scannedAddress
-                    showQRScanner = false
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
-                        showWithdrawSheet = true
-                    }
-                }
-            )
-        }
-        .sheet(isPresented: $showAddToken) {
-            AddTokenView()
-                .environmentObject(walletManager)
-        }
-        .sheet(isPresented: $showBuy) {
-            BuyView()
-                .environmentObject(walletManager)
-                .environmentObject(settingsManager)
-        }
-        .sheet(isPresented: $showSwapSheet) {
-            SwapView()
-                .environmentObject(walletManager)
-                .environmentObject(settingsManager)
-        }
-        .sheet(isPresented: $showAllAssets) {
-            AllAssetsView()
-                .environmentObject(walletManager)
-                .environmentObject(settingsManager)
-        }
-        .sheet(item: $selectedToken) { token in
-            AssetDetailView(token: token)
-                .environmentObject(walletManager)
-                .environmentObject(settingsManager)
-        }
-        .sheet(isPresented: $showWalletSelector) {
-            WalletSelectorView()
-                .environmentObject(walletManager)
-                .environmentObject(settingsManager)
-        }
-        .sheet(isPresented: $showCreateWallet) {
-            CreateWalletFlow()
-                .environmentObject(walletManager)
-        }
-        .sheet(isPresented: $showImportWallet) {
-            ImportWalletView()
-                .environmentObject(walletManager)
-        }
-        .sheet(isPresented: $showMenuSheet) {
-            WalletOptionsSheet(
-                hasWallet: walletManager.hasWallet,
-                walletName: walletManager.activeWallet?.name ?? L10n.Wallet.mainWallet.localized,
-                walletAddress: walletManager.walletAddress,
-                onAddToken: {
-                    openAfterClosingWalletOptions { showAddToken = true }
-                },
-                onManageWallets: {
-                    openAfterClosingWalletOptions { showWalletSelector = true }
-                },
-                onCreateWallet: {
-                    openAfterClosingWalletOptions { showCreateWallet = true }
-                },
-                onImportWallet: {
-                    openAfterClosingWalletOptions { showImportWallet = true }
-                }
-            )
-            .walletOptionsPresentation()
+        .confirmationDialog(
+            walletManager.hasWallet ? "Wallet Options".localized : "Connect Wallet".localized,
+            isPresented: $showMenuDialog,
+            titleVisibility: .visible
+        ) {
+            if walletManager.hasWallet {
+                Button("Add Token".localized) { openSheetAfterMenu(.addToken) }
+                Button("Manage Wallets".localized) { openSheetAfterMenu(.walletSelector) }
+                Button("Cancel".localized, role: .cancel) { }
+            } else {
+                Button("Create New Wallet".localized) { openSheetAfterMenu(.createWallet) }
+                Button("Import Existing Wallet".localized) { openSheetAfterMenu(.importWallet) }
+                Button("Cancel".localized, role: .cancel) { }
+            }
         }
         .task {
             if walletManager.walletAddress.isEmpty {
@@ -181,10 +129,77 @@ struct WalletView: View {
         walletManager.visibleGroupedTokens.reduce(0) { $0 + $1.totalValue }
     }
 
-    private func openAfterClosingWalletOptions(_ action: @escaping () -> Void) {
-        showMenuSheet = false
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.28) {
-            action()
+    @ViewBuilder
+    private func sheetContent(for sheet: HomeSheet) -> some View {
+        switch sheet {
+        case .deposit:
+            DepositView()
+                .environmentObject(walletManager)
+                .environmentObject(settingsManager)
+        case .withdraw:
+            WithdrawView(
+                initialRecipientAddress: scannedRecipientAddress,
+                initialPaymentRequest: scannedPaymentRequest
+            )
+            .environmentObject(walletManager)
+            .environmentObject(settingsManager)
+        case .qrScanner:
+            QRScannerView(
+                scannedAddress: $scannedRecipientAddress,
+                onPaymentRequest: { request in
+                    scannedPaymentRequest = request
+                    scannedRecipientAddress = request.address
+                    openSheetAfterDismissal(.withdraw)
+                },
+                onScan: { scannedAddress in
+                    scannedPaymentRequest = nil
+                    scannedRecipientAddress = scannedAddress
+                    openSheetAfterDismissal(.withdraw)
+                }
+            )
+        case .addToken:
+            AddTokenView()
+                .environmentObject(walletManager)
+        case .p2p:
+            P2PTradeView()
+                .environmentObject(walletManager)
+                .environmentObject(settingsManager)
+        case .swap:
+            SwapView()
+                .environmentObject(walletManager)
+                .environmentObject(settingsManager)
+        case .allAssets:
+            AllAssetsView()
+                .environmentObject(walletManager)
+                .environmentObject(settingsManager)
+        case .asset(let token):
+            AssetDetailView(token: token)
+                .environmentObject(walletManager)
+                .environmentObject(settingsManager)
+        case .walletSelector:
+            WalletSelectorView()
+                .environmentObject(walletManager)
+                .environmentObject(settingsManager)
+        case .createWallet:
+            CreateWalletFlow()
+                .environmentObject(walletManager)
+        case .importWallet:
+            ImportWalletView()
+                .environmentObject(walletManager)
+        }
+    }
+
+    private func openSheetAfterDismissal(_ sheet: HomeSheet) {
+        activeSheet = nil
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
+            activeSheet = sheet
+        }
+    }
+
+    private func openSheetAfterMenu(_ sheet: HomeSheet) {
+        showMenuDialog = false
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+            activeSheet = sheet
         }
     }
 }
@@ -1018,11 +1033,11 @@ struct TokensTabContent: View {
     @EnvironmentObject var settingsManager: SettingsManager
 
     private var favoriteTokens: [Token] {
-        tokens.filter { settingsManager.favoriteTokenSymbols.contains($0.symbol) }
+        tokens.filter { walletManager.isFavorite($0.symbol) }
     }
 
     private var regularTokens: [Token] {
-        tokens.filter { !settingsManager.favoriteTokenSymbols.contains($0.symbol) }
+        tokens.filter { !walletManager.isFavorite($0.symbol) }
     }
 
     var body: some View {

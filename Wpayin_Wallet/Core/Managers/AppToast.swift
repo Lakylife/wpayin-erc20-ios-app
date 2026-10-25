@@ -35,6 +35,16 @@ final class AppToast {
         show(message ?? "Copied to clipboard".localized, icon: "doc.on.doc.fill")
     }
 
+    /// Wallet secrets must not sync through Universal Clipboard or persist indefinitely.
+    static func copySecretToClipboard(_ value: String) {
+        UIPasteboard.general.setItems(
+            [[UIPasteboard.typeAutomatic: value]],
+            options: [.localOnly: true, .expirationDate: Date().addingTimeInterval(30)]
+        )
+        UIImpactFeedbackGenerator(style: .light).impactOccurred()
+        show("Copied to clipboard".localized, icon: "doc.on.doc.fill")
+    }
+
     // MARK: - Private
 
     private func present(message: String, icon: String) {

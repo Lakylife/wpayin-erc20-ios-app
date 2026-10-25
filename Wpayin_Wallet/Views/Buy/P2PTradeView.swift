@@ -37,6 +37,7 @@ struct P2PTradeView: View {
     }
 
     @State private var mode: P2PMode = .buy
+    @State private var showCrossChainFlow = false
 
     private var availableModes: [P2PMode] { P2PMode.allCases }
 
@@ -66,8 +67,69 @@ struct P2PTradeView: View {
                     Button(L10n.Action.cancel.localized) { dismiss() }
                         .foregroundColor(WpayinColors.text)
                 }
+
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button {
+                        showCrossChainFlow = true
+                    } label: {
+                        Image(systemName: "point.3.connected.trianglepath.dotted")
+                            .foregroundColor(WpayinColors.primary)
+                    }
+                    .accessibilityLabel("Cross-chain P2P".localized)
+                }
+            }
+            .sheet(isPresented: $showCrossChainFlow) {
+                P2PCrossChainFlowView {
+                    showCrossChainFlow = false
+                    withAnimation(.easeOut(duration: 0.2)) { mode = .sell }
+                }
+                .environmentObject(walletManager)
+                .environmentObject(settingsManager)
             }
         }
+    }
+
+    private var crossChainButton: some View {
+        Button {
+            showCrossChainFlow = true
+        } label: {
+            HStack(spacing: 12) {
+                Image(systemName: "point.3.connected.trianglepath.dotted")
+                    .font(.system(size: 17, weight: .semibold))
+                    .foregroundColor(WpayinColors.primary)
+                    .frame(width: 38, height: 38)
+                    .background(Circle().fill(WpayinColors.primary.opacity(0.12)))
+
+                VStack(alignment: .leading, spacing: 3) {
+                    Text("BTC / SOL ↔ ERC-20".localized)
+                        .font(.system(size: 14, weight: .bold, design: .rounded))
+                        .foregroundColor(WpayinColors.text)
+
+                    Text("Bridge first, then settle P2P atomically".localized)
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundColor(WpayinColors.textSecondary)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.8)
+                }
+
+                Spacer()
+
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 12, weight: .bold))
+                    .foregroundColor(WpayinColors.textTertiary)
+            }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 11)
+            .background(
+                RoundedRectangle(cornerRadius: WpayinRadius.medium, style: .continuous)
+                    .fill(WpayinColors.surface)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: WpayinRadius.medium, style: .continuous)
+                            .stroke(WpayinColors.primary.opacity(0.25), lineWidth: 1)
+                    )
+            )
+        }
+        .buttonStyle(WpayinPressableStyle())
     }
 
     private var modePicker: some View {
@@ -106,6 +168,429 @@ struct P2PTradeView: View {
             )
         }
         .buttonStyle(WpayinPressableStyle())
+    }
+}
+
+// MARK: - Native BTC / SOL ↔ EVM P2P guide
+
+/// Cross-chain P2P is deliberately a guided two-step flow. The bridge moves
+/// one user's asset between chains; the AirSwap trade remains atomic on one
+/// EVM chain. Combining two independent peer transfers would let one party
+/// receive funds without paying the other.
+private struct P2PCrossChainFlowView: View {
+    private enum Direction: String, CaseIterable {
+        case nativeToERC20
+        case erc20ToNative
+
+        var title: String {
+            switch self {
+            case .nativeToERC20: return "BTC / SOL → ERC-20".localized
+            case .erc20ToNative: return "ERC-20 → BTC / SOL".localized
+            }
+        }
+    }
+
+    private struct BridgeLaunch: Identifiable {
+        let id = UUID()
+        let sourceToken: Token?
+        let destination: BlockchainPlatform?
+    }
+
+    @EnvironmentObject private var walletManager: WalletManager
+    @EnvironmentObject private var settingsManager: SettingsManager
+    @Environment(\.dismiss) private var dismiss
+
+    let onContinueToOffer: () -> Void
+
+    @State private var direction: Direction = .nativeToERC20
+    @State private var selectedNativeSource: Token?
+    @State private var selectedNativeDestination: BlockchainPlatform = .bitcoin
+    @State private var bridgeLaunch: BridgeLaunch?
+
+    private var nativeSources: [Token] {
+        [.bitcoin, .solana].compactMap { blockchain in
+            walletManager.visibleSupportedTokens
+                .filter { $0.blockchain == blockchain && $0.isNative && $0.balance > 0 }
+                .max { $0.balance < $1.balance }
+        }
+    }
+
+    var body: some View {
+        NavigationView {
+            ZStack {
+                WpayinColors.background.ignoresSafeArea()
+
+                ScrollView(showsIndicators: false) {
+                    VStack(spacing: 16) {
+                        directionPicker
+
+                        if direction == .nativeToERC20 {
+                            nativeToERC20Flow
+                        } else {
+                            erc20ToNativeFlow
+                        }
+
+                        safetyNotice
+                        Spacer(minLength: 20)
+                    }
+                    .padding(.horizontal, 20)
+                    .padding(.top, 12)
+                }
+            }
+            .navigationTitle("Cross-chain P2P".localized)
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarLeading) {
+                    Button(L10n.Action.cancel.localized) { dismiss() }
+                        .foregroundColor(WpayinColors.text)
+                }
+            }
+        }
+        .onAppear {
+            if selectedNativeSource == nil { selectedNativeSource = nativeSources.first }
+        }
+        .onChange(of: direction) { newDirection in
+            if newDirection == .nativeToERC20, selectedNativeSource == nil {
+                selectedNativeSource = nativeSources.first
+            }
+        }
+        .sheet(item: $bridgeLaunch, onDismiss: refreshBalances) { launch in
+            P2PBridgeSheet(
+                sourceToken: launch.sourceToken,
+                destination: launch.destination
+            )
+            .environmentObject(walletManager)
+            .environmentObject(settingsManager)
+        }
+    }
+
+    private var directionPicker: some View {
+        HStack(spacing: 4) {
+            ForEach(Direction.allCases, id: \.self) { item in
+                let selected = direction == item
+                Button {
+                    withAnimation(.easeOut(duration: 0.2)) { direction = item }
+                } label: {
+                    Text(item.title)
+                        .font(.system(size: 12, weight: .semibold, design: .rounded))
+                        .foregroundColor(selected ? .white : WpayinColors.textSecondary)
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 38)
+                        .background(
+                            Capsule()
+                                .fill(selected ? AnyShapeStyle(WpayinColors.accentGradient) : AnyShapeStyle(Color.clear))
+                        )
+                }
+                .buttonStyle(WpayinPressableStyle())
+            }
+        }
+        .padding(4)
+        .background(
+            Capsule()
+                .fill(WpayinColors.surface)
+                .overlay(Capsule().stroke(WpayinColors.surfaceBorder, lineWidth: 1))
+        )
+    }
+
+    private var nativeToERC20Flow: some View {
+        VStack(spacing: 14) {
+            stepCard(
+                number: 1,
+                title: "Bridge BTC or SOL to an EVM network".localized,
+                subtitle: "The bridge converts your native asset to an asset on the EVM network you choose.".localized
+            ) {
+                if nativeSources.isEmpty {
+                    Text("No BTC or SOL balance is available to bridge.".localized)
+                        .font(.system(size: 13, weight: .medium))
+                        .foregroundColor(WpayinColors.textSecondary)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                } else {
+                    HStack(spacing: 10) {
+                        ForEach(nativeSources) { token in
+                            nativeSourceButton(token)
+                        }
+                    }
+                }
+
+                primaryButton(
+                    title: "Open Bridge".localized,
+                    icon: "link",
+                    enabled: selectedNativeSource != nil
+                ) {
+                    bridgeLaunch = BridgeLaunch(
+                        sourceToken: selectedNativeSource,
+                        destination: .base
+                    )
+                }
+            }
+
+            stepCard(
+                number: 2,
+                title: "Create an atomic P2P offer".localized,
+                subtitle: "After the bridged balance arrives, sell the received EVM asset for the ERC-20 token you want.".localized
+            ) {
+                secondaryButton(
+                    title: "Continue to P2P offer".localized,
+                    icon: "arrow.up.circle"
+                ) {
+                    onContinueToOffer()
+                }
+            }
+        }
+    }
+
+    private var erc20ToNativeFlow: some View {
+        VStack(spacing: 14) {
+            stepCard(
+                number: 1,
+                title: "Trade ERC-20 for a bridgeable EVM asset".localized,
+                subtitle: "Create an atomic offer on one EVM network. Receive ETH, WETH, WBTC or another asset supported by Bridge.".localized
+            ) {
+                primaryButton(
+                    title: "Create P2P Offer".localized,
+                    icon: "arrow.up.circle",
+                    enabled: true
+                ) {
+                    onContinueToOffer()
+                }
+            }
+
+            stepCard(
+                number: 2,
+                title: "Bridge the received asset to BTC or SOL".localized,
+                subtitle: "Once the P2P offer is filled, choose the received EVM asset in Bridge and send it to your native wallet.".localized
+            ) {
+                HStack(spacing: 10) {
+                    nativeDestinationButton(.bitcoin)
+                    nativeDestinationButton(.solana)
+                }
+
+                secondaryButton(
+                    title: "Open Bridge".localized,
+                    icon: "link"
+                ) {
+                    bridgeLaunch = BridgeLaunch(
+                        sourceToken: nil,
+                        destination: selectedNativeDestination
+                    )
+                }
+            }
+        }
+    }
+
+    private func stepCard<Content: View>(
+        number: Int,
+        title: String,
+        subtitle: String,
+        @ViewBuilder content: () -> Content
+    ) -> some View {
+        VStack(alignment: .leading, spacing: 14) {
+            HStack(alignment: .top, spacing: 11) {
+                Text("\(number)")
+                    .font(.system(size: 13, weight: .bold))
+                    .foregroundColor(.white)
+                    .frame(width: 28, height: 28)
+                    .background(Circle().fill(WpayinColors.primary))
+
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(title)
+                        .font(.system(size: 15, weight: .bold, design: .rounded))
+                        .foregroundColor(WpayinColors.text)
+
+                    Text(subtitle)
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundColor(WpayinColors.textSecondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+
+            content()
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(16)
+        .background(
+            RoundedRectangle(cornerRadius: WpayinRadius.card, style: .continuous)
+                .fill(WpayinColors.surface)
+                .overlay(
+                    RoundedRectangle(cornerRadius: WpayinRadius.card, style: .continuous)
+                        .stroke(WpayinColors.surfaceBorder, lineWidth: 1)
+                )
+        )
+    }
+
+    private func nativeSourceButton(_ token: Token) -> some View {
+        let selected = selectedNativeSource?.id == token.id
+        return Button {
+            selectedNativeSource = token
+        } label: {
+            VStack(spacing: 7) {
+                TokenIconView(token: token, size: 32, showNetworkBadge: false)
+                Text(token.symbol)
+                    .font(.system(size: 14, weight: .bold))
+                    .foregroundColor(WpayinColors.text)
+                Text(formatBalance(token.balance))
+                    .font(.system(size: 10, weight: .medium))
+                    .foregroundColor(WpayinColors.textSecondary)
+                    .lineLimit(1)
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 12)
+            .background(
+                RoundedRectangle(cornerRadius: WpayinRadius.medium, style: .continuous)
+                    .fill(selected ? WpayinColors.primary.opacity(0.14) : WpayinColors.surfaceLight)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: WpayinRadius.medium, style: .continuous)
+                            .stroke(selected ? WpayinColors.primary : WpayinColors.surfaceBorder, lineWidth: 1)
+                    )
+            )
+        }
+        .buttonStyle(WpayinPressableStyle())
+    }
+
+    private func nativeDestinationButton(_ network: BlockchainPlatform) -> some View {
+        let selected = selectedNativeDestination == network
+        return Button {
+            selectedNativeDestination = network
+        } label: {
+            HStack(spacing: 8) {
+                if let blockchain = network.blockchainType {
+                    NetworkIconView(blockchain: blockchain, size: 24)
+                }
+                Text(network.symbol)
+                    .font(.system(size: 14, weight: .bold))
+                    .foregroundColor(WpayinColors.text)
+            }
+            .frame(maxWidth: .infinity)
+            .frame(height: 48)
+            .background(
+                RoundedRectangle(cornerRadius: WpayinRadius.medium, style: .continuous)
+                    .fill(selected ? WpayinColors.primary.opacity(0.14) : WpayinColors.surfaceLight)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: WpayinRadius.medium, style: .continuous)
+                            .stroke(selected ? WpayinColors.primary : WpayinColors.surfaceBorder, lineWidth: 1)
+                    )
+            )
+        }
+        .buttonStyle(WpayinPressableStyle())
+    }
+
+    private var safetyNotice: some View {
+        HStack(alignment: .top, spacing: 10) {
+            Image(systemName: "shield.checkered")
+                .font(.system(size: 15, weight: .semibold))
+                .foregroundColor(WpayinColors.success)
+
+            Text("Bridge and P2P are separate on-chain transactions. The P2P step remains atomic; exchange rates and network fees may change between steps.".localized)
+                .font(.system(size: 11, weight: .medium))
+                .foregroundColor(WpayinColors.textSecondary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .padding(14)
+        .background(
+            RoundedRectangle(cornerRadius: WpayinRadius.medium, style: .continuous)
+                .fill(WpayinColors.success.opacity(0.08))
+                .overlay(
+                    RoundedRectangle(cornerRadius: WpayinRadius.medium, style: .continuous)
+                        .stroke(WpayinColors.success.opacity(0.2), lineWidth: 1)
+                )
+        )
+    }
+
+    private func primaryButton(
+        title: String,
+        icon: String,
+        enabled: Bool,
+        action: @escaping () -> Void
+    ) -> some View {
+        Button(action: action) {
+            Label(title, systemImage: icon)
+                .font(.system(size: 14, weight: .bold))
+                .foregroundColor(enabled ? .white : WpayinColors.textTertiary)
+                .frame(maxWidth: .infinity)
+                .frame(height: 46)
+                .background(
+                    RoundedRectangle(cornerRadius: WpayinRadius.medium, style: .continuous)
+                        .fill(enabled
+                              ? AnyShapeStyle(WpayinColors.accentGradient)
+                              : AnyShapeStyle(WpayinColors.surfaceLight))
+                )
+        }
+        .disabled(!enabled)
+        .buttonStyle(WpayinPressableStyle())
+    }
+
+    private func secondaryButton(
+        title: String,
+        icon: String,
+        action: @escaping () -> Void
+    ) -> some View {
+        Button(action: action) {
+            Label(title, systemImage: icon)
+                .font(.system(size: 14, weight: .bold))
+                .foregroundColor(WpayinColors.primary)
+                .frame(maxWidth: .infinity)
+                .frame(height: 46)
+                .background(
+                    RoundedRectangle(cornerRadius: WpayinRadius.medium, style: .continuous)
+                        .fill(WpayinColors.primary.opacity(0.11))
+                )
+        }
+        .buttonStyle(WpayinPressableStyle())
+    }
+
+    private func formatBalance(_ balance: Double) -> String {
+        String(format: balance >= 1 ? "%.4f" : "%.8f", balance)
+    }
+
+    private func refreshBalances() {
+        Task {
+            await walletManager.refreshWalletData()
+            await MainActor.run {
+                selectedNativeSource = nativeSources.first
+            }
+        }
+    }
+}
+
+/// Modal wrapper gives the bridge an explicit close control. SwapView is also
+/// used as a root tab, so it intentionally does not own presentation state.
+private struct P2PBridgeSheet: View {
+    @EnvironmentObject private var walletManager: WalletManager
+    @EnvironmentObject private var settingsManager: SettingsManager
+    @Environment(\.dismiss) private var dismiss
+
+    let sourceToken: Token?
+    let destination: BlockchainPlatform?
+
+    var body: some View {
+        ZStack(alignment: .topLeading) {
+            SwapView(
+                initialFromToken: sourceToken,
+                initialBridgeMode: true,
+                initialBridgeDestination: destination
+            )
+            .environmentObject(walletManager)
+            .environmentObject(settingsManager)
+
+            Button { dismiss() } label: {
+                Image(systemName: "xmark")
+                    .font(.system(size: 15, weight: .bold))
+                    .foregroundColor(WpayinColors.text)
+                    .frame(width: 44, height: 44)
+                    .background(
+                        RoundedRectangle(cornerRadius: 14, style: .continuous)
+                            .fill(WpayinColors.surfaceLight)
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                                    .stroke(WpayinColors.surfaceBorder, lineWidth: 1)
+                            )
+                    )
+            }
+            .buttonStyle(WpayinPressableStyle())
+            .padding(.leading, 20)
+            .padding(.top, 8)
+            .accessibilityLabel(L10n.Action.close.localized)
+        }
     }
 }
 

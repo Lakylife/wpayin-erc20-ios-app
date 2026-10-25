@@ -724,6 +724,7 @@
 "error.bridge.unsupportedNetwork" = "This network does not support bridging";
 "error.bridge.noRoute" = "No bridge route found for this token and network pair";
 "error.bridge.quoteFailed" = "Could not get a bridge quote. Please try again.";
+"error.bridge.rateLimited" = "The bridge quote limit has been reached. Try again in about %d minutes.";
 "bridge.receiveAddress" = "Receiving address";
 "error.bridge.missingDestinationAddress" = "Could not determine the receiving address on the destination network";
 "error.bridge.solanaSendFailed" = "Failed to sign or send the Solana transaction";
@@ -863,3 +864,25 @@
 "error.swap.approvalTimeout" = "토큰 승인이 예상보다 오래 걸리고 있습니다. 활동 탭을 확인하고 확인된 후 다시 시도하세요.";
 "Paste from Clipboard" = "클립보드에서 붙여넣기";
 "error.swap.confirmationTimeout" = "스왑 기한이 만료되기 전에 네트워크가 트랜잭션을 확인하지 못했습니다. 익스플로러에서 최종 결과를 확인하세요 — 만료된 경우 아무것도 교환되지 않았습니다.";
+
+// MARK: - 크로스체인 P2P
+"BTC / SOL ↔ ERC-20" = "BTC / SOL ↔ ERC-20";
+"Bridge first, then settle P2P atomically" = "먼저 브리지한 후 P2P를 원자적으로 결제";
+"BTC / SOL → ERC-20" = "BTC / SOL → ERC-20";
+"ERC-20 → BTC / SOL" = "ERC-20 → BTC / SOL";
+"Cross-chain P2P" = "크로스체인 P2P";
+"Bridge BTC or SOL to an EVM network" = "BTC 또는 SOL을 EVM 네트워크로 브리지";
+"The bridge converts your native asset to an asset on the EVM network you choose." = "브리지는 네이티브 자산을 선택한 EVM 네트워크의 자산으로 변환합니다.";
+"No BTC or SOL balance is available to bridge." = "브리지할 수 있는 BTC 또는 SOL 잔액이 없습니다.";
+"Open Bridge" = "브리지 열기";
+"Create an atomic P2P offer" = "원자적 P2P 제안 만들기";
+"After the bridged balance arrives, sell the received EVM asset for the ERC-20 token you want." = "브리지 잔액이 도착하면 받은 EVM 자산을 원하는 ERC-20 토큰으로 판매하세요.";
+"Continue to P2P offer" = "P2P 제안으로 계속";
+"Trade ERC-20 for a bridgeable EVM asset" = "ERC-20을 브리지 가능한 EVM 자산으로 거래";
+"Create an atomic offer on one EVM network. Receive ETH, WETH, WBTC or another asset supported by Bridge." = "하나의 EVM 네트워크에서 원자적 제안을 만들고 ETH, WETH, WBTC 또는 브리지 지원 자산을 받으세요.";
+"Create P2P Offer" = "P2P 제안 만들기";
+"Bridge the received asset to BTC or SOL" = "받은 자산을 BTC 또는 SOL로 브리지";
+"Once the P2P offer is filled, choose the received EVM asset in Bridge and send it to your native wallet." = "P2P 제안이 체결되면 브리지에서 받은 EVM 자산을 선택해 네이티브 지갑으로 보내세요.";
+"Bridge and P2P are separate on-chain transactions. The P2P step remains atomic; exchange rates and network fees may change between steps." = "브리지와 P2P는 별도의 온체인 트랜잭션입니다. P2P 단계는 원자적으로 유지되며 단계 사이에 환율과 네트워크 수수료가 변경될 수 있습니다.";
+
+"Authentication failed" = "인증에 실패했습니다";

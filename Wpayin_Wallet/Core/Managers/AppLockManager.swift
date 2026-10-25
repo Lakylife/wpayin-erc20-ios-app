@@ -16,8 +16,18 @@ final class AppLockManager: ObservableObject {
     @Published var isAuthenticating: Bool = false
     @Published var authenticationError: String?
 
-    private var backgroundedAt: Date?
-    private let userDefaults = UserDefaults.standard
+    private var backgroundedAt: TimeInterval?
+    private let userDefaults: UserDefaults
+    private let uptime: () -> TimeInterval
+    private let requestUnlock: (@MainActor () async -> Void)?
+
+    init(userDefaults: UserDefaults = .standard,
+         uptime: @escaping () -> TimeInterval = { ProcessInfo.processInfo.systemUptime },
+         requestUnlock: (@MainActor () async -> Void)? = nil) {
+        self.userDefaults = userDefaults
+        self.uptime = uptime
+        self.requestUnlock = requestUnlock
+    }
 
     private var biometricLockEnabled: Bool {
         userDefaults.bool(forKey: "BiometricAuthEnabled")
@@ -43,20 +53,26 @@ final class AppLockManager: ObservableObject {
 
         switch phase {
         case .background:
-            backgroundedAt = Date()
-            // Lock immediately when leaving the app — even a brief switch away
-            // requires Face ID on return, and the lock screen also hides wallet
-            // content in the app switcher snapshot. Auto Lock "Never" opts out.
-            if autoLockDuration.seconds != nil {
+            backgroundedAt = uptime()
+            if autoLockDuration == .immediately {
                 authenticationError = nil
                 isLocked = true
             }
         case .active:
+            if let started = backgroundedAt, let timeout = autoLockDuration.seconds,
+               uptime() - started >= timeout {
+                authenticationError = nil
+                isLocked = true
+            }
             backgroundedAt = nil
             // Returning to foreground while locked → prompt Face ID right away
             if isLocked {
                 Task { @MainActor in
-                    await self.unlockWithBiometrics()
+                    if let requestUnlock = self.requestUnlock {
+                        await requestUnlock()
+                    } else {
+                        await self.unlockWithBiometrics()
+                    }
                 }
             }
         default:
@@ -74,13 +90,10 @@ final class AppLockManager: ObservableObject {
         defer { isAuthenticating = false }
 
         let context = LAContext()
-        var error: NSError?
 
         // Prefer biometrics; fall back to device passcode so the user
         // is never permanently locked out of their own wallet.
-        let policy: LAPolicy = context.canEvaluatePolicy(.deviceOwnerAuthenticationWithBiometrics, error: &error)
-            ? .deviceOwnerAuthenticationWithBiometrics
-            : .deviceOwnerAuthentication
+        let policy: LAPolicy = .deviceOwnerAuthentication
 
         do {
             let success = try await context.evaluatePolicy(
@@ -155,5 +168,49 @@ struct LockScreenView: View {
             // Trigger Face ID automatically when the lock screen appears.
             await lockManager.unlockWithBiometrics()
         }
+    }
+}
+
+/// A fresh authorization is required for each sensitive export screen.
+@MainActor
+final class SecretRevealAuthorization: ObservableObject {
+    @Published private(set) var isAuthenticating = false
+    @Published var errorMessage: String?
+    private var context: LAContext?
+    private var requestID = UUID()
+
+    func authorize(_ reveal: @escaping () -> Void) {
+        guard !isAuthenticating else { return }
+        let id = UUID()
+        requestID = id
+        let context = LAContext()
+        self.context = context
+        isAuthenticating = true
+        errorMessage = nil
+        Task { @MainActor in
+            do {
+                let success = try await context.evaluatePolicy(
+                    .deviceOwnerAuthentication,
+                    localizedReason: "Authenticate to access your wallet".localized
+                )
+                guard requestID == id else { return }
+                isAuthenticating = false
+                self.context = nil
+                if success && UIApplication.shared.applicationState == .active { reveal() }
+            } catch {
+                guard requestID == id else { return }
+                isAuthenticating = false
+                self.context = nil
+                errorMessage = error.localizedDescription
+            }
+        }
+    }
+
+    func cancel() {
+        requestID = UUID()
+        context?.invalidate()
+        context = nil
+        isAuthenticating = false
+        errorMessage = nil
     }
 }

@@ -887,7 +887,7 @@ class SwapService {
             }
 
             if let error = json["error"] as? [String: Any],
-               let message = error["message"] as? String {
+               let message = rpcErrorDiagnostic(error) {
                 throw TransactionError.fromRPCMessage(message)
             }
 
@@ -901,6 +901,30 @@ class SwapService {
 
         Logger.log("🛑 All \(blockchain.rawValue) RPC endpoints failed (\(lastFailure))")
         throw TransactionError.networkError("error.networkUnavailable".localized)
+    }
+
+    /// Solana puts the actionable preflight reason in `error.data.logs` while
+    /// the top-level JSON-RPC message can be only "Transaction simulation
+    /// failed". Preserve those details for error mapping and the debug log;
+    /// release alerts still show the localized, user-safe mapped message.
+    private func rpcErrorDiagnostic(_ error: [String: Any]) -> String? {
+        guard let message = error["message"] as? String else { return nil }
+        guard let data = error["data"] as? [String: Any] else { return message }
+
+        var details: [String] = [message]
+        if let simulationError = data["err"], !(simulationError is NSNull) {
+            if JSONSerialization.isValidJSONObject(simulationError),
+               let encoded = try? JSONSerialization.data(withJSONObject: simulationError),
+               let description = String(data: encoded, encoding: .utf8) {
+                details.append(description)
+            } else {
+                details.append(String(describing: simulationError))
+            }
+        }
+        if let logs = data["logs"] as? [String], !logs.isEmpty {
+            details.append(logs.joined(separator: " | "))
+        }
+        return details.joined(separator: " — ")
     }
 
     /// Fetch the source account's live native-token balance from the chain.

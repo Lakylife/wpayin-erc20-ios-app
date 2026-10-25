@@ -751,6 +751,7 @@
 "error.bridge.unsupportedNetwork" = "Tato síť nepodporuje bridge";
 "error.bridge.noRoute" = "Pro tuto kombinaci tokenu a sítí nebyla nalezena žádná bridge cesta";
 "error.bridge.quoteFailed" = "Nepodařilo se získat kotaci bridge. Zkuste to prosím znovu.";
+"error.bridge.rateLimited" = "Byl vyčerpán limit kotací bridge. Zkuste to znovu přibližně za %d minut.";
 "bridge.receiveAddress" = "Adresa pro přijetí";
 "error.bridge.missingDestinationAddress" = "Nepodařilo se zjistit adresu pro přijetí na cílové síti";
 "error.bridge.solanaSendFailed" = "Nepodařilo se podepsat nebo odeslat transakci na Solaně";
@@ -774,6 +775,35 @@
 "Create Offer" = "Vytvořit nabídku";
 "Creating offer..." = "Vytvářím nabídku...";
 "Share this offer with the buyer" = "Sdílejte tuto nabídku s kupujícím";
+
+// MARK: - Ovládání aktiv a sítí
+"Tap the star next to an asset to add it to Favorites." = "Klepnutím na hvězdičku u měny ji přidáte do oblíbených.";
+"Open asset details" = "Otevřít detail měny";
+"Hide networks" = "Skrýt sítě";
+"Show networks" = "Zobrazit sítě";
+"Choose network first, then select assets" = "Nejprve vyberte síť a potom měnu";
+"Enable notifications in iOS Settings" = "Povolit oznámení v nastavení iOS";
+"Notifications permission was not granted" = "Oprávnění k oznámením nebylo uděleno";
+
+// MARK: - P2P napříč sítěmi
+"BTC / SOL ↔ ERC-20" = "BTC / SOL ↔ ERC-20";
+"Bridge first, then settle P2P atomically" = "Nejprve Bridge, potom atomické P2P vypořádání";
+"BTC / SOL → ERC-20" = "BTC / SOL → ERC-20";
+"ERC-20 → BTC / SOL" = "ERC-20 → BTC / SOL";
+"Cross-chain P2P" = "P2P napříč sítěmi";
+"Bridge BTC or SOL to an EVM network" = "Převeďte BTC nebo SOL do sítě EVM";
+"The bridge converts your native asset to an asset on the EVM network you choose." = "Bridge převede nativní aktivum na aktivum ve zvolené síti EVM.";
+"No BTC or SOL balance is available to bridge." = "Pro Bridge není k dispozici žádný zůstatek BTC ani SOL.";
+"Open Bridge" = "Otevřít Bridge";
+"Create an atomic P2P offer" = "Vytvořte atomickou P2P nabídku";
+"After the bridged balance arrives, sell the received EVM asset for the ERC-20 token you want." = "Po připsání prostředků prodejte přijaté EVM aktivum za požadovaný ERC-20 token.";
+"Continue to P2P offer" = "Pokračovat k P2P nabídce";
+"Trade ERC-20 for a bridgeable EVM asset" = "Směňte ERC-20 za EVM aktivum podporované Bridgem";
+"Create an atomic offer on one EVM network. Receive ETH, WETH, WBTC or another asset supported by Bridge." = "Vytvořte atomickou nabídku v jedné síti EVM. Přijměte ETH, WETH, WBTC nebo jiné aktivum podporované Bridgem.";
+"Create P2P Offer" = "Vytvořit P2P nabídku";
+"Bridge the received asset to BTC or SOL" = "Převeďte přijaté aktivum na BTC nebo SOL";
+"Once the P2P offer is filled, choose the received EVM asset in Bridge and send it to your native wallet." = "Po vypořádání P2P nabídky vyberte v Bridge přijaté EVM aktivum a odešlete ho do nativní peněženky.";
+"Bridge and P2P are separate on-chain transactions. The P2P step remains atomic; exchange rates and network fees may change between steps." = "Bridge a P2P jsou samostatné on-chain transakce. P2P krok zůstává atomický; kurz a síťové poplatky se mezi kroky mohou změnit.";
 
 // MARK: - Ochrana před NFT spamem
 "Spam Protection" = "Ochrana před spamem";
@@ -1146,3 +1176,11 @@
 "Funds arrived on %@." = "Prostředky dorazily do sítě %@.";
 "The bridge provider reported a failure. Open the source transaction for details." = "Poskytovatel bridge nahlásil selhání. Podrobnosti najdete ve zdrojové transakci.";
 "Share this offer with the buyer" = "Sdílejte tuto nabídku s kupujícím";
+
+"Authentication failed" = "Ověření se nezdařilo";
+
+"Improved wallet security, account handling and transaction review." = "Lepší zabezpečení peněženky, správa účtů a kontrola transakcí.";
+"Added fresh device authentication for wallet secret export." = "Export tajných údajů peněženky nově vyžaduje ověření identity.";
+"Secret clipboard copies stay on this device and expire after 30 seconds." = "Tajné údaje ve schránce zůstávají v tomto zařízení a vyprší po 30 sekundách.";
+"Corrected Auto-Lock timing and active-account private-key export." = "Opraveny intervaly automatického zamčení a export klíče aktivního účtu.";
+"Prevented delayed network responses from changing another wallet." = "Opožděné síťové odpovědi již nemění stav jiné peněženky.";

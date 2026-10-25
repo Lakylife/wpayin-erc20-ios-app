@@ -12,6 +12,8 @@ import SwiftUI
 struct RecoveryPhraseView: View {
     @EnvironmentObject var walletManager: WalletManager
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.scenePhase) private var scenePhase
+    @StateObject private var authorization = SecretRevealAuthorization()
     @State private var isRevealed = false
     @State private var showWarning = true
     @State private var recoveryPhrase: String?
@@ -57,8 +59,12 @@ struct RecoveryPhraseView: View {
                                     title: "I Understand",
                                     style: .primary
                                 ) {
-                                    showWarning = false
-                                    loadRecoveryPhrase()
+                                    let walletID = walletManager.activeWallet?.id
+                                    authorization.authorize {
+                                        guard walletManager.activeWallet?.id == walletID else { return }
+                                        showWarning = false
+                                        loadRecoveryPhrase()
+                                    }
                                 }
                             }
                             .padding(.horizontal, 24)
@@ -182,6 +188,32 @@ struct RecoveryPhraseView: View {
                 }
             }
         }
+        .disabled(authorization.isAuthenticating)
+        .overlay {
+            if scenePhase != .active {
+                WpayinColors.background.ignoresSafeArea()
+            }
+        }
+        .alert("Authentication failed".localized, isPresented: Binding(
+            get: { authorization.errorMessage != nil },
+            set: { if !$0 { authorization.errorMessage = nil } }
+        )) {
+            Button("OK".localized) { authorization.errorMessage = nil }
+        } message: {
+            Text(authorization.errorMessage ?? "")
+        }
+        .onChange(of: scenePhase) { phase in
+            if phase == .background { clearSecrets() }
+        }
+        .onChange(of: walletManager.activeWallet?.id) { _ in clearSecrets() }
+        .onDisappear { clearSecrets() }
+    }
+
+    private func clearSecrets() {
+        authorization.cancel()
+        recoveryPhrase = nil
+        isRevealed = false
+        showWarning = true
     }
 
     private func loadRecoveryPhrase() {
@@ -196,7 +228,7 @@ struct RecoveryPhraseView: View {
 
     private func copyToClipboard() {
         guard let phrase = recoveryPhrase else { return }
-        AppToast.copyToClipboard(phrase)
+        AppToast.copySecretToClipboard(phrase)
         copied = true
 
         DispatchQueue.main.asyncAfter(deadline: .now() + 2) {

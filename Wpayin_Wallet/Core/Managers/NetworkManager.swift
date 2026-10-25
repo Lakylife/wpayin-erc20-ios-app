@@ -191,7 +191,9 @@ class NetworkManager {
                 chainId: 0, // Solana doesn't have an EVM chainId
                 rpcSources: [
                     RPCSource(name: "Solana Labs", urls: ["https://api.mainnet-beta.solana.com"]),
-                    RPCSource(name: "PublicNode", urls: ["https://solana-rpc.publicnode.com"])
+                    // Solana keeps the legacy hostname — solana-rpc.publicnode.com
+                    // does not resolve (unlike the EVM *-rpc.publicnode.com names).
+                    RPCSource(name: "PublicNode", urls: ["https://solana.publicnode.com"])
                 ],
                 explorerUrl: "https://explorer.solana.com",
                 supportsEIP1559: false,

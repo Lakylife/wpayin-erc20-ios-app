@@ -751,6 +751,7 @@
 "error.bridge.unsupportedNetwork" = "This network does not support bridging";
 "error.bridge.noRoute" = "No bridge route found for this token and network pair";
 "error.bridge.quoteFailed" = "Could not get a bridge quote. Please try again.";
+"error.bridge.rateLimited" = "The bridge quote limit has been reached. Try again in about %d minutes.";
 "bridge.receiveAddress" = "Receiving address";
 "error.bridge.missingDestinationAddress" = "Could not determine the receiving address on the destination network";
 "error.bridge.solanaSendFailed" = "Failed to sign or send the Solana transaction";
@@ -774,6 +775,35 @@
 "Create Offer" = "Create Offer";
 "Creating offer..." = "Creating offer...";
 "Share this offer with the buyer" = "Share this offer with the buyer";
+
+// MARK: - Asset and network controls
+"Tap the star next to an asset to add it to Favorites." = "Tap the star next to an asset to add it to Favorites.";
+"Open asset details" = "Open asset details";
+"Hide networks" = "Hide networks";
+"Show networks" = "Show networks";
+"Choose network first, then select assets" = "Choose network first, then select assets";
+"Enable notifications in iOS Settings" = "Enable notifications in iOS Settings";
+"Notifications permission was not granted" = "Notifications permission was not granted";
+
+// MARK: - Cross-chain P2P
+"BTC / SOL ↔ ERC-20" = "BTC / SOL ↔ ERC-20";
+"Bridge first, then settle P2P atomically" = "Bridge first, then settle P2P atomically";
+"BTC / SOL → ERC-20" = "BTC / SOL → ERC-20";
+"ERC-20 → BTC / SOL" = "ERC-20 → BTC / SOL";
+"Cross-chain P2P" = "Cross-chain P2P";
+"Bridge BTC or SOL to an EVM network" = "Bridge BTC or SOL to an EVM network";
+"The bridge converts your native asset to an asset on the EVM network you choose." = "The bridge converts your native asset to an asset on the EVM network you choose.";
+"No BTC or SOL balance is available to bridge." = "No BTC or SOL balance is available to bridge.";
+"Open Bridge" = "Open Bridge";
+"Create an atomic P2P offer" = "Create an atomic P2P offer";
+"After the bridged balance arrives, sell the received EVM asset for the ERC-20 token you want." = "After the bridged balance arrives, sell the received EVM asset for the ERC-20 token you want.";
+"Continue to P2P offer" = "Continue to P2P offer";
+"Trade ERC-20 for a bridgeable EVM asset" = "Trade ERC-20 for a bridgeable EVM asset";
+"Create an atomic offer on one EVM network. Receive ETH, WETH, WBTC or another asset supported by Bridge." = "Create an atomic offer on one EVM network. Receive ETH, WETH, WBTC or another asset supported by Bridge.";
+"Create P2P Offer" = "Create P2P Offer";
+"Bridge the received asset to BTC or SOL" = "Bridge the received asset to BTC or SOL";
+"Once the P2P offer is filled, choose the received EVM asset in Bridge and send it to your native wallet." = "Once the P2P offer is filled, choose the received EVM asset in Bridge and send it to your native wallet.";
+"Bridge and P2P are separate on-chain transactions. The P2P step remains atomic; exchange rates and network fees may change between steps." = "Bridge and P2P are separate on-chain transactions. The P2P step remains atomic; exchange rates and network fees may change between steps.";
 
 // MARK: - NFT spam protection
 "Spam Protection" = "Spam Protection";
@@ -1096,3 +1126,11 @@
 "Funds arrived on %@." = "Funds arrived on %@.";
 "The bridge provider reported a failure. Open the source transaction for details." = "The bridge provider reported a failure. Open the source transaction for details.";
 "Share this offer with the buyer" = "Share this offer with the buyer";
+
+"Authentication failed" = "Authentication failed";
+
+"Improved wallet security, account handling and transaction review." = "Improved wallet security, account handling and transaction review.";
+"Added fresh device authentication for wallet secret export." = "Added fresh device authentication for wallet secret export.";
+"Secret clipboard copies stay on this device and expire after 30 seconds." = "Secret clipboard copies stay on this device and expire after 30 seconds.";
+"Corrected Auto-Lock timing and active-account private-key export." = "Corrected Auto-Lock timing and active-account private-key export.";
+"Prevented delayed network responses from changing another wallet." = "Prevented delayed network responses from changing another wallet.";

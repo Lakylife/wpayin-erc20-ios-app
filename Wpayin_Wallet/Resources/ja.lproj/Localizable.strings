@@ -724,6 +724,7 @@
 "error.bridge.unsupportedNetwork" = "This network does not support bridging";
 "error.bridge.noRoute" = "No bridge route found for this token and network pair";
 "error.bridge.quoteFailed" = "Could not get a bridge quote. Please try again.";
+"error.bridge.rateLimited" = "The bridge quote limit has been reached. Try again in about %d minutes.";
 "bridge.receiveAddress" = "Receiving address";
 "error.bridge.missingDestinationAddress" = "Could not determine the receiving address on the destination network";
 "error.bridge.solanaSendFailed" = "Failed to sign or send the Solana transaction";
@@ -863,3 +864,25 @@
 "error.swap.approvalTimeout" = "トークンの承認に通常より時間がかかっています。アクティビティを確認し、承認後に再試行してください。";
 "Paste from Clipboard" = "クリップボードから貼り付け";
 "error.swap.confirmationTimeout" = "スワップの期限内にネットワークがトランザクションを承認しませんでした。エクスプローラーで最終結果を確認してください — 期限切れの場合、交換は行われていません。";
+
+// MARK: - クロスチェーンP2P
+"BTC / SOL ↔ ERC-20" = "BTC / SOL ↔ ERC-20";
+"Bridge first, then settle P2P atomically" = "先にブリッジし、その後P2Pをアトミック決済";
+"BTC / SOL → ERC-20" = "BTC / SOL → ERC-20";
+"ERC-20 → BTC / SOL" = "ERC-20 → BTC / SOL";
+"Cross-chain P2P" = "クロスチェーンP2P";
+"Bridge BTC or SOL to an EVM network" = "BTCまたはSOLをEVMネットワークへブリッジ";
+"The bridge converts your native asset to an asset on the EVM network you choose." = "ブリッジはネイティブ資産を選択したEVMネットワーク上の資産へ変換します。";
+"No BTC or SOL balance is available to bridge." = "ブリッジ可能なBTCまたはSOL残高がありません。";
+"Open Bridge" = "ブリッジを開く";
+"Create an atomic P2P offer" = "アトミックP2Pオファーを作成";
+"After the bridged balance arrives, sell the received EVM asset for the ERC-20 token you want." = "残高の到着後、受け取ったEVM資産を希望するERC-20トークンと交換します。";
+"Continue to P2P offer" = "P2Pオファーへ進む";
+"Trade ERC-20 for a bridgeable EVM asset" = "ERC-20をブリッジ対応EVM資産と交換";
+"Create an atomic offer on one EVM network. Receive ETH, WETH, WBTC or another asset supported by Bridge." = "1つのEVMネットワークでアトミックオファーを作成し、ETH、WETH、WBTCなどブリッジ対応資産を受け取ります。";
+"Create P2P Offer" = "P2Pオファーを作成";
+"Bridge the received asset to BTC or SOL" = "受け取った資産をBTCまたはSOLへブリッジ";
+"Once the P2P offer is filled, choose the received EVM asset in Bridge and send it to your native wallet." = "P2Pオファー成立後、ブリッジで受け取ったEVM資産を選び、ネイティブウォレットへ送ります。";
+"Bridge and P2P are separate on-chain transactions. The P2P step remains atomic; exchange rates and network fees may change between steps." = "ブリッジとP2Pは別々のオンチェーントランザクションです。P2Pはアトミックですが、手順間でレートやネットワーク手数料が変わる場合があります。";
+
+"Authentication failed" = "認証に失敗しました";

@@ -724,6 +724,7 @@
 "error.bridge.unsupportedNetwork" = "This network does not support bridging";
 "error.bridge.noRoute" = "No bridge route found for this token and network pair";
 "error.bridge.quoteFailed" = "Could not get a bridge quote. Please try again.";
+"error.bridge.rateLimited" = "The bridge quote limit has been reached. Try again in about %d minutes.";
 "bridge.receiveAddress" = "Receiving address";
 "error.bridge.missingDestinationAddress" = "Could not determine the receiving address on the destination network";
 "error.bridge.solanaSendFailed" = "Failed to sign or send the Solana transaction";
@@ -863,3 +864,25 @@
 "error.swap.approvalTimeout" = "La aprobación del token está tardando más de lo esperado. Revisa Actividad y vuelve a intentarlo cuando se confirme.";
 "Paste from Clipboard" = "Pegar del portapapeles";
 "error.swap.confirmationTimeout" = "La red no confirmó la transacción antes de que expirara el plazo del swap. Comprueba el resultado en el explorador — si expiró, no se intercambió nada.";
+
+// MARK: - P2P entre cadenas
+"BTC / SOL ↔ ERC-20" = "BTC / SOL ↔ ERC-20";
+"Bridge first, then settle P2P atomically" = "Primero usa Bridge y después liquida P2P de forma atómica";
+"BTC / SOL → ERC-20" = "BTC / SOL → ERC-20";
+"ERC-20 → BTC / SOL" = "ERC-20 → BTC / SOL";
+"Cross-chain P2P" = "P2P entre cadenas";
+"Bridge BTC or SOL to an EVM network" = "Transfiere BTC o SOL a una red EVM";
+"The bridge converts your native asset to an asset on the EVM network you choose." = "Bridge convierte tu activo nativo en un activo de la red EVM que elijas.";
+"No BTC or SOL balance is available to bridge." = "No hay saldo de BTC ni SOL disponible para Bridge.";
+"Open Bridge" = "Abrir Bridge";
+"Create an atomic P2P offer" = "Crea una oferta P2P atómica";
+"After the bridged balance arrives, sell the received EVM asset for the ERC-20 token you want." = "Cuando llegue el saldo, vende el activo EVM recibido por el token ERC-20 que quieras.";
+"Continue to P2P offer" = "Continuar a la oferta P2P";
+"Trade ERC-20 for a bridgeable EVM asset" = "Cambia ERC-20 por un activo EVM compatible con Bridge";
+"Create an atomic offer on one EVM network. Receive ETH, WETH, WBTC or another asset supported by Bridge." = "Crea una oferta atómica en una red EVM. Recibe ETH, WETH, WBTC u otro activo compatible con Bridge.";
+"Create P2P Offer" = "Crear oferta P2P";
+"Bridge the received asset to BTC or SOL" = "Transfiere el activo recibido a BTC o SOL";
+"Once the P2P offer is filled, choose the received EVM asset in Bridge and send it to your native wallet." = "Cuando se complete la oferta P2P, elige el activo EVM recibido en Bridge y envíalo a tu cartera nativa.";
+"Bridge and P2P are separate on-chain transactions. The P2P step remains atomic; exchange rates and network fees may change between steps." = "Bridge y P2P son transacciones on-chain separadas. El paso P2P sigue siendo atómico; el tipo de cambio y las comisiones pueden cambiar entre pasos.";
+
+"Authentication failed" = "Error de autenticación";

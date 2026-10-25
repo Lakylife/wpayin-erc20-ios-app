@@ -28,24 +28,30 @@ private enum AppVersionInfo {
     }
 }
 
+private enum SettingsSheet: String, Identifiable {
+    case privateKey
+    case recoveryPhrase
+    case about
+    case currency
+    case language
+    case timeZone
+    case autoLock
+    case networks
+    case helpCenter
+    case exportWallet
+    case contactSupport
+    case appearance
+    case walletConnect
+
+    var id: String { rawValue }
+}
+
 struct SettingsView: View {
     @EnvironmentObject var walletManager: WalletManager
     @EnvironmentObject var settingsManager: SettingsManager
     @EnvironmentObject var networkManager: NetworkConfigManager
     @State private var showDeleteWalletAlert = false
-    @State private var showPrivateKey = false
-    @State private var showRecoveryPhrase = false
-    @State private var showAbout = false
-    @State private var showCurrencySelection = false
-    @State private var showLanguageSelection = false
-    @State private var showTimeZoneSelection = false
-    @State private var showAutoLockSelection = false
-    @State private var showNetworkManagement = false
-    @State private var showHelpCenter = false
-    @State private var showExportWalletCompliance = false
-    @State private var showContactSupport = false
-    @State private var showAppearanceSettings = false
-    @State private var showWalletConnect = false
+    @State private var activeSheet: SettingsSheet?
 
     var body: some View {
         ZStack {
@@ -91,14 +97,14 @@ struct SettingsView: View {
                                 icon: "key.fill",
                                 title: "Show Private Key",
                                 subtitle: "View your wallet private key",
-                                action: { showPrivateKey = true }
+                                action: { activeSheet = .privateKey }
                             )
 
                             SettingsRow(
                                 icon: "square.and.arrow.up",
                                 title: "Export Wallet",
                                 subtitle: "Backup your wallet data",
-                                action: { showExportWalletCompliance = true }
+                                action: { activeSheet = .exportWallet }
                             )
                         }
 
@@ -110,7 +116,7 @@ struct SettingsView: View {
                                 icon: "lock.fill",
                                 title: "Auto-Lock",
                                 subtitle: settingsManager.autoLockDuration.displayName.localized,
-                                action: { showAutoLockSelection = true }
+                                action: { activeSheet = .autoLock }
                             )
                         }
 
@@ -120,28 +126,28 @@ struct SettingsView: View {
                                 icon: "dollarsign.circle.fill",
                                 title: L10n.Settings.currency.localized,
                                 subtitle: "\(settingsManager.selectedCurrency.symbol) \(settingsManager.selectedCurrency.rawValue)",
-                                action: { showCurrencySelection = true }
+                                action: { activeSheet = .currency }
                             )
 
                             SettingsRow(
                                 icon: "globe",
                                 title: L10n.Settings.language.localized,
                                 subtitle: "\(settingsManager.selectedLanguage.flag) \(settingsManager.selectedLanguage.name)",
-                                action: { showLanguageSelection = true }
+                                action: { activeSheet = .language }
                             )
 
                             SettingsRow(
                                 icon: "clock.badge.checkmark",
                                 title: "Time Zone",
                                 subtitle: settingsManager.timeZoneSummary,
-                                action: { showTimeZoneSelection = true }
+                                action: { activeSheet = .timeZone }
                             )
 
                             SettingsRow(
                                 icon: "paintbrush.fill",
                                 title: "Appearance",
                                 subtitle: settingsManager.selectedColorTheme.displayName,
-                                action: { showAppearanceSettings = true }
+                                action: { activeSheet = .appearance }
                             )
 
                             NotificationSettingsRow(settingsManager: settingsManager)
@@ -153,14 +159,14 @@ struct SettingsView: View {
                                 icon: "network",
                                 title: L10n.Settings.manageNetworks.localized,
                                 subtitle: L10n.Networks.networkCount.localized(walletManager.selectedBlockchains.count),
-                                action: { showNetworkManagement = true }
+                                action: { activeSheet = .networks }
                             )
 
                             SettingsRow(
                                 icon: "link",
                                 title: "WalletConnect",
                                 subtitle: "Connect to dApps and manage active sessions".localized,
-                                action: { showWalletConnect = true }
+                                action: { activeSheet = .walletConnect }
                             )
                         }
 
@@ -170,7 +176,7 @@ struct SettingsView: View {
                                 icon: "questionmark.circle.fill",
                                 title: L10n.Settings.helpCenter.localized,
                                 subtitle: "Get help and support",
-                                action: { showHelpCenter = true }
+                                action: { activeSheet = .helpCenter }
                             )
 
                             SettingsRow(
@@ -179,7 +185,7 @@ struct SettingsView: View {
                                 subtitle: "Send feedback",
                                 action: {
                                     if !settingsManager.openContactUs() {
-                                        showContactSupport = true
+                                        activeSheet = .contactSupport
                                     }
                                 }
                             )
@@ -188,7 +194,7 @@ struct SettingsView: View {
                                 icon: "info.circle.fill",
                                 title: L10n.Settings.about.localized,
                                 subtitle: "App version and info",
-                                action: { showAbout = true }
+                                action: { activeSheet = .about }
                             )
                         }
 
@@ -224,56 +230,8 @@ struct SettingsView: View {
                 }
             }
         }
-        .sheet(isPresented: $showPrivateKey) {
-            PrivateKeyView()
-                .environmentObject(walletManager)
-        }
-        .sheet(isPresented: $showRecoveryPhrase) {
-            RecoveryPhraseView()
-                .environmentObject(walletManager)
-        }
-        .sheet(isPresented: $showCurrencySelection) {
-            CurrencySelectionView()
-                .environmentObject(settingsManager)
-        }
-        .sheet(isPresented: $showLanguageSelection) {
-            LanguageSelectionView()
-                .environmentObject(settingsManager)
-        }
-        .sheet(isPresented: $showTimeZoneSelection) {
-            TimeZoneSelectionView()
-                .environmentObject(settingsManager)
-        }
-        .sheet(isPresented: $showAutoLockSelection) {
-            AutoLockSelectionView()
-                .environmentObject(settingsManager)
-        }
-        .sheet(isPresented: $showAppearanceSettings) {
-            AppearanceSettingsView()
-                .environmentObject(settingsManager)
-        }
-        .sheet(isPresented: $showNetworkManagement) {
-            NetworkManagementView()
-                .environmentObject(walletManager)
-                .environmentObject(networkManager)
-        }
-        .sheet(isPresented: $showWalletConnect) {
-            WalletConnectView()
-        }
-        .sheet(isPresented: $showAbout) {
-            AboutView()
-        }
-        .sheet(isPresented: $showHelpCenter) {
-            HelpCenterView()
-        }
-        .sheet(isPresented: $showContactSupport) {
-            ContactSupportView()
-        }
-        .sheet(isPresented: $showExportWalletCompliance) {
-            ExportWalletComplianceView {
-                showExportWalletCompliance = false
-                showRecoveryPhrase = true
-            }
+        .sheet(item: $activeSheet) { sheet in
+            settingsSheetContent(for: sheet)
         }
         .alert(L10n.Settings.deleteWallet.localized, isPresented: $showDeleteWalletAlert) {
             Button("Cancel".localized, role: .cancel) { }
@@ -285,6 +243,55 @@ struct SettingsView: View {
         }
     }
 
+    @ViewBuilder
+    private func settingsSheetContent(for sheet: SettingsSheet) -> some View {
+        switch sheet {
+        case .privateKey:
+            PrivateKeyView()
+                .environmentObject(walletManager)
+        case .recoveryPhrase:
+            RecoveryPhraseView()
+                .environmentObject(walletManager)
+        case .about:
+            AboutView()
+        case .currency:
+            CurrencySelectionView()
+                .environmentObject(settingsManager)
+        case .language:
+            LanguageSelectionView()
+                .environmentObject(settingsManager)
+        case .timeZone:
+            TimeZoneSelectionView()
+                .environmentObject(settingsManager)
+        case .autoLock:
+            AutoLockSelectionView()
+                .environmentObject(settingsManager)
+        case .networks:
+            NetworkManagementView()
+                .environmentObject(walletManager)
+                .environmentObject(networkManager)
+        case .helpCenter:
+            HelpCenterView()
+        case .exportWallet:
+            ExportWalletComplianceView {
+                openSettingsSheetAfterDismissal(.recoveryPhrase)
+            }
+        case .contactSupport:
+            ContactSupportView()
+        case .appearance:
+            AppearanceSettingsView()
+                .environmentObject(settingsManager)
+        case .walletConnect:
+            WalletConnectView()
+        }
+    }
+
+    private func openSettingsSheetAfterDismissal(_ sheet: SettingsSheet) {
+        activeSheet = nil
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
+            activeSheet = sheet
+        }
+    }
 }
 
 struct SettingsSection<Content: View>: View {

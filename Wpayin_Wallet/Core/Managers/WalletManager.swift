@@ -35,7 +35,16 @@ final class WalletManager: ObservableObject {
 
     // MARK: - Published Properties
     @Published var multiChainWallets: [MultiChainWallet] = []
-    @Published var activeWallet: MultiChainWallet?
+    private var refreshGeneration = UUID()
+    @Published var activeWallet: MultiChainWallet? {
+        didSet {
+            if oldValue?.id != activeWallet?.id {
+                refreshGeneration = UUID()
+                isLoading = false
+                isLoadingNFTs = false
+            }
+        }
+    }
     @Published var availableBlockchains: [BlockchainConfig] = []
     @Published var savedAddresses: [SavedAddress] = []
     @Published var isLoading: Bool = false
@@ -97,6 +106,11 @@ final class WalletManager: ObservableObject {
     private let priceUpdateInterval: TimeInterval = 60 // Live prices — CoinGecko free tier is fine with 1 call/min
     private var savedCustomTokens: [Token] = []
     private var hiddenTokenIdentities: Set<String> = []
+#if DEBUG
+    private let isScreenshotFixture = ProcessInfo.processInfo.arguments.contains("--ui-screenshot-mode")
+#else
+    private let isScreenshotFixture = false
+#endif
 
     // Public access to chain accounts for deposit address generation
     var availableChainAccounts: [BlockchainType: ChainAccount] {
@@ -348,6 +362,11 @@ final class WalletManager: ObservableObject {
         loadNFTVisibilityPreferences()
         loadSelectedBlockchains()  // NEW: Load selected blockchains
         checkOnboardingStatus()
+#if DEBUG
+        if isScreenshotFixture {
+            configureScreenshotFixture()
+        }
+#endif
         // Don't set isInitializing = false here, let ContentView handle it
     }
 
@@ -376,7 +395,151 @@ final class WalletManager: ObservableObject {
             .store(in: &cancellables)
     }
 
+#if DEBUG
+    /// Deterministic, credential-free state used only while generating public
+    /// documentation screenshots. It never creates or reads a seed phrase.
+    private func configureScreenshotFixture() {
+        let evmAddress = "0x000000000000000000000000000000000000dEaD"
+        let bitcoinAddress = "1A1zP1eP5QGefi2DMPTfTL5SLmv7DivfNa"
+        let solanaAddress = "11111111111111111111111111111111"
+
+        hasWallet = true
+        hasCompletedOnboarding = true
+        isInitializing = false
+        isLoading = false
+        walletAddress = evmAddress
+        selectedBlockchains = [.ethereum, .base, .bitcoin, .polygon]
+
+        chainAccounts = Dictionary(uniqueKeysWithValues: availableBlockchains.compactMap { config in
+            guard config.network == .mainnet,
+                  let blockchain = config.blockchainType else { return nil }
+
+            let address: String
+            switch blockchain {
+            case .bitcoin:
+                address = bitcoinAddress
+            case .solana:
+                address = solanaAddress
+            default:
+                address = evmAddress
+            }
+
+            return (
+                blockchain,
+                ChainAccount(
+                    config: config,
+                    tokenType: blockchain,
+                    coinType: config.coinType,
+                    address: address
+                )
+            )
+        })
+
+        tokens = [
+            Token(
+                contractAddress: nil,
+                name: "Ethereum",
+                symbol: "ETH",
+                decimals: 18,
+                balance: 0,
+                price: 3_200,
+                iconUrl: nil,
+                blockchain: .ethereum,
+                isNative: true,
+                receivingAddress: evmAddress
+            ),
+            Token(
+                contractAddress: nil,
+                name: "Ethereum",
+                symbol: "ETH",
+                decimals: 18,
+                balance: 0,
+                price: 3_200,
+                iconUrl: nil,
+                blockchain: .base,
+                isNative: true,
+                receivingAddress: evmAddress
+            ),
+            Token(
+                contractAddress: "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+                name: "USD Coin",
+                symbol: "USDC",
+                decimals: 6,
+                balance: 0,
+                price: 1,
+                iconUrl: nil,
+                blockchain: .base,
+                isNative: false,
+                receivingAddress: evmAddress
+            ),
+            Token(
+                contractAddress: nil,
+                name: "Bitcoin",
+                symbol: "BTC",
+                decimals: 8,
+                balance: 0,
+                price: 105_000,
+                iconUrl: nil,
+                blockchain: .bitcoin,
+                isNative: true,
+                receivingAddress: bitcoinAddress
+            )
+        ]
+
+        let now = Date()
+        transactions = [
+            Transaction(
+                hash: "0x0000000000000000000000000000000000000000000000000000000000000001",
+                from: "0x0000000000000000000000000000000000000001",
+                to: evmAddress,
+                amount: 0.25,
+                token: "ETH",
+                type: .receive,
+                status: .confirmed,
+                timestamp: now.addingTimeInterval(-1_800),
+                gasUsed: 21_000,
+                gasFee: 0.0004,
+                blockchain: .ethereum
+            ),
+            Transaction(
+                hash: "0x0000000000000000000000000000000000000000000000000000000000000002",
+                from: evmAddress,
+                to: "0x0000000000000000000000000000000000000002",
+                amount: 25,
+                token: "USDC",
+                type: .send,
+                status: .confirmed,
+                timestamp: now.addingTimeInterval(-7_200),
+                gasUsed: 65_000,
+                gasFee: 0.0001,
+                blockchain: .base
+            ),
+            Transaction(
+                hash: "0x0000000000000000000000000000000000000000000000000000000000000003",
+                from: evmAddress,
+                to: evmAddress,
+                amount: 10,
+                token: "USDC",
+                type: .swap,
+                status: .confirmed,
+                timestamp: now.addingTimeInterval(-86_400),
+                gasUsed: 110_000,
+                gasFee: 0.0002,
+                blockchain: .base
+            )
+        ]
+        balance = 0
+        priceChanges24h = ["ETH": 1.8, "BTC": 0.9, "USDC": 0]
+    }
+#endif
+
     func checkExistingWallet() async {
+#if DEBUG
+        if isScreenshotFixture {
+            configureScreenshotFixture()
+            return
+        }
+#endif
         isInitializing = true
 
         hasWallet = keychain.hasSeedPhrase() || keychain.hasPrivateKey()
@@ -479,24 +642,27 @@ final class WalletManager: ObservableObject {
 
     @MainActor
     func refreshWalletData() async {
+        let generation = UUID()
+        refreshGeneration = generation
         isLoading = true
-        defer { isLoading = false }
+        defer { if refreshGeneration == generation { isLoading = false } }
 
         if let seedPhrase = keychain.getSeedPhrase() {
-            await refreshFromMnemonic(seedPhrase)
+            await refreshFromMnemonic(seedPhrase, generation: generation)
         } else if let privateKey = keychain.getPrivateKey() {
-            await refreshFromPrivateKey(privateKey)
+            await refreshFromPrivateKey(privateKey, generation: generation)
         } else {
             resetState()
         }
 
-        if hasWallet {
+        if refreshGeneration == generation && hasWallet {
             startPriceUpdates()
         }
     }
 
     @MainActor
     func deleteWallet() {
+        refreshGeneration = UUID()
         stopPriceUpdates()
         keychain.deleteSeedPhrase()
         keychain.deletePrivateKey()
@@ -526,12 +692,12 @@ final class WalletManager: ObservableObject {
 
     func depositAddress(for token: Token) -> String {
         // Return address only if a wallet (seed/private key) truly exists and onboarding completed
-        guard hasWallet && (keychain.hasSeedPhrase() || keychain.hasPrivateKey()) else { return "" }
+        guard hasWallet && (isScreenshotFixture || keychain.hasSeedPhrase() || keychain.hasPrivateKey()) else { return "" }
         return chainAccounts[token.blockchain]?.address ?? ""
     }
 
     func hasActiveAccount(for blockchain: BlockchainType) -> Bool {
-        guard hasWallet && (keychain.hasSeedPhrase() || keychain.hasPrivateKey()) else { return false }
+        guard hasWallet && (isScreenshotFixture || keychain.hasSeedPhrase() || keychain.hasPrivateKey()) else { return false }
         guard let address = chainAccounts[blockchain]?.address else { return false }
         return !address.isEmpty
     }
@@ -635,7 +801,7 @@ final class WalletManager: ObservableObject {
 
     // MARK: - Private Helpers
     @MainActor
-    private func refreshFromMnemonic(_ mnemonic: String) async {
+    private func refreshFromMnemonic(_ mnemonic: String, generation: UUID) async {
         do {
             Logger.log("🔄 refreshFromMnemonic started")
             let wallet = try mnemonicService.loadWallet(from: mnemonic)
@@ -690,9 +856,10 @@ final class WalletManager: ObservableObject {
             Logger.log("🎯 Total tokens before updateState: \(fetchedTokens.count)")
             let defaultAddress = accounts[.ethereum]?.address ?? accounts.values.first?.address
 
-            await updateState(with: fetchedTokens, accounts: selectedPlatformAccounts, defaultAddress: defaultAddress)
+            await updateState(with: fetchedTokens, accounts: selectedPlatformAccounts, defaultAddress: defaultAddress, generation: generation)
             Logger.log("✅ refreshFromMnemonic completed")
         } catch {
+            guard refreshGeneration == generation else { return }
             Logger.log("❌ Failed to refresh wallet data: \(error.localizedDescription)")
             // A temporary RPC/API problem must not blank a wallet that was
             // already restored from its last known good snapshot.
@@ -701,7 +868,7 @@ final class WalletManager: ObservableObject {
     }
 
     @MainActor
-    private func refreshFromPrivateKey(_ privateKey: String) async {
+    private func refreshFromPrivateKey(_ privateKey: String, generation: UUID) async {
         do {
             let normalizedKey = try mnemonicService.normalizePrivateKey(privateKey)
             let primaryAddress = try mnemonicService.deriveEthereumAddress(fromPrivateKey: normalizedKey)
@@ -735,8 +902,9 @@ final class WalletManager: ObservableObject {
             let requests = evmAccounts.map { NativeBalanceRequest(config: $0.config, tokenType: $0.tokenType, address: $0.address) }
             let fetchedTokens = await apiService.getNativeAssets(for: requests)
 
-            await updateState(with: fetchedTokens, accounts: evmAccounts, defaultAddress: primaryAddress)
+            await updateState(with: fetchedTokens, accounts: evmAccounts, defaultAddress: primaryAddress, generation: generation)
         } catch {
+            guard refreshGeneration == generation else { return }
             Logger.log("Failed to refresh legacy wallet: \(error.localizedDescription)")
             hasWallet = keychain.hasSeedPhrase() || keychain.hasPrivateKey()
         }
@@ -834,7 +1002,8 @@ final class WalletManager: ObservableObject {
     }
 
     @MainActor
-    private func updateState(with tokens: [Token], accounts: [ChainAccount], defaultAddress: String?) async {
+    private func updateState(with tokens: [Token], accounts: [ChainAccount], defaultAddress: String?, generation: UUID) async {
+        guard refreshGeneration == generation else { return }
         Logger.log("📊 updateState called with \(tokens.count) tokens")
 
         // Instead of replacing all tokens, merge new tokens with existing ones
@@ -933,6 +1102,7 @@ final class WalletManager: ObservableObject {
                     blockchains: nftBlockchains
                 )
                 await MainActor.run {
+                    guard self.refreshGeneration == generation else { return }
                     self.nfts = fetchedNFTs
                     self.isLoadingNFTs = false
                     Logger.log("✅ Loaded \(fetchedNFTs.count) NFTs for wallet")
@@ -940,6 +1110,7 @@ final class WalletManager: ObservableObject {
             } catch {
                 Logger.log("Failed to load NFTs: \(error)")
                 await MainActor.run {
+                    guard self.refreshGeneration == generation else { return }
                     // Don't show fake data - just empty array if fetch fails
                     self.nfts = []
                     self.isLoadingNFTs = false
@@ -970,6 +1141,7 @@ final class WalletManager: ObservableObject {
                     using: configs
                 )
                 await MainActor.run {
+                    guard self.refreshGeneration == generation else { return }
                     self.notifyForNewTransactions(fetchedTransactions, walletAddress: resolvedAddress)
                     let merged = self.mergingLocalTransactions(into: fetchedTransactions)
                     self.transactions = merged
@@ -2015,27 +2187,35 @@ final class WalletManager: ObservableObject {
 
     /// Toggle favorite status for a token symbol
     func toggleFavorite(for tokenSymbol: String) {
-        if favoriteTokenSymbols.contains(tokenSymbol) {
-            favoriteTokenSymbols.remove(tokenSymbol)
-            Logger.log("🌟 Removed \(tokenSymbol) from favorites")
+        let normalizedSymbol = tokenSymbol.uppercased()
+        if favoriteTokenSymbols.contains(normalizedSymbol) {
+            favoriteTokenSymbols.remove(normalizedSymbol)
+            AppToast.show("Removed from Favorites".localized, icon: "star.slash")
+            Logger.log("🌟 Removed \(normalizedSymbol) from favorites")
         } else {
-            favoriteTokenSymbols.insert(tokenSymbol)
-            Logger.log("⭐️ Added \(tokenSymbol) to favorites")
+            favoriteTokenSymbols.insert(normalizedSymbol)
+            AppToast.show("Added to Favorites".localized, icon: "star.fill")
+            Logger.log("⭐️ Added \(normalizedSymbol) to favorites")
         }
         saveFavorites()
     }
 
     /// Check if a token is favorite
     func isFavorite(_ tokenSymbol: String) -> Bool {
-        return favoriteTokenSymbols.contains(tokenSymbol)
+        return favoriteTokenSymbols.contains(tokenSymbol.uppercased())
     }
 
     /// Load favorites from UserDefaults
     func loadFavorites() {
         if let data = UserDefaults.standard.data(forKey: favoritesStorageKey),
            let favorites = try? JSONDecoder().decode(Set<String>.self, from: data) {
-            favoriteTokenSymbols = favorites
+            favoriteTokenSymbols = Set(favorites.map { $0.uppercased() })
             Logger.log("📚 Loaded \(favorites.count) favorite tokens")
+        } else if let legacyFavorites = UserDefaults.standard.stringArray(forKey: "FavoriteTokenSymbols"),
+                  !legacyFavorites.isEmpty {
+            favoriteTokenSymbols = Set(legacyFavorites.map { $0.uppercased() })
+            saveFavorites()
+            Logger.log("📚 Migrated \(legacyFavorites.count) favorite tokens")
         }
     }
 
@@ -2103,11 +2283,13 @@ final class WalletManager: ObservableObject {
     private func refreshPricesOnly() async {
         guard !tokens.isEmpty else { return }
 
+        let generation = refreshGeneration
         let coinIds = Array(Set(tokens.map { APIService.getCoinId(for: $0.symbol) }))
         Logger.log("📊 Updating prices/logos for \(coinIds.count) assets...")
 
         do {
             let lookup = try await apiService.fetchPricesAndLogos(for: coinIds)
+            guard refreshGeneration == generation else { return }
             tokens = tokens.map { token in
                 let coinId = APIService.getCoinId(for: token.symbol)
                 guard let priceInfo = lookup[coinId] else { return token }

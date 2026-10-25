@@ -38,4 +38,46 @@ final class Wpayin_WalletUITests: XCTestCase {
             XCUIApplication().launch()
         }
     }
+
+    @MainActor
+    func testCaptureReleaseScreenshots() throws {
+        let app = XCUIApplication()
+        app.launchArguments = ["--ui-screenshot-mode"]
+        app.launch()
+
+        XCTAssertTrue(app.buttons["Receive"].waitForExistence(timeout: 12))
+        captureScreenshot(named: "03_home", app: app)
+
+        app.buttons["Receive"].tap()
+        XCTAssertTrue(app.navigationBars["Deposit"].waitForExistence(timeout: 5))
+        captureScreenshot(named: "04_deposit", app: app)
+        app.buttons["Close"].tap()
+
+        XCTAssertTrue(app.buttons["Send"].waitForExistence(timeout: 5))
+        app.buttons["Send"].tap()
+        XCTAssertTrue(app.navigationBars["Withdraw"].waitForExistence(timeout: 5))
+        captureScreenshot(named: "05_withdraw", app: app)
+        app.buttons["Cancel"].tap()
+
+        XCTAssertTrue(app.buttons["Swap"].waitForExistence(timeout: 5))
+        let swapButtons = app.buttons.matching(identifier: "Swap")
+        swapButtons.element(boundBy: swapButtons.count - 1).tap()
+        XCTAssertTrue(app.staticTexts["You pay"].waitForExistence(timeout: 5))
+        captureScreenshot(named: "06_swap", app: app)
+
+        app.buttons["Activity"].tap()
+        XCTAssertTrue(app.staticTexts["Transactions"].waitForExistence(timeout: 5))
+        captureScreenshot(named: "07_activity", app: app)
+
+        app.buttons["Settings"].tap()
+        XCTAssertTrue(app.staticTexts["Time Zone"].waitForExistence(timeout: 5))
+        captureScreenshot(named: "08_settings", app: app)
+    }
+
+    private func captureScreenshot(named name: String, app: XCUIApplication) {
+        let attachment = XCTAttachment(screenshot: app.screenshot())
+        attachment.name = name
+        attachment.lifetime = .keepAlways
+        add(attachment)
+    }
 }

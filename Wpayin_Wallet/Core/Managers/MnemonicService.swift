@@ -92,7 +92,12 @@ final class MnemonicService {
         case .litecoin:
             return "m/84'/2'/0'/0/\(accountIndex)"
         case .solana:
-            return "m/44'/501'/\(accountIndex)'/0'"
+            // Account 0 must use WalletCore's DEFAULT Solana derivation
+            // (m/44'/501'/0', no trailing /0') — that is the address
+            // `getAddressForCoin` has always displayed and received funds
+            // on. Additional accounts keep the Phantom-style path they were
+            // created and displayed with.
+            return accountIndex == 0 ? "m/44'/501'/0'" : "m/44'/501'/\(accountIndex)'/0'"
         default:
             return "m/44'/\(coin.slip44Id)'/0'/0/\(accountIndex)"
         }

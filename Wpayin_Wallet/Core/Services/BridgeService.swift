@@ -19,6 +19,7 @@ enum BridgeError: LocalizedError {
     case unsupportedNetwork
     case noRoute
     case quoteFailed
+    case rateLimited(retryAfterMinutes: Int)
     case missingDestinationAddress
     case solanaSendFailed
     case insufficientFunds
@@ -31,6 +32,8 @@ enum BridgeError: LocalizedError {
             return "error.bridge.noRoute".localized
         case .quoteFailed:
             return "error.bridge.quoteFailed".localized
+        case .rateLimited(let retryAfterMinutes):
+            return "error.bridge.rateLimited".localized(retryAfterMinutes)
         case .missingDestinationAddress:
             return "error.bridge.missingDestinationAddress".localized
         case .solanaSendFailed:
@@ -186,8 +189,17 @@ final class BridgeService {
         let (data, response) = try await URLSession.shared.data(for: request)
 
         if let http = response as? HTTPURLResponse, http.statusCode != 200 {
-            let message = (try? JSONSerialization.jsonObject(with: data) as? [String: Any])?["message"] as? String
+            let errorJSON = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
+            let message = errorJSON?["message"] as? String
+            let code = (errorJSON?["code"] as? NSNumber)?.intValue
             Logger.log("🛑 LI.FI quote failed (HTTP \(http.statusCode)): \(message ?? "?")")
+            if http.statusCode == 429 || code == 1005
+                || message?.lowercased().contains("rate limit") == true {
+                let retryAfterSeconds = http.value(forHTTPHeaderField: "Retry-After")
+                    .flatMap(Int.init) ?? 3_600
+                let retryAfterMinutes = max(1, Int(ceil(Double(retryAfterSeconds) / 60)))
+                throw BridgeError.rateLimited(retryAfterMinutes: retryAfterMinutes)
+            }
             // 404 = no route between the requested pair; LI.FI also validates
             // the source balance for UTXO chains (amount + BTC fee must fit).
             if http.statusCode == 404 { throw BridgeError.noRoute }
@@ -379,9 +391,15 @@ final class BridgeService {
             throw BridgeError.solanaSendFailed
         }
 
+        // preflightCommitment must match the blockhash's commitment — the
+        // default is "finalized", whose bank doesn't know a "confirmed"
+        // blockhash yet and rejects the tx with "Blockhash not found".
         let sendResult = try await SwapService.shared.rpcRequest(
             method: "sendTransaction",
-            params: [output.encoded, ["encoding": "base64"]],
+            params: [output.encoded, [
+                "encoding": "base64",
+                "preflightCommitment": "confirmed"
+            ]],
             blockchain: .solana
         )
         guard let signature = sendResult as? String, !signature.isEmpty else {
@@ -389,6 +407,34 @@ final class BridgeService {
         }
         Logger.log("✅ Solana bridge tx sent: \(signature)")
         return signature
+    }
+
+    /// Best-effort simulation of LI.FI's prepared (unsigned) transaction.
+    /// Only a positive on-chain failure throws — RPC hiccups or nodes that
+    /// reject simulateTransaction never block the bridge.
+    private func simulateSolanaTransaction(_ encodedTx: String) async throws {
+        guard let result = try? await SwapService.shared.rpcRequest(
+            method: "simulateTransaction",
+            params: [encodedTx, [
+                "encoding": "base64",
+                "sigVerify": false,
+                "replaceRecentBlockhash": true,
+                "commitment": "confirmed"
+            ]],
+            blockchain: .solana
+        ) else { return }
+
+        guard let value = (result as? [String: Any])?["value"] as? [String: Any],
+              let err = value["err"], !(err is NSNull) else { return }
+
+        let logs = (value["logs"] as? [String])?.joined(separator: " | ") ?? ""
+        Logger.log("🛑 Solana bridge simulation failed: \(err) — \(logs)")
+        let lowered = "\(err) \(logs)".lowercased()
+        if lowered.contains("insufficient lamports") || lowered.contains("insufficient funds") {
+            throw BridgeError.insufficientFunds
+        }
+        // Anything else may be a false positive of simulating the unsigned
+        // route transaction — don't block the quote, let the real send decide.
     }
 
     // MARK: - Destination tracking
@@ -463,6 +509,25 @@ final class BridgeService {
                 availableNativeBalance: Decimal(fromToken.balance)
             )
         case .solana:
+            // Preflight the prepared transaction so route errors (missing
+            // lamports for rent-exempt deposits, slippage, …) surface on the
+            // quote screen instead of failing after Confirm.
+            if let encodedTx = quote.solanaTransaction {
+                try await simulateSolanaTransaction(encodedTx)
+            }
+            guard let privateKey = try SwapService.shared.getPrivateKey(for: .solana) else {
+                throw TransactionError.noPrivateKey
+            }
+            let owner = try SwapService.shared.deriveAddress(from: privateKey, blockchain: .solana)
+            let balanceResult = try await SwapService.shared.rpcRequest(
+                method: "getBalance",
+                params: [owner, ["commitment": "confirmed"]],
+                blockchain: .solana
+            )
+            guard let balanceValue = (balanceResult as? [String: Any])?["value"],
+                  let balanceLamports = decimalQuantity(balanceValue) else {
+                throw TransactionError.networkError("Invalid Solana balance response")
+            }
             // Base fee is 5000 lamports per signature; add the priority fee
             // when the prepared transaction sets a compute budget.
             var lamports = Decimal(5_000)
@@ -478,7 +543,7 @@ final class BridgeService {
                 approvalGasLimit: 0,
                 approvalRequired: false,
                 feeNative: lamports / swapPow(Decimal(10), 9),
-                availableNativeBalance: Decimal(fromToken.balance)
+                availableNativeBalance: balanceLamports / swapPow(Decimal(10), 9)
             )
         default:
             break // EVM estimation below
@@ -579,6 +644,16 @@ final class BridgeService {
         guard let hex else { return nil }
         let stripped = hex.hasPrefix("0x") ? String(hex.dropFirst(2)) : hex
         return BigUInt(stripped, radix: 16)
+    }
+
+    private func decimalQuantity(_ value: Any) -> Decimal? {
+        if let number = value as? NSNumber {
+            return Decimal(string: number.stringValue)
+        }
+        if let string = value as? String {
+            return Decimal(string: string)
+        }
+        return nil
     }
 
     private func estimateGas(

@@ -175,6 +175,18 @@ private struct AppReleaseInfo: Identifiable {
 
     static let releases: [AppReleaseInfo] = [
         AppReleaseInfo(
+            version: "1.1.10",
+            date: "2026-10-25",
+            summary: "Improved wallet security, account handling and transaction review.",
+            changes: [
+                .init(icon: "faceid", text: "Added fresh device authentication for wallet secret export."),
+                .init(icon: "doc.on.clipboard", text: "Secret clipboard copies stay on this device and expire after 30 seconds."),
+                .init(icon: "lock.fill", text: "Corrected Auto-Lock timing and active-account private-key export."),
+                .init(icon: "arrow.clockwise", text: "Prevented delayed network responses from changing another wallet.")
+            ],
+            isCurrent: true
+        ),
+        AppReleaseInfo(
             version: "1.1.9",
             date: "July 15, 2026",
             summary: "A major wallet experience update focused on clearer flows, safer signing and better multi-network control.",
@@ -189,7 +201,7 @@ private struct AppReleaseInfo: Identifiable {
                 .init(icon: "faceid", text: "Added Face ID verification for transaction signing, selectable time zones and a refined launch experience."),
                 .init(icon: "checkmark.shield.fill", text: "Added NFT spam filtering with a reviewable hidden folder and manual hide or restore controls.")
             ],
-            isCurrent: true
+            isCurrent: false
         ),
         AppReleaseInfo(
             version: "1.1.8",

@@ -12,6 +12,7 @@ import SwiftUI
 import Combine
 import LocalAuthentication
 import UserNotifications
+import UIKit
 
 enum Currency: String, CaseIterable, Identifiable {
     case usd = "USD"
@@ -417,36 +418,72 @@ final class SettingsManager: ObservableObject {
     func setNotificationsEnabled(_ enabled: Bool) {
         guard enabled else {
             updateNotifications(false)
+            UNUserNotificationCenter.current().removePendingNotificationRequests(
+                withIdentifiers: ["notifications_enabled_confirmation"]
+            )
             AppToast.show("Notifications disabled".localized, icon: "bell.slash")
             return
         }
 
+        let notificationCenter = UNUserNotificationCenter.current()
+        notificationCenter.getNotificationSettings { [weak self] settings in
+            switch settings.authorizationStatus {
+            case .authorized, .provisional, .ephemeral:
+                DispatchQueue.main.async {
+                    self?.finishEnablingNotifications()
+                }
+            case .notDetermined:
+                self?.requestNotificationAuthorization()
+            case .denied:
+                DispatchQueue.main.async {
+                    self?.updateNotifications(false)
+                    AppToast.show(
+                        "Enable notifications in iOS Settings".localized,
+                        icon: "gearshape.fill"
+                    )
+                    guard let url = URL(string: UIApplication.openSettingsURLString) else { return }
+                    UIApplication.shared.open(url)
+                }
+            @unknown default:
+                DispatchQueue.main.async {
+                    self?.updateNotifications(false)
+                }
+            }
+        }
+    }
+
+    private func requestNotificationAuthorization() {
         UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .badge, .sound]) { [weak self] granted, error in
             if let error {
                 Logger.log("Notification permission error: \(error.localizedDescription)")
             }
 
             DispatchQueue.main.async {
-                self?.updateNotifications(granted)
-
                 if granted {
-                    AppToast.show("Notifications enabled".localized, icon: "bell.badge.fill")
-
-                    // Immediate visible confirmation that notifications work
-                    let content = UNMutableNotificationContent()
-                    content.title = "Notifications enabled".localized
-                    content.body = "You will be notified about wallet activity.".localized
-                    content.sound = .default
-
-                    let request = UNNotificationRequest(
-                        identifier: "notifications_enabled_confirmation",
-                        content: content,
-                        trigger: UNTimeIntervalNotificationTrigger(timeInterval: 1, repeats: false)
-                    )
-                    UNUserNotificationCenter.current().add(request)
+                    self?.finishEnablingNotifications()
+                } else {
+                    self?.updateNotifications(false)
+                    AppToast.show("Notifications permission was not granted".localized, icon: "bell.slash")
                 }
             }
         }
+    }
+
+    private func finishEnablingNotifications() {
+        updateNotifications(true)
+        AppToast.show("Notifications enabled".localized, icon: "bell.badge.fill")
+
+        let content = UNMutableNotificationContent()
+        content.title = "Notifications enabled".localized
+        content.body = "You will be notified about wallet activity.".localized
+        content.sound = .default
+
+        let request = UNNotificationRequest(
+            identifier: "notifications_enabled_confirmation",
+            content: content,
+            trigger: UNTimeIntervalNotificationTrigger(timeInterval: 1, repeats: false)
+        )
+        UNUserNotificationCenter.current().add(request)
     }
 
     private func refreshFiatRates() {

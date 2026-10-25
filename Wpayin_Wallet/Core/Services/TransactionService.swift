@@ -71,6 +71,13 @@ enum TransactionError: LocalizedError {
         if message.contains("insufficient funds") || message.contains("gas required exceeds allowance") {
             return .networkError("error.insufficientGasFunds".localized)
         }
+        // Solana preflight failures: "insufficient lamports X, need Y",
+        // "insufficient funds for rent", and the system/token programs'
+        // InsufficientFunds error surfaced as "custom program error: 0x1".
+        if message.contains("insufficient lamports")
+            || message.range(of: #"custom program error: 0x1\b"#, options: .regularExpression) != nil {
+            return .networkError("error.insufficientGasFunds".localized)
+        }
         if message.contains("nonce too low") || message.contains("already known")
             || message.contains("replacement transaction") {
             return .networkError("error.txPending".localized)
@@ -78,7 +85,13 @@ enum TransactionError: LocalizedError {
         if message.contains("revert") {
             return .networkError("error.executionReverted".localized)
         }
+        #if DEBUG
+        // Debug builds surface the raw node error in the alert — an
+        // unrecognized message is exactly the case that needs diagnosing.
+        return .networkError("error.txGeneric".localized + "\n\n[\(raw)]")
+        #else
         return .networkError("error.txGeneric".localized)
+        #endif
     }
 }
 

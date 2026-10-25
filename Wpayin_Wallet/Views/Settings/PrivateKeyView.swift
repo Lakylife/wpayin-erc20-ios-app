@@ -13,6 +13,8 @@ import WalletCore
 struct PrivateKeyView: View {
     @EnvironmentObject var walletManager: WalletManager
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.scenePhase) private var scenePhase
+    @StateObject private var authorization = SecretRevealAuthorization()
     @State private var isRevealed = false
     @State private var showWarning = true
     @State private var privateKeys: [ExportedPrivateKey] = []
@@ -77,8 +79,12 @@ struct PrivateKeyView: View {
                                     style: .primary,
                                     isEnabled: micaAccepted
                                 ) {
-                                    showWarning = false
-                                    loadPrivateKey()
+                                    let walletID = walletManager.activeWallet?.id
+                                    authorization.authorize {
+                                        guard walletManager.activeWallet?.id == walletID else { return }
+                                        showWarning = false
+                                        loadPrivateKey()
+                                    }
                                 }
                                 .opacity(micaAccepted ? 1.0 : 0.5)
                             }
@@ -127,7 +133,7 @@ struct PrivateKeyView: View {
                                                         title: L10n.Action.copy.localized,
                                                         style: .secondary
                                                     ) {
-                                                        AppToast.copyToClipboard(exportedKey.privateKey)
+                                                        AppToast.copySecretToClipboard(exportedKey.privateKey)
                                                     }
                                                 }
                                                 .padding(16)
@@ -171,6 +177,32 @@ struct PrivateKeyView: View {
                 }
             }
         }
+        .disabled(authorization.isAuthenticating)
+        .overlay {
+            if scenePhase != .active {
+                WpayinColors.background.ignoresSafeArea()
+            }
+        }
+        .alert("Authentication failed".localized, isPresented: Binding(
+            get: { authorization.errorMessage != nil },
+            set: { if !$0 { authorization.errorMessage = nil } }
+        )) {
+            Button("OK".localized) { authorization.errorMessage = nil }
+        } message: {
+            Text(authorization.errorMessage ?? "")
+        }
+        .onChange(of: scenePhase) { phase in
+            if phase == .background { clearSecrets() }
+        }
+        .onChange(of: walletManager.activeWallet?.id) { _ in clearSecrets() }
+        .onDisappear { clearSecrets() }
+    }
+
+    private func clearSecrets() {
+        authorization.cancel()
+        privateKeys = []
+        isRevealed = false
+        showWarning = true
     }
 
     private func loadPrivateKey() {
@@ -225,7 +257,9 @@ struct PrivateKeyView: View {
 
         return uniqueBlockchains.compactMap { blockchain in
             guard let coinType = blockchain.coinType else { return nil }
-            let key = wallet.getKeyForCoin(coin: coinType)
+            let index = walletManager.activeWallet.map { walletManager.getAccountIndex(for: $0) } ?? 0
+            let path = MnemonicService().derivationPath(for: coinType, accountIndex: index)
+            let key = wallet.getKey(coin: coinType, derivationPath: path)
             let address = walletManager.availableChainAccounts[blockchain]?.address
                 ?? coinType.deriveAddress(privateKey: key).description
 

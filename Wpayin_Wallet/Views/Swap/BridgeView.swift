@@ -10,6 +10,13 @@
 
 import SwiftUI
 
+/// Extra SOL kept back when bridging from Solana. LI.FI routes may wrap SOL
+/// into temporary token accounts whose rent-exempt deposits (0.00204 SOL
+/// each, refunded on close) must be available at execution, and the sender
+/// account itself must stay rent-exempt (0.00089 SOL) — a bare fee reserve
+/// makes the on-chain simulation fail even though the fee alone would fit.
+private let solanaBridgeRentReserve = Decimal(string: "0.007")!
+
 private struct BridgeSubmission: Identifiable {
     enum Status {
         case submitted
@@ -38,8 +45,8 @@ struct BridgeContentView: View {
     @EnvironmentObject var walletManager: WalletManager
     @EnvironmentObject var settingsManager: SettingsManager
 
-    @State private var fromNetwork: BlockchainPlatform = .ethereum
-    @State private var toNetwork: BlockchainPlatform = .base
+    @State private var fromNetwork: BlockchainPlatform
+    @State private var toNetwork: BlockchainPlatform
     @State private var selectedToken: Token?
     @State private var amount = ""
 
@@ -50,6 +57,7 @@ struct BridgeContentView: View {
     @State private var quote: BridgeQuote?
     @State private var feeEstimate: BridgeNetworkFeeEstimate?
     @State private var quoteEstimateKey = ""
+    @State private var quoteFetchedAt = Date.distantPast
     @State private var isQuoting = false
     @State private var showReview = false
     @State private var isBridging = false
@@ -57,6 +65,19 @@ struct BridgeContentView: View {
     @State private var showError = false
     @State private var errorMessage = ""
     @State private var bridgeSubmission: BridgeSubmission?
+
+    init(
+        initialFromToken: Token? = nil,
+        initialToNetwork: BlockchainPlatform? = nil
+    ) {
+        let sourceNetwork = initialFromToken
+            .flatMap { BlockchainPlatform(rawValue: $0.blockchain.rawValue) } ?? .ethereum
+        let fallbackDestination: BlockchainPlatform = sourceNetwork == .base ? .ethereum : .base
+
+        _fromNetwork = State(initialValue: sourceNetwork)
+        _toNetwork = State(initialValue: initialToNetwork ?? fallbackDestination)
+        _selectedToken = State(initialValue: initialFromToken)
+    }
 
     private var availableNetworks: [BlockchainPlatform] {
         walletManager.availableBlockchains
@@ -200,10 +221,14 @@ struct BridgeContentView: View {
 
     private var networkFeeReserveDecimal: Decimal {
         guard let token = selectedToken, networkFeeNativeDecimal > 0 else { return 0 }
-        let isNonEVMSource = BridgeService.nativeTokenParam(for: token.blockchain) != nil
-        return isNonEVMSource
-            ? networkFeeNativeDecimal
-            : max(networkFeeNativeDecimal * Decimal(string: "0.05")!, Decimal(string: "0.00000001")!)
+        switch token.blockchain {
+        case .solana:
+            return networkFeeNativeDecimal + solanaBridgeRentReserve
+        case .bitcoin:
+            return networkFeeNativeDecimal
+        default:
+            return max(networkFeeNativeDecimal * Decimal(string: "0.05")!, Decimal(string: "0.00000001")!)
+        }
     }
 
     private var networkFeeReserve: Double {
@@ -266,14 +291,11 @@ struct BridgeContentView: View {
         }
         .sheet(isPresented: $showTokenPicker) {
             TokenPickerView(
-                tokens: selectableTokens,
+                tokens: availableTokens,
                 selectedToken: selectedToken,
                 initialNetwork: fromNetwork,
-                availableNetworks: availableNetworks
+                availableNetworks: [fromNetwork]
             ) { token in
-                if let tokenNetwork = BlockchainPlatform(rawValue: token.blockchain.rawValue) {
-                    fromNetwork = tokenNetwork
-                }
                 selectedToken = token
             }
         }
@@ -337,10 +359,12 @@ struct BridgeContentView: View {
         .task(id: bridgeEstimateKey) {
             guard isValidBridge else { return }
             try? await Task.sleep(nanoseconds: 280_000_000)
-            while !Task.isCancelled {
-                await refreshBridgeQuote(showError: false)
-                try? await Task.sleep(nanoseconds: 20_000_000_000)
-            }
+            // One quote per debounced user change. The previous 20-second
+            // polling loop exhausted LI.FI's unauthenticated per-IP quota even
+            // while the user was only reviewing the screen. Review explicitly
+            // refreshes a quote once it is close to LI.FI's ~60 s expiry.
+            guard !Task.isCancelled, !isQuoting else { return }
+            await refreshBridgeQuote(showError: false)
         }
     }
 
@@ -685,9 +709,19 @@ struct BridgeContentView: View {
     private func requestQuoteAndReview() {
         Task {
             guard isValidBridge else { return }
-            isQuoting = true
-            await refreshBridgeQuote(showError: true)
-            isQuoting = false
+            // MAX has usually just quoted this exact key — reuse a quote
+            // younger than 45 s instead of hitting LI.FI again (the keyless
+            // tier rate-limits bursts). Execution re-signs with a fresh
+            // blockhash anyway.
+            let hasFreshQuote = quote != nil
+                && feeEstimate != nil
+                && quoteEstimateKey == bridgeEstimateKey
+                && Date().timeIntervalSince(quoteFetchedAt) < 45
+            if !hasFreshQuote {
+                isQuoting = true
+                await refreshBridgeQuote(showError: true)
+                isQuoting = false
+            }
 
             guard quote != nil, feeEstimate != nil else { return }
             // Gas shortage is already shown inline with the exact required
@@ -730,6 +764,7 @@ struct BridgeContentView: View {
             quote = newQuote
             feeEstimate = newFee
             quoteEstimateKey = requestedKey
+            quoteFetchedAt = Date()
         } catch {
             guard requestedKey == bridgeEstimateKey else { return }
             clearQuote()
@@ -749,8 +784,12 @@ struct BridgeContentView: View {
             let feeRate = token.blockchain.isEVM && AppConfig.platformFeeEnabled
                 ? AppConfig.platformFeeRate
                 : 0
+            // Solana must already subtract the rent reserve here — the first
+            // quote's on-chain simulation would fail on small balances
+            // otherwise and MAX could never converge.
+            let rentReserve = token.blockchain == .solana ? solanaBridgeRentReserve : 0
             let provisionalAmount = token.isNative
-                ? tokenBalance * Decimal(string: "0.99")! / (1 + feeRate)
+                ? max(0, tokenBalance - rentReserve) * Decimal(string: "0.99")! / (1 + feeRate)
                 : tokenBalance / (1 + feeRate)
             amount = editableBridgeAmount(provisionalAmount)
             await refreshBridgeQuote(showError: false)
@@ -760,6 +799,9 @@ struct BridgeContentView: View {
                 // slightly after MAX itself changes. The fee and safety
                 // reserve are always removed from the live on-chain balance.
                 for _ in 0..<2 {
+                    // A failed refresh clears the fee estimate — stop rather
+                    // than treating zero fees as extra spendable balance.
+                    guard networkFeeNativeDecimal > 0 else { break }
                     let spendable = max(
                         Decimal.zero,
                         sourceNativeBalanceDecimal - networkFeeNativeDecimal - networkFeeReserveDecimal

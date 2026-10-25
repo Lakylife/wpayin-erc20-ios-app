@@ -43,6 +43,7 @@ struct SwapView: View {
     @EnvironmentObject var walletManager: WalletManager
     @EnvironmentObject var settingsManager: SettingsManager
     private let initialFromToken: Token?
+    private let initialBridgeDestination: BlockchainPlatform?
     @State private var selectedFromToken: Token?
     @State private var selectedToToken: Token?
     @State private var fromAmount = ""
@@ -55,6 +56,7 @@ struct SwapView: View {
     @State private var selectedGasSpeed: GasSpeed = .standard
     @State private var showGasSettings = false
     @State private var selectedNetwork: BlockchainPlatform = .ethereum
+    @State private var showNetworkSelector = false
     @State private var showSwapError = false
     @State private var swapErrorMessage = ""
     @State private var showReviewSwap = false
@@ -66,11 +68,17 @@ struct SwapView: View {
     @State private var liveEstimateKey = ""
     @State private var isEstimatingNetworkFee = false
 
-    init(initialFromToken: Token? = nil) {
+    init(
+        initialFromToken: Token? = nil,
+        initialBridgeMode: Bool = false,
+        initialBridgeDestination: BlockchainPlatform? = nil
+    ) {
         self.initialFromToken = initialFromToken
+        self.initialBridgeDestination = initialBridgeDestination
         let initialNetwork = initialFromToken.flatMap { BlockchainPlatform(rawValue: $0.blockchain.rawValue) } ?? .ethereum
         _selectedNetwork = State(initialValue: initialNetwork)
         _selectedFromToken = State(initialValue: initialFromToken)
+        _isBridgeMode = State(initialValue: initialBridgeMode)
     }
 
     private var selectableTokens: [Token] {
@@ -224,11 +232,15 @@ struct SwapView: View {
                 modePicker
 
                 if isBridgeMode {
-                    BridgeContentView()
+                    BridgeContentView(
+                        initialFromToken: initialFromToken,
+                        initialToNetwork: initialBridgeDestination
+                    )
                 } else {
                     ScrollView(showsIndicators: false) {
                         VStack(spacing: 16) {
                             balanceRow
+                            swapNetworkRow
                             swapCard
                             swapDetailsCard
                             Spacer(minLength: 16)
@@ -242,22 +254,24 @@ struct SwapView: View {
         }
         .sheet(isPresented: $showTokenPicker) {
             TokenPickerView(
-                tokens: isSelectingFromToken ? selectableTokens : availableTokens,
+                tokens: availableTokens,
                 selectedToken: isSelectingFromToken ? selectedFromToken : selectedToToken,
                 initialNetwork: selectedNetwork,
-                availableNetworks: isSelectingFromToken ? availableNetworks : [selectedNetwork]
+                availableNetworks: [selectedNetwork]
             ) { token in
                 if isSelectingFromToken {
-                    if let tokenNetwork = BlockchainPlatform(rawValue: token.blockchain.rawValue) {
-                        selectedNetwork = tokenNetwork
-                    }
                     selectedFromToken = token
                 } else {
                     selectedToToken = token
                 }
             }
         }
-
+        .sheet(isPresented: $showNetworkSelector) {
+            NetworkSelectorSheet(
+                selectedNetwork: $selectedNetwork,
+                availableNetworks: availableNetworks
+            )
+        }
         .sheet(isPresented: $showGasSettings) {
             GasSettingsSheet(
                 selectedSpeed: $selectedGasSpeed,
@@ -462,6 +476,50 @@ struct SwapView: View {
                 .minimumScaleFactor(0.75)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private var swapNetworkRow: some View {
+        VStack(alignment: .leading, spacing: 7) {
+            Text(L10n.Swap.selectNetwork.localized)
+                .font(.system(size: 12, weight: .medium))
+                .foregroundColor(WpayinColors.textSecondary)
+
+            Button {
+                showNetworkSelector = true
+            } label: {
+                HStack(spacing: 11) {
+                    PlatformIconView(platform: selectedNetwork, size: 30)
+
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(selectedNetwork.name)
+                            .font(.system(size: 15, weight: .semibold, design: .rounded))
+                            .foregroundColor(WpayinColors.text)
+
+                        Text("Choose network first, then select assets".localized)
+                            .font(.system(size: 11, weight: .medium))
+                            .foregroundColor(WpayinColors.textSecondary)
+                    }
+
+                    Spacer()
+
+                    Image(systemName: "chevron.down")
+                        .font(.system(size: 11, weight: .bold))
+                        .foregroundColor(WpayinColors.textSecondary)
+                }
+                .padding(.horizontal, 14)
+                .frame(height: 58)
+                .background(
+                    RoundedRectangle(cornerRadius: 17, style: .continuous)
+                        .fill(WpayinColors.surface)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 17, style: .continuous)
+                                .stroke(WpayinColors.surfaceBorder, lineWidth: 1)
+                        )
+                )
+            }
+            .buttonStyle(WpayinPressableStyle())
+            .accessibilityIdentifier("swap.network.selector")
+        }
     }
 
     private var swapCard: some View {

@@ -107,7 +107,7 @@ struct GenerateMnemonicStep: View {
     }
 
     private func copyToClipboard() {
-        AppToast.copyToClipboard(mnemonic)
+        AppToast.copySecretToClipboard(mnemonic)
         copied = true
 
         DispatchQueue.main.asyncAfter(deadline: .now() + 2) {

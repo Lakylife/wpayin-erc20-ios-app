@@ -12,6 +12,42 @@ import Foundation
 @MainActor
 struct Wpayin_WalletTests {
 
+    @Test func autoLockHonorsConfiguredTimeout() throws {
+        let suite = "AppLockTests-\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        defaults.set(true, forKey: "BiometricAuthEnabled")
+        defaults.set(AutoLockDuration.after5min.rawValue, forKey: "AutoLockDuration")
+        var now: TimeInterval = 100
+        let manager = AppLockManager(userDefaults: defaults, uptime: { now }, requestUnlock: {})
+        manager.handleScenePhaseChange(.background, hasWallet: true)
+        #expect(!manager.isLocked)
+        now += 299
+        manager.handleScenePhaseChange(.active, hasWallet: true)
+        #expect(!manager.isLocked)
+        manager.handleScenePhaseChange(.background, hasWallet: true)
+        now += 300
+        manager.handleScenePhaseChange(.active, hasWallet: true)
+        #expect(manager.isLocked)
+    }
+
+    @Test func autoLockNeverAndImmediateRemainDistinct() throws {
+        let suite = "AppLockTests-\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        defaults.set(true, forKey: "BiometricAuthEnabled")
+        defaults.set(AutoLockDuration.never.rawValue, forKey: "AutoLockDuration")
+        var now: TimeInterval = 0
+        let manager = AppLockManager(userDefaults: defaults, uptime: { now }, requestUnlock: {})
+        manager.handleScenePhaseChange(.background, hasWallet: true)
+        now = 100_000
+        manager.handleScenePhaseChange(.active, hasWallet: true)
+        #expect(!manager.isLocked)
+        defaults.set(AutoLockDuration.immediately.rawValue, forKey: "AutoLockDuration")
+        manager.handleScenePhaseChange(.background, hasWallet: true)
+        #expect(manager.isLocked)
+    }
+
     @Test func recognizesCanonicalETHWETHPair() {
         let eth = token(address: nil, symbol: "ETH", isNative: true)
         let weth = token(
