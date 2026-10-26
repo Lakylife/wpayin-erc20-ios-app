@@ -1,0 +1,243 @@
+// Autor Lukas Helebrandt, 2026
+
+//
+//  RecoveryPhraseView.swift
+//  Wpayin_Wallet
+//
+//  Created by Lukas Helebrandt on 25.09.2025.
+//
+
+import SwiftUI
+
+struct RecoveryPhraseView: View {
+    @EnvironmentObject var walletManager: WalletManager
+    @Environment(\.dismiss) private var dismiss
+    @Environment(\.scenePhase) private var scenePhase
+    @StateObject private var authorization = SecretRevealAuthorization()
+    @State private var isRevealed = false
+    @State private var showWarning = true
+    @State private var recoveryPhrase: String?
+    @State private var copied = false
+
+    private var mnemonicWords: [String] {
+        guard let phrase = recoveryPhrase else { return [] }
+        return phrase.components(separatedBy: " ")
+    }
+
+    var body: some View {
+        NavigationView {
+            ZStack {
+                WpayinColors.background.ignoresSafeArea()
+
+                ScrollView {
+                    VStack(spacing: 32) {
+                        if showWarning {
+                            // Warning
+                            VStack(spacing: 20) {
+                                Image(systemName: "key.fill")
+                                    .font(.system(size: 48))
+                                    .foregroundColor(WpayinColors.error)
+
+                                VStack(spacing: 12) {
+                                    Text("Keep Your Recovery Phrase Safe".localized)
+                                        .font(.wpayinHeadline)
+                                        .foregroundColor(WpayinColors.text)
+                                        .multilineTextAlignment(.center)
+
+                                    Text("Never share your recovery phrase with anyone. Anyone with access to your recovery phrase can steal your funds.".localized)
+                                        .font(.wpayinBody)
+                                        .foregroundColor(WpayinColors.textSecondary)
+                                        .multilineTextAlignment(.center)
+
+                                    Text("Self-custody notice: crypto-assets can be volatile, transfers are usually irreversible, and Wpayin cannot recover your wallet if you lose or share this phrase. In the EU/EEA, crypto-asset services may be subject to MiCA-related disclosures depending on your location and provider.".localized)
+                                        .font(.wpayinCaption)
+                                        .foregroundColor(WpayinColors.textSecondary)
+                                        .multilineTextAlignment(.center)
+                                }
+
+                                WpayinButton(
+                                    title: "I Understand",
+                                    style: .primary
+                                ) {
+                                    let walletID = walletManager.activeWallet?.id
+                                    authorization.authorize {
+                                        guard walletManager.activeWallet?.id == walletID else { return }
+                                        showWarning = false
+                                        loadRecoveryPhrase()
+                                    }
+                                }
+                            }
+                            .padding(.horizontal, 24)
+                        } else {
+                            // Recovery Phrase Display
+                            if recoveryPhrase != nil {
+                                VStack(spacing: 24) {
+                                    VStack(spacing: 16) {
+                                        Text("Your Recovery Phrase".localized)
+                                            .font(.wpayinHeadline)
+                                            .foregroundColor(WpayinColors.text)
+
+                                        Text("Write down these 12 words in the exact order shown. This phrase is the only way to recover your wallet.".localized)
+                                            .font(.wpayinBody)
+                                            .foregroundColor(WpayinColors.textSecondary)
+                                            .multilineTextAlignment(.center)
+                                    }
+
+                                    // Warning Box
+                                    HStack(spacing: 12) {
+                                        Image(systemName: "exclamationmark.triangle.fill")
+                                            .foregroundColor(WpayinColors.error)
+                                            .font(.system(size: 20))
+
+                                        VStack(alignment: .leading, spacing: 4) {
+                                            Text("Keep it secure!".localized)
+                                                .font(.wpayinSubheadline)
+                                                .foregroundColor(WpayinColors.error)
+
+                                            Text("Never share your recovery phrase with anyone. Store it in a safe place.".localized)
+                                                .font(.wpayinCaption)
+                                                .foregroundColor(WpayinColors.textSecondary)
+                                        }
+
+                                        Spacer()
+                                    }
+                                    .padding(16)
+                                    .background(WpayinColors.surface)
+                                    .cornerRadius(12)
+
+                                    // Mnemonic Display
+                                    VStack(spacing: 16) {
+                                        LazyVGrid(columns: Array(repeating: GridItem(.flexible()), count: 2), spacing: 12) {
+                                            ForEach(Array(mnemonicWords.enumerated()), id: \.offset) { index, word in
+                                                HStack {
+                                                    Text("\(index + 1).")
+                                                        .font(.wpayinCaption)
+                                                        .foregroundColor(WpayinColors.textSecondary)
+                                                        .frame(width: 20, alignment: .leading)
+
+                                                    Text(word)
+                                                        .font(.wpayinBody)
+                                                        .foregroundColor(WpayinColors.text)
+
+                                                    Spacer()
+                                                }
+                                                .padding(.vertical, 12)
+                                                .padding(.horizontal, 16)
+                                                .background(WpayinColors.surfaceLight)
+                                                .cornerRadius(8)
+                                                .blur(radius: isRevealed ? 0 : 4)
+                                            }
+                                        }
+
+                                        // Reveal/Hide Button
+                                        WpayinButton(
+                                            title: isRevealed ? "Hide" : "Tap to Reveal",
+                                            style: .secondary
+                                        ) {
+                                            withAnimation(.easeInOut(duration: 0.3)) {
+                                                isRevealed.toggle()
+                                            }
+                                        }
+                                    }
+                                    .padding(20)
+                                    .background(WpayinColors.surface)
+                                    .cornerRadius(16)
+
+                                    // Copy Button
+                                    WpayinButton(
+                                        title: copied ? "Copied!".localized : "Copy to Clipboard".localized,
+                                        style: .tertiary
+                                    ) {
+                                        copyToClipboard()
+                                    }
+                                    .disabled(!isRevealed)
+                                }
+                                .padding(.horizontal, 24)
+                            } else {
+                                // No recovery phrase available
+                                VStack(spacing: 16) {
+                                    Image(systemName: "exclamationmark.triangle")
+                                        .font(.system(size: 32))
+                                        .foregroundColor(WpayinColors.error)
+
+                                    Text("Recovery Phrase Not Available".localized)
+                                        .font(.wpayinBody)
+                                        .foregroundColor(WpayinColors.text)
+
+                                    Text("This wallet was imported using a private key. Recovery phrase is only available for wallets created with a seed phrase.".localized)
+                                        .font(.wpayinCaption)
+                                        .foregroundColor(WpayinColors.textSecondary)
+                                        .multilineTextAlignment(.center)
+                                }
+                                .padding(.horizontal, 24)
+                                .padding(.vertical, 32)
+                            }
+                        }
+                    }
+                    .padding(.top, 40)
+                }
+            }
+            .navigationTitle("Recovery Phrase".localized)
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarLeading) {
+                    Button("Close".localized) {
+                        dismiss()
+                    }
+                    .foregroundColor(WpayinColors.text)
+                }
+            }
+        }
+        .disabled(authorization.isAuthenticating)
+        .overlay {
+            if scenePhase != .active {
+                WpayinColors.background.ignoresSafeArea()
+            }
+        }
+        .alert("Authentication failed".localized, isPresented: Binding(
+            get: { authorization.errorMessage != nil },
+            set: { if !$0 { authorization.errorMessage = nil } }
+        )) {
+            Button("OK".localized) { authorization.errorMessage = nil }
+        } message: {
+            Text(authorization.errorMessage ?? "")
+        }
+        .onChange(of: scenePhase) { phase in
+            if phase == .background { clearSecrets() }
+        }
+        .onChange(of: walletManager.activeWallet?.id) { _ in clearSecrets() }
+        .onDisappear { clearSecrets() }
+    }
+
+    private func clearSecrets() {
+        authorization.cancel()
+        recoveryPhrase = nil
+        isRevealed = false
+        showWarning = true
+    }
+
+    private func loadRecoveryPhrase() {
+        if let mnemonic = walletManager.keychain.getSeedPhrase() {
+            recoveryPhrase = mnemonic
+            Logger.log("✅ Loaded recovery phrase from keychain")
+        } else {
+            Logger.log("⚠️ No recovery phrase found - wallet might be imported via private key")
+            recoveryPhrase = nil
+        }
+    }
+
+    private func copyToClipboard() {
+        guard let phrase = recoveryPhrase else { return }
+        AppToast.copySecretToClipboard(phrase)
+        copied = true
+
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
+            copied = false
+        }
+    }
+}
+
+#Preview {
+    RecoveryPhraseView()
+        .environmentObject(WalletManager())
+}

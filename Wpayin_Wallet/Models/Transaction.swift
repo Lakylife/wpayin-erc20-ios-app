@@ -1,0 +1,155 @@
+// Autor Lukas Helebrandt, 2026
+
+//
+//  Transaction.swift
+//  Wpayin_Wallet
+//
+//  Created by Lukas Helebrandt on 25.09.2025.
+//
+
+import Foundation
+
+struct Transaction: Identifiable, Codable {
+    let id: UUID
+    let hash: String
+    let from: String
+    let to: String
+    let amount: Double
+    let token: String
+    let type: TransactionType
+    let status: TransactionStatus
+    let timestamp: Date
+    let gasUsed: Double
+    let gasFee: Double
+    let blockNumber: String?
+    let explorerUrl: URL?
+    /// Network the transaction happened on; nil only for legacy cached entries.
+    let blockchain: BlockchainType?
+
+    enum TransactionType: String, CaseIterable, Codable {
+        case send = "send"
+        case receive = "receive"
+        case swap = "swap"
+        case deposit = "deposit"
+        case withdraw = "withdraw"
+        case bridge = "bridge"                  // outgoing side on the source chain
+        case bridgeReceive = "bridge_receive"   // incoming side on the destination chain
+
+        var displayName: String {
+            switch self {
+            case .send: return "Send".localized
+            case .receive: return "Receive".localized
+            case .swap: return "Swap".localized
+            case .deposit: return "Deposit".localized
+            case .withdraw: return "Withdraw".localized
+            case .bridge, .bridgeReceive: return "Bridge".localized
+            }
+        }
+    }
+
+    enum TransactionStatus: String, CaseIterable, Codable {
+        case pending = "pending"
+        case confirmed = "confirmed"
+        case failed = "failed"
+
+        var displayName: String {
+            switch self {
+            case .pending: return "Pending".localized
+            case .confirmed: return "Confirmed".localized
+            case .failed: return "Failed".localized
+            }
+        }
+    }
+
+    init(
+        hash: String,
+        from: String,
+        to: String,
+        amount: Double,
+        token: String,
+        type: TransactionType,
+        status: TransactionStatus,
+        timestamp: Date,
+        gasUsed: Double,
+        gasFee: Double,
+        blockNumber: String? = nil,
+        explorerUrl: URL? = nil,
+        blockchain: BlockchainType? = nil,
+        id: UUID = UUID()
+    ) {
+        self.id = id
+        self.hash = hash
+        self.from = from
+        self.to = to
+        self.amount = amount
+        self.token = token
+        self.type = type
+        self.status = status
+        self.timestamp = timestamp
+        self.gasUsed = gasUsed
+        self.gasFee = gasFee
+        self.blockNumber = blockNumber
+        self.explorerUrl = explorerUrl
+        self.blockchain = blockchain
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case id
+        case hash
+        case from
+        case to
+        case amount
+        case token
+        case type
+        case status
+        case timestamp
+        case gasUsed
+        case gasFee
+        case blockNumber
+        case explorerUrl
+        case blockchain
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        hash = try container.decode(String.self, forKey: .hash)
+        from = try container.decode(String.self, forKey: .from)
+        to = try container.decode(String.self, forKey: .to)
+        amount = try container.decode(Double.self, forKey: .amount)
+        token = try container.decode(String.self, forKey: .token)
+        type = try container.decode(TransactionType.self, forKey: .type)
+        status = try container.decode(TransactionStatus.self, forKey: .status)
+        if let isoDateString = try? container.decode(String.self, forKey: .timestamp) {
+            let formatter = ISO8601DateFormatter()
+            timestamp = formatter.date(from: isoDateString) ?? Date()
+        } else if let timeInterval = try? container.decode(Double.self, forKey: .timestamp) {
+            timestamp = Date(timeIntervalSince1970: timeInterval)
+        } else {
+            timestamp = Date()
+        }
+        gasUsed = try container.decode(Double.self, forKey: .gasUsed)
+        gasFee = try container.decode(Double.self, forKey: .gasFee)
+        blockNumber = try container.decodeIfPresent(String.self, forKey: .blockNumber)
+        explorerUrl = try container.decodeIfPresent(URL.self, forKey: .explorerUrl)
+        blockchain = try container.decodeIfPresent(BlockchainType.self, forKey: .blockchain)
+        id = try container.decodeIfPresent(UUID.self, forKey: .id) ?? UUID()
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(id, forKey: .id)
+        try container.encode(hash, forKey: .hash)
+        try container.encode(from, forKey: .from)
+        try container.encode(to, forKey: .to)
+        try container.encode(amount, forKey: .amount)
+        try container.encode(token, forKey: .token)
+        try container.encode(type, forKey: .type)
+        try container.encode(status, forKey: .status)
+        try container.encode(timestamp, forKey: .timestamp)
+        try container.encode(gasUsed, forKey: .gasUsed)
+        try container.encode(gasFee, forKey: .gasFee)
+        try container.encodeIfPresent(blockNumber, forKey: .blockNumber)
+        try container.encodeIfPresent(explorerUrl, forKey: .explorerUrl)
+        try container.encodeIfPresent(blockchain, forKey: .blockchain)
+    }
+}
