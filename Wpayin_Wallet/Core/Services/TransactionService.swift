@@ -519,7 +519,9 @@ class TransactionService {
     // MARK: - Network Methods
 
     private func fetchNonce(address: String, rpcUrl: String) async throws -> Int {
-        let url = URL(string: rpcUrl)!
+        guard let url = URL(string: rpcUrl), url.host != nil else {
+            throw TransactionError.networkError("No node is set for this network. Add a node URL in Settings.".localized)
+        }
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
@@ -590,7 +592,9 @@ class TransactionService {
     }
 
     private func fetchGasPrice(rpcUrl: String) async throws -> Decimal {
-        let url = URL(string: rpcUrl)!
+        guard let url = URL(string: rpcUrl), url.host != nil else {
+            throw TransactionError.networkError("No node is set for this network. Add a node URL in Settings.".localized)
+        }
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
@@ -621,7 +625,9 @@ class TransactionService {
     }
 
     private func broadcastTransaction(signedTx: String, rpcUrl: String) async throws -> String {
-        let url = URL(string: rpcUrl)!
+        guard let url = URL(string: rpcUrl), url.host != nil else {
+            throw TransactionError.networkError("No node is set for this network. Add a node URL in Settings.".localized)
+        }
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
@@ -670,6 +676,8 @@ extension BlockchainType {
             return 10
         case .base:
             return 8453
+        case .quintium:
+            return QuintiumSettings.network.chainId
         default:
             return nil
         }
@@ -677,7 +685,9 @@ extension BlockchainType {
 
     /// Primary RPC endpoint — first entry of the NetworkManager source list.
     var rpcUrl: String {
-        rpcUrls.first ?? "https://ethereum-rpc.publicnode.com"
+        // Quintium must never fall back to an Ethereum node.
+        if self == .quintium { return QuintiumSettings.rpcUrl }
+        return rpcUrls.first ?? "https://ethereum-rpc.publicnode.com"
     }
 
     /// All RPC endpoints for this chain, in failover order.

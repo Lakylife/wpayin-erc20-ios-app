@@ -78,6 +78,22 @@ struct Wpayin_WalletTests {
         #expect(AppConfig.platformFeeEnabled)
     }
 
+    @Test func quintiumUsesItsOwnChainIdsAndNeverAnEthereumNode() {
+        #expect(QuintiumNetwork.mainnet.chainId == 52401)
+        #expect(QuintiumNetwork.testnet.chainId == 52402)
+        #expect(QuintiumNetwork.mainnet.symbol == "QU")
+        #expect(QuintiumNetwork.testnet.symbol == "tQU")
+
+        let network = QuintiumSettings.network
+        #expect(BlockchainType.quintium.chainId == network.chainId)
+        // Without a configured node the RPC stays empty instead of falling back to Ethereum.
+        #expect(BlockchainType.quintium.rpcUrl == QuintiumSettings.rpcUrl)
+        #expect(!BlockchainType.quintium.rpcUrl.contains("ethereum"))
+        #expect(!QuintiumSettings.isValidURL(""))
+        #expect(!QuintiumSettings.isValidURL("rpc.example.com"))
+        #expect(QuintiumSettings.isValidURL("https://rpc.example.com"))
+    }
+
     @Test func p2pOfferCodeRoundTripsThroughShareText() throws {
         let offer = P2POffer(
             chainId: 1,

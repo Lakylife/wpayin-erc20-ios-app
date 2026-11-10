@@ -16,6 +16,8 @@ struct NetworkIconView: View {
     var body: some View {
         if blockchain == .solana {
             SolanaIconMark(size: size)
+        } else if blockchain == .quintium {
+            QuintiumIconMark(size: size)
         } else if blockchain == .polygon {
             PolygonIconMark(size: size)
         } else {
@@ -61,6 +63,8 @@ struct NetworkIconView: View {
             return Color(red: 0.08, green: 0.49, blue: 0.96)
         case .solana:
             return Color(red: 0.66, green: 0.36, blue: 1.0)
+        case .quintium:
+            return QuintiumIconMark.gold
         }
     }
     
@@ -102,6 +106,8 @@ struct NetworkIconView: View {
             return "f.circle.fill"
         case .solana:
             return "sun.max.fill"
+        case .quintium:
+            return "pentagon.fill"
         }
     }
 }
@@ -140,7 +146,10 @@ struct TokenIconView: View {
             // Main token icon - Priority: local asset > iconUrl > colored placeholder > blockchain icon
             
             Group {
-                if token.symbol.uppercased() == "WETH" {
+                if token.isQuintiumCoin {
+                    // Our own coin: Quintium logo for QU (mainnet) and tQU (testnet)
+                    QuintiumIconMark(size: size)
+                } else if token.symbol.uppercased() == "WETH" {
                     // Official WETH icon with drawn mark as offline fallback
                     AsyncImage(url: URL(string: token.iconUrl?.hasPrefix("http") == true
                                         ? token.iconUrl!
@@ -355,6 +364,56 @@ struct StablecoinIconMark: View {
                 .lineLimit(1)
                 .minimumScaleFactor(0.6)
         }
+    }
+}
+
+extension Token {
+    /// Native QU or tQU on the Quintium chain.
+    var isQuintiumCoin: Bool {
+        guard blockchain == .quintium else { return false }
+        let upper = self.symbol.uppercased()
+        return isNative || upper == "QU" || upper == "TQU"
+    }
+}
+
+/// Quintium coin: a star-gold disc with the night-blue "Q" pentagon, drawn
+/// from `packages/explorer/public/coin.svg` (64×64 viewBox) of the Quintium repo.
+struct QuintiumIconMark: View {
+    let size: CGFloat
+
+    static let gold = Color(red: 0.949, green: 0.710, blue: 0.267)   // #F2B544
+    static let night = Color(red: 0.043, green: 0.086, blue: 0.133)  // #0B1622
+
+    var body: some View {
+        ZStack {
+            Circle()
+                .fill(Self.gold)
+                .frame(width: size * 60 / 64, height: size * 60 / 64)
+            QuintiumGlyph()
+                .fill(Self.night)
+                .frame(width: size, height: size)
+        }
+        .frame(width: size, height: size)
+    }
+}
+
+private struct QuintiumGlyph: Shape {
+    func path(in rect: CGRect) -> Path {
+        let scale = min(rect.width, rect.height) / 64
+        func p(_ x: CGFloat, _ y: CGFloat) -> CGPoint {
+            CGPoint(x: rect.minX + x * scale, y: rect.minY + y * scale)
+        }
+        var path = Path()
+        // Outer pentagon
+        path.addLines([p(32, 12.4), p(50.55, 25.87), p(43.46, 47.68), p(20.54, 47.68), p(13.45, 25.87)])
+        path.closeSubpath()
+        // Inner pentagon (hole: wound opposite to the outer one, nonzero fill)
+        path.addLines([p(22.73, 28.89), p(26.27, 39.79), p(37.73, 39.79), p(41.27, 28.89), p(32, 22.15)])
+        path.closeSubpath()
+        // Tail of the Q
+        path.addLines([p(36.96, 33.28), p(47.63, 47.97), p(42.45, 51.73), p(31.78, 37.05)])
+        path.closeSubpath()
+        return path
     }
 }
 

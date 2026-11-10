@@ -1184,3 +1184,31 @@
 "Secret clipboard copies stay on this device and expire after 30 seconds." = "Tajné údaje ve schránce zůstávají v tomto zařízení a vyprší po 30 sekundách.";
 "Corrected Auto-Lock timing and active-account private-key export." = "Opraveny intervaly automatického zamčení a export klíče aktivního účtu.";
 "Prevented delayed network responses from changing another wallet." = "Opožděné síťové odpovědi již nemění stav jiné peněženky.";
+
+// MARK: - Quintium (QU)
+"Address of a Quintium node with JSON-RPC (default port %@). There is no public node yet, so enter your own." = "Adresa uzlu Quintium s JSON-RPC (výchozí port %@). Veřejný uzel zatím není, zadejte vlastní.";
+"Address path" = "Cesta adresy";
+"Block time" = "Doba bloku";
+"Connected. Chain ID %@, block %@." = "Připojeno. Chain ID %@, blok %@.";
+"Currency" = "Měna";
+"Empty answer from the node" = "Uzel vrátil prázdnou odpověď";
+"Enter a valid node URL starting with https:// or http://" = "Zadejte platnou adresu uzlu začínající https:// nebo http://";
+"Mainnet starts on 1 January 2027. Until then use the testnet." = "Mainnet startuje 1. 1. 2027. Do té doby použijte testnet.";
+"Mainnet" = "Mainnet";
+"Network parameters" = "Parametry sítě";
+"No node is set for this network. Add a node URL in Settings." = "Pro tuto síť není nastavený uzel. Doplňte adresu uzlu v Nastavení.";
+"Node" = "Uzel";
+"Our own Proof-of-Work blockchain, compatible with Ethereum. Your Quintium address is the same as your Ethereum address." = "Náš vlastní blockchain s Proof-of-Work, kompatibilní s Ethereem. Adresa pro Quintium je stejná jako adresa pro Ethereum.";
+"Saved" = "Uloženo";
+"Set up a node for your Quintium wallet" = "Nastavte uzel pro peněženku Quintium";
+"Test connection" = "Vyzkoušet spojení";
+"The node belongs to another network (chain ID %@, expected %@)" = "Uzel patří k jiné síti (chain ID %@, očekáváno %@)";
+"The node did not answer (HTTP error)" = "Uzel neodpověděl (chyba HTTP)";
+"decimals" = "desetinných míst";
+
+/* Version history 1.2.0 */
+"Added the Quintium network with your own node, balance, sending and history." = "Přidána síť Quintium s vlastním uzlem, zůstatkem, odesíláním a historií.";
+"Added Quintium (QU, testnet tQU) with balance, sending and transaction history from the node." = "Přidán Quintium (QU, testnet tQU) se zůstatkem, odesíláním a historií transakcí z uzlu.";
+"Added Settings → Quintium to choose the network, set your node and test the connection." = "Přidáno Nastavení → Quintium pro výběr sítě, nastavení uzlu a test spojení.";
+"Quintium never falls back to an Ethereum node, and an empty RPC address no longer crashes the app." = "Quintium nikdy nepoužije uzel Etherea a prázdná adresa RPC už aplikaci neshodí.";
+"Added the QU/tQU logo and English and Czech translations." = "Přidáno logo QU/tQU a anglické a české překlady.";

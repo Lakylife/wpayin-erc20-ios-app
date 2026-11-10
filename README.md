@@ -1,9 +1,9 @@
-# Wpayin Wallet 1.1.10
+# Wpayin Wallet 1.2.0
 
-Release details and verification status: [1.1.10 release notes](RELEASE_NOTES_v1.1.10.md).
+Release details and verification status: [1.2.0 release notes](RELEASE_NOTES_v1.2.0.md).
 
 Wpayin Wallet is a non-custodial iOS wallet built with SwiftUI and Trust
-Wallet Core. It supports Bitcoin, Ethereum, Solana, EVM-compatible networks,
+Wallet Core. It supports Bitcoin, Ethereum, Solana, Quintium, EVM-compatible networks,
 tokens, network-aware transaction history, NFTs, DEX swaps, cross-chain
 bridging, and atomic EVM P2P trading.
 
@@ -17,17 +17,56 @@ work; the existing iOS target is unchanged by the Android project.
 > recovery phrase and private keys.
 
 <p align="center">
-  <img src="./screenshots/20260712_v1.1.8/01_launch.png" width="220" alt="Wpayin Wallet launch">
-  <img src="./screenshots/20260712_v1.1.8/02_welcome.png" width="220" alt="Wpayin Wallet welcome">
-  <img src="./screenshots/20260712_v1.1.8/03_home.png" width="220" alt="Wpayin Wallet home">
+  <img src="./screenshots/20261110_v1.2.0/01_launch.png" width="220" alt="Wpayin Wallet launch">
+  <img src="./screenshots/20261110_v1.2.0/02_welcome.png" width="220" alt="Wpayin Wallet welcome">
+  <img src="./screenshots/20261110_v1.2.0/03_home.png" width="220" alt="Wpayin Wallet home">
 </p>
 <p align="center">
-  <img src="./screenshots/20260712_v1.1.8/04_swap.png" width="220" alt="Wpayin Wallet swap">
-  <img src="./screenshots/20260712_v1.1.8/05_activity.png" width="220" alt="Wpayin Wallet activity">
-  <img src="./screenshots/20260712_v1.1.8/06_settings.png" width="220" alt="Wpayin Wallet settings">
+  <img src="./screenshots/20261110_v1.2.0/04_swap.png" width="220" alt="Wpayin Wallet swap">
+  <img src="./screenshots/20261110_v1.2.0/05_activity.png" width="220" alt="Wpayin Wallet activity">
+  <img src="./screenshots/20261110_v1.2.0/06_settings.png" width="220" alt="Wpayin Wallet settings">
+</p>
+<p align="center">
+  <img src="./screenshots/20261110_v1.2.0/07_quintium.png" width="220" alt="Wpayin Wallet Quintium settings">
 </p>
 
-## Version 1.1.10
+Screenshots are taken in the iOS Simulator from a credential-free DEBUG
+fixture (`--ui-screenshot-mode`): no recovery phrase, private key or real
+balance is shown.
+
+## Version 1.2.0
+
+- Added the Quintium network (QU on mainnet, tQU on testnet): balance, sending
+  and transaction history read from the node's own index (`aether_addressTxs`).
+- Added **Settings → Quintium** to choose mainnet or testnet, enter your node's
+  RPC and explorer URLs, and test the connection (chain ID and latest block).
+- Added the Quintium QU/tQU logo across asset lists and network pickers, plus
+  English and Czech translations.
+- Safety guard: Quintium never falls back to an Ethereum node. Without a node
+  URL no Quintium transaction is signed or sent.
+- An empty or invalid RPC address now shows an error instead of crashing.
+- Home asset list keeps the original token symbol case (tQU) and the correct
+  network icon.
+
+## Quintium network
+
+Quintium is an EVM-compatible Proof-of-Work chain that
+uses Ethereum keys and addresses (`m/44'/60'/0'/0`), so your Quintium address is
+the same as your Ethereum address.
+
+| Network | Chain ID | Currency | Default RPC port |
+| --- | --- | --- | --- |
+| Quintium Mainnet | 52401 | QU (18 decimals) | 8545 |
+| Quintium Testnet | 52402 | tQU (18 decimals) | 8546 |
+
+- There is no public Quintium RPC node yet. Run your own node and enter its URL
+  in **Settings → Quintium** (or set `QUINTIUM_RPC_URL` /
+  `QUINTIUM_TESTNET_RPC_URL` and the optional `QUINTIUM_EXPLORER_URL` /
+  `QUINTIUM_TESTNET_EXPLORER_URL` as scheme environment variables).
+- The testnet is running now; mainnet starts on 1 January 2027 (00:00 UTC).
+- QU has no market price yet, so fiat values for Quintium show $0.00.
+
+## Previous version 1.1.10
 
 - Added fresh device authentication for recovery-phrase and private-key export.
 - Limited secret clipboard copies to this device with a 30-second expiry.
@@ -37,7 +76,9 @@ work; the existing iOS target is unchanged by the Android project.
 
 The simulator build and unit tests pass. On-device authentication checks remain manual.
 
-## Previous version 1.1.9
+See [RELEASE_NOTES_v1.1.10.md](RELEASE_NOTES_v1.1.10.md) for details.
+
+## Version 1.1.9
 
 - Redesigned Deposit, Withdraw, asset details, Swap, Bridge, and multi-network
   transaction history for clearer network-aware wallet flows.
@@ -129,9 +170,11 @@ continues to work when the board is not configured.
 - Optimism
 - Avalanche C-Chain
 - Base
+- Quintium (mainnet and testnet; requires your own node, see above)
 
 Cross-chain bridging is available between the supported EVM networks listed
-above through LI.FI. Native Bitcoin and Solana cannot participate in atomic
+above through LI.FI. LI.FI does not support Quintium, so Quintium is not
+available for bridging. Native Bitcoin and Solana cannot participate in atomic
 EVM P2P settlement; supported wrapped representations include WBTC, cbBTC,
 BTCB, and BTC.b where available.
 

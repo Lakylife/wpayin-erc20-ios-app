@@ -53,6 +53,9 @@ enum BlockchainPlatform: String, CaseIterable, Codable, Identifiable {
     case zkSync = "zksync"
     case fantom = "fantom"
 
+    // Own chain (EVM-compatible Proof-of-Work L1)
+    case quintium = "quintium"
+
     var id: String { rawValue }
 
     var name: String {
@@ -93,6 +96,8 @@ enum BlockchainPlatform: String, CaseIterable, Codable, Identifiable {
             return "zkSync Era"
         case .fantom:
             return "Fantom"
+        case .quintium:
+            return QuintiumSettings.network.displayName
         }
     }
 
@@ -134,6 +139,8 @@ enum BlockchainPlatform: String, CaseIterable, Codable, Identifiable {
             return "ETH"
         case .fantom:
             return "FTM"
+        case .quintium:
+            return QuintiumSettings.network.symbol
         }
     }
 
@@ -175,6 +182,8 @@ enum BlockchainPlatform: String, CaseIterable, Codable, Identifiable {
             return Color(red: 0.32, green: 0.42, blue: 0.98)  // Blue/purple
         case .fantom:
             return Color(red: 0.08, green: 0.49, blue: 0.96)  // Blue
+        case .quintium:
+            return Color(red: 0.95, green: 0.71, blue: 0.27)  // #F2B544 star gold
         }
     }
 
@@ -216,6 +225,8 @@ enum BlockchainPlatform: String, CaseIterable, Codable, Identifiable {
             return "z.square.fill"
         case .fantom:
             return "f.circle.fill"
+        case .quintium:
+            return "pentagon.fill"
         }
     }
     
@@ -257,6 +268,8 @@ enum BlockchainPlatform: String, CaseIterable, Codable, Identifiable {
             return "F"
         case .solana:
             return "S"  // Solana
+        case .quintium:
+            return "Q"
         }
     }
     
@@ -311,7 +324,7 @@ enum BlockchainPlatform: String, CaseIterable, Codable, Identifiable {
         switch self {
         case .bitcoin, .litecoin, .bitcoinCash, .eCash, .dash, .zcash, .monero:
             return .baseLayer1
-        case .ethereum:
+        case .ethereum, .quintium:
             return .baseLayer1
         case .polygon, .bsc, .arbitrum, .optimism, .avalanche, .base, .gnosis, .zkSync, .fantom:
             return .evmChain
@@ -321,7 +334,7 @@ enum BlockchainPlatform: String, CaseIterable, Codable, Identifiable {
     }
     
     var isEVM: Bool {
-        category == .evmChain || self == .ethereum
+        category == .evmChain || self == .ethereum || self == .quintium
     }
 
     var supportedNetworks: [NetworkType] {
@@ -336,12 +349,14 @@ enum BlockchainPlatform: String, CaseIterable, Codable, Identifiable {
             return [.mainnet, .testnet, .devnet]
         case .base:
             return [.mainnet]
+        case .quintium:
+            return [.mainnet, .testnet]
         }
     }
 
     var addressPrefix: String {
         switch self {
-        case .ethereum, .polygon, .bsc, .arbitrum, .optimism, .avalanche, .base, .gnosis, .zkSync, .fantom:
+        case .ethereum, .polygon, .bsc, .arbitrum, .optimism, .avalanche, .base, .gnosis, .zkSync, .fantom, .quintium:
             return "0x"
         case .bitcoin:
             return "bc1" // Bech32 for mainnet
@@ -400,6 +415,8 @@ enum BlockchainPlatform: String, CaseIterable, Codable, Identifiable {
             return .ethereum
         case .fantom:
             return .fantom
+        case .quintium:
+            return .ethereum  // Ethereum keys and addresses, m/44'/60'
         }
     }
 
@@ -532,8 +549,25 @@ struct BlockchainConfig: Identifiable, Codable, Sendable {
             explorerUrl: "https://basescan.org",
             chainId: 8453,
             isEnabled: false
-        )
+        ),
+
+        // Quintium (own chain). One slot that follows the active Quintium
+        // network (testnet now, mainnet from 1 January 2027).
+        BlockchainConfig.quintium()
     ]
+
+    /// Current Quintium config built from QuintiumSettings (network, node URL, explorer).
+    static func quintium() -> BlockchainConfig {
+        let network = QuintiumSettings.network
+        return BlockchainConfig(
+            platform: .quintium,
+            network: .mainnet,  // the wallet only reads "mainnet" slots; the Quintium network is chosen in QuintiumSettings
+            rpcUrl: QuintiumSettings.rpcUrl(for: network),
+            explorerUrl: QuintiumSettings.explorerUrl(for: network),
+            chainId: network.chainId,
+            isEnabled: true
+        )
+    }
 }
 
 extension BlockchainConfig {

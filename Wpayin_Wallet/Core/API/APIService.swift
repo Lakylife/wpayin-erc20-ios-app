@@ -173,7 +173,10 @@ final class APIService: ObservableObject, @unchecked Sendable {
                             balance = try await fetchEVMNativeBalanceWithFailover(
                                 address: request.address,
                                 blockchain: request.tokenType,
-                                primaryRpcUrl: request.config.rpcUrl
+                                // The stored Quintium config can lag behind a network switch.
+                                primaryRpcUrl: request.tokenType == .quintium
+                                    ? QuintiumSettings.rpcUrl
+                                    : request.config.rpcUrl
                             )
                         }
                         return (index, balance)
@@ -231,6 +234,24 @@ final class APIService: ObservableObject, @unchecked Sendable {
 
         for config in supportedConfigs {
             guard let blockchain = config.platform.blockchainType, blockchain.isEVM else { continue }
+
+            // Quintium has no Etherscan/Blockscout: the node indexes history itself.
+            if blockchain == .quintium {
+                do {
+                    let fetched = try await fetchQuintiumTransactions(
+                        address: trimmedAddress,
+                        normalizedAddress: normalizedAddress
+                    )
+                    aggregated.append(contentsOf: fetched)
+                    hadSuccessfulFetch = true
+                } catch {
+                    if firstFailure == nil {
+                        firstFailure = error
+                    }
+                    Logger.log("⚠️ Quintium transaction fetch failed: \(error)")
+                }
+                continue
+            }
 
             let etherscan = etherscanEndpoint(for: config.platform)
             let etherscanKey = etherscan?.resolveAPIKey()
@@ -409,6 +430,8 @@ final class APIService: ObservableObject, @unchecked Sendable {
             return 8453
         case .gnosis:
             return 100
+        case .quintium:
+            return QuintiumSettings.network.chainId
         default:
             return 1 // Default to Ethereum
         }
@@ -1613,6 +1636,48 @@ extension APIService {
         var result = Decimal()
         NSDecimalDivide(&result, &numerator, &denominator, .plain)
         return result
+    }
+
+    // MARK: - Quintium history
+
+    /// Native transaction history from the Quintium node's own index
+    /// (`aether_addressTxs`). Returns nothing while no node is set.
+    func fetchQuintiumTransactions(address: String, normalizedAddress: String) async throws -> [Transaction] {
+        let rpcUrl = QuintiumSettings.rpcUrl
+        guard QuintiumSettings.isValidURL(rpcUrl) else { return [] }
+
+        let items = try await QuintiumNodeClient.addressTransactions(address: address, rpcUrl: rpcUrl)
+        let explorer = QuintiumSettings.explorerUrl
+        let decimals = QuintiumNetwork.decimals
+        let divisor = powerOfTen(decimals)
+        let symbol = BlockchainType.quintium.nativeToken
+
+        return items.map { item -> Transaction in
+            let value = NSDecimalNumber(decimal: decimalDividing(decimalFromHex(item.value), by: divisor)).doubleValue
+            let gasUsed = decimalFromHex(item.gasUsed ?? "0x0")
+            let gasPrice = decimalFromHex(item.gasPrice ?? "0x0")
+            let fee = NSDecimalNumber(decimal: decimalDividing(gasUsed * gasPrice, by: divisor)).doubleValue
+            let isOutgoing = item.from.lowercased() == normalizedAddress
+            let status: Transaction.TransactionStatus = item.status == 0 ? .failed : .confirmed
+            let timestamp = item.timestamp.map { Date(timeIntervalSince1970: TimeInterval($0)) } ?? Date()
+            let blockNumber = item.blockNumber.flatMap { Int($0.dropHexPrefix, radix: 16) }.map { String($0) }
+
+            return Transaction(
+                hash: item.hash,
+                from: item.from,
+                to: item.to ?? "",
+                amount: value,
+                token: symbol,
+                type: isOutgoing ? .send : .receive,
+                status: status,
+                timestamp: timestamp,
+                gasUsed: NSDecimalNumber(decimal: gasUsed).doubleValue,
+                gasFee: isOutgoing ? fee : 0,
+                blockNumber: blockNumber,
+                explorerUrl: QuintiumSettings.isValidURL(explorer) ? URL(string: "\(explorer)/tx/\(item.hash)") : nil,
+                blockchain: .quintium
+            )
+        }
     }
 
 }

@@ -93,6 +93,8 @@ struct BlockchainIconHelper {
                 PolygonIconMark(size: size)
             } else if blockchain == .solana {
                 SolanaIconMark(size: size)
+            } else if blockchain == .quintium {
+                QuintiumIconMark(size: size)
             } else {
                 // Fallback to colored circle with symbol
                 ZStack {
@@ -146,6 +148,8 @@ struct BlockchainIconHelper {
             return Color(red: 0.08, green: 0.49, blue: 0.96)
         case .solana:
             return Color(red: 0.66, green: 0.36, blue: 1.0)
+        case .quintium:
+            return QuintiumIconMark.gold
         }
     }
     
@@ -187,6 +191,8 @@ struct BlockchainIconHelper {
             return "F"
         case .solana:
             return "◎"
+        case .quintium:
+            return "Q"
         }
     }
 }

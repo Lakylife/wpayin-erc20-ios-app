@@ -170,7 +170,9 @@ class GasPriceService {
     // MARK: - Network Fetching
 
     private func fetchBaseFee(rpcUrl: String) async throws -> Int {
-        let url = URL(string: rpcUrl)!
+        guard let url = URL(string: rpcUrl), url.host != nil else {
+            throw URLError(.badURL)
+        }
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
@@ -198,7 +200,9 @@ class GasPriceService {
     }
 
     private func fetchPriorityFee(rpcUrl: String) async throws -> Int {
-        let url = URL(string: rpcUrl)!
+        guard let url = URL(string: rpcUrl), url.host != nil else {
+            throw URLError(.badURL)
+        }
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
@@ -224,7 +228,9 @@ class GasPriceService {
     }
 
     private func fetchLegacyGasPrice(rpcUrl: String) async throws -> Int {
-        let url = URL(string: rpcUrl)!
+        guard let url = URL(string: rpcUrl), url.host != nil else {
+            throw URLError(.badURL)
+        }
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")

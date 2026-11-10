@@ -106,8 +106,12 @@ struct NetworkManagementView: View {
                     .environmentObject(networkManager)
             }
             .sheet(item: $selectedNetwork) { network in
-                EditNetworkView(network: network)
-                    .environmentObject(networkManager)
+                if network.blockchain == .quintium {
+                    QuintiumSettingsView()
+                } else {
+                    EditNetworkView(network: network)
+                        .environmentObject(networkManager)
+                }
             }
             .onAppear {
                 syncWalletSelectionFromEnabledNetworks()

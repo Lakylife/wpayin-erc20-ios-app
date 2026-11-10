@@ -60,6 +60,7 @@ enum BlockchainType: String, CaseIterable, Codable, Sendable {
     case gnosis = "gnosis"
     case zkSync = "zksync"
     case fantom = "fantom"
+    case quintium = "quintium"
 
     var name: String {
         switch self {
@@ -99,6 +100,8 @@ enum BlockchainType: String, CaseIterable, Codable, Sendable {
             return "zkSync Era"
         case .fantom:
             return "Fantom"
+        case .quintium:
+            return QuintiumSettings.network.displayName
         }
     }
 
@@ -140,12 +143,14 @@ enum BlockchainType: String, CaseIterable, Codable, Sendable {
             return "ETH"
         case .fantom:
             return "FTM"
+        case .quintium:
+            return QuintiumSettings.network.symbol  // QU, tQU on testnet
         }
     }
 
     var addressFormat: String {
         switch self {
-        case .ethereum, .polygon, .bsc, .arbitrum, .optimism, .avalanche, .base, .gnosis, .zkSync, .fantom:
+        case .ethereum, .polygon, .bsc, .arbitrum, .optimism, .avalanche, .base, .gnosis, .zkSync, .fantom, .quintium:
             return "0x"
         case .bitcoin:
             return "bc1" // Bech32 (BIP84)
@@ -176,6 +181,8 @@ enum BlockchainType: String, CaseIterable, Codable, Sendable {
             return 18
         case .base:
             return 18
+        case .quintium:
+            return QuintiumNetwork.decimals
         default:
             return 18
         }
@@ -219,12 +226,14 @@ enum BlockchainType: String, CaseIterable, Codable, Sendable {
             return "zksync"
         case .fantom:
             return "fantom"
+        case .quintium:
+            return nil  // not listed on CoinGecko yet, so no fiat price
         }
     }
 
     var isEVM: Bool {
         switch self {
-        case .ethereum, .polygon, .bsc, .arbitrum, .optimism, .avalanche, .base, .gnosis, .zkSync, .fantom:
+        case .ethereum, .polygon, .bsc, .arbitrum, .optimism, .avalanche, .base, .gnosis, .zkSync, .fantom, .quintium:
             return true
         case .bitcoin, .litecoin, .bitcoinCash, .eCash, .dash, .zcash, .monero, .solana:
             return false
@@ -269,6 +278,8 @@ enum BlockchainType: String, CaseIterable, Codable, Sendable {
             return .ethereum // zkSync uses Ethereum coin type
         case .fantom:
             return .fantom
+        case .quintium:
+            return .ethereum // Quintium uses Ethereum keys and addresses (m/44'/60')
         }
     }
 }
@@ -358,7 +369,7 @@ struct Token: Identifiable, Codable, Sendable {
                 return .bip84  // Native SegWit
             case .litecoin, .bitcoinCash, .eCash, .dash, .zcash, .monero:
                 return .native
-            case .ethereum, .polygon, .bsc, .arbitrum, .optimism, .avalanche, .base, .gnosis, .zkSync, .fantom:
+            case .ethereum, .polygon, .bsc, .arbitrum, .optimism, .avalanche, .base, .gnosis, .zkSync, .fantom, .quintium:
                 return .native
             case .solana:
                 return .native
@@ -366,7 +377,7 @@ struct Token: Identifiable, Codable, Sendable {
         } else {
             // Token (not native)
             switch blockchain {
-            case .ethereum, .polygon, .arbitrum, .optimism, .avalanche, .base, .gnosis, .zkSync, .fantom:
+            case .ethereum, .polygon, .arbitrum, .optimism, .avalanche, .base, .gnosis, .zkSync, .fantom, .quintium:
                 return .erc20
             case .bsc:
                 return .bep20
@@ -466,6 +477,8 @@ extension BlockchainType {
             self = .zkSync
         case .fantom:
             self = .fantom
+        case .quintium:
+            self = .quintium
         }
     }
 }

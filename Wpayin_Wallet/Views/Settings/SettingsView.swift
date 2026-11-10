@@ -42,6 +42,7 @@ private enum SettingsSheet: String, Identifiable {
     case contactSupport
     case appearance
     case walletConnect
+    case quintium
 
     var id: String { rawValue }
 }
@@ -160,6 +161,15 @@ struct SettingsView: View {
                                 title: L10n.Settings.manageNetworks.localized,
                                 subtitle: L10n.Networks.networkCount.localized(walletManager.selectedBlockchains.count),
                                 action: { activeSheet = .networks }
+                            )
+
+                            SettingsRow(
+                                icon: "pentagon.fill",
+                                title: "Quintium",
+                                subtitle: QuintiumSettings.isConfigured
+                                    ? QuintiumSettings.network.displayName
+                                    : "Set up a node for your Quintium wallet".localized,
+                                action: { activeSheet = .quintium }
                             )
 
                             SettingsRow(
@@ -283,6 +293,8 @@ struct SettingsView: View {
                 .environmentObject(settingsManager)
         case .walletConnect:
             WalletConnectView()
+        case .quintium:
+            QuintiumSettingsView()
         }
     }
 

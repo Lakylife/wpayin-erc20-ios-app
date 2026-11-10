@@ -180,7 +180,7 @@ final class WalletManager: ObservableObject {
             return Token(
                 contractAddress: primaryToken.contractAddress,
                 name: primaryToken.name,
-                symbol: symbol,
+                symbol: primaryToken.symbol,  // keep the original case (tQU, not TQU)
                 decimals: primaryToken.decimals,
                 balance: totalBalance,
                 price: unifiedPrice,
@@ -362,6 +362,7 @@ final class WalletManager: ObservableObject {
         loadNFTVisibilityPreferences()
         loadSelectedBlockchains()  // NEW: Load selected blockchains
         checkOnboardingStatus()
+        observeQuintiumSettings()
 #if DEBUG
         if isScreenshotFixture {
             configureScreenshotFixture()
@@ -408,7 +409,7 @@ final class WalletManager: ObservableObject {
         isInitializing = false
         isLoading = false
         walletAddress = evmAddress
-        selectedBlockchains = [.ethereum, .base, .bitcoin, .polygon]
+        selectedBlockchains = [.ethereum, .base, .bitcoin, .polygon, .quintium]
 
         chainAccounts = Dictionary(uniqueKeysWithValues: availableBlockchains.compactMap { config in
             guard config.network == .mainnet,
@@ -483,6 +484,18 @@ final class WalletManager: ObservableObject {
                 blockchain: .bitcoin,
                 isNative: true,
                 receivingAddress: bitcoinAddress
+            ),
+            Token(
+                contractAddress: nil,
+                name: BlockchainType.quintium.name,
+                symbol: BlockchainType.quintium.nativeToken,
+                decimals: QuintiumNetwork.decimals,
+                balance: 0,
+                price: 0,
+                iconUrl: nil,
+                blockchain: .quintium,
+                isNative: true,
+                receivingAddress: evmAddress
             )
         ]
 
@@ -768,6 +781,8 @@ final class WalletManager: ObservableObject {
             return .bsc
         case "AVAX":
             return .avalanche
+        case "QU", "TQU":
+            return .quintium
         default:
             return .ethereum // Default to Ethereum for unknown tokens
         }
@@ -1546,10 +1561,53 @@ final class WalletManager: ObservableObject {
         savedAddresses = addresses
     }
 
+    // MARK: - Quintium
+
+    private func observeQuintiumSettings() {
+        NotificationCenter.default.publisher(for: QuintiumSettings.didChangeNotification)
+            .sink { [weak self] _ in
+                Task { @MainActor [weak self] in
+                    self?.applyQuintiumSettings()
+                }
+            }
+            .store(in: &cancellables)
+    }
+
+    /// Network or node changed in Settings → Quintium: rebuild the Quintium slot,
+    /// drop balances and history of the previous network and reload.
+    @MainActor
+    private func applyQuintiumSettings() {
+        let config = BlockchainConfig.quintium()
+        availableBlockchains = availableBlockchains.filter { $0.platform != .quintium } + [config]
+        if let data = try? JSONEncoder().encode(availableBlockchains) {
+            UserDefaults.standard.set(data, forKey: blockchainsStorageKey)
+        }
+
+        if let account = chainAccounts[.quintium] {
+            chainAccounts[.quintium] = ChainAccount(
+                config: config,
+                tokenType: .quintium,
+                coinType: account.coinType,
+                address: account.address
+            )
+        }
+
+        tokens.removeAll { $0.blockchain == .quintium }
+        transactions.removeAll { $0.blockchain == .quintium }
+        tokens = mergedSupportedTokens(with: tokens)
+
+        Task { await refreshWalletData() }
+    }
+
     private func setupDefaultBlockchains() {
         if let data = UserDefaults.standard.data(forKey: blockchainsStorageKey),
            let stored = try? JSONDecoder().decode([BlockchainConfig].self, from: data) {
-            availableBlockchains = stored
+            // Installs from before Quintium support have no Quintium slot, and a
+            // stored slot can hold an old node URL or chain ID: rebuild it.
+            availableBlockchains = stored.filter { $0.platform != .quintium } + [BlockchainConfig.quintium()]
+            if let updated = try? JSONEncoder().encode(availableBlockchains) {
+                UserDefaults.standard.set(updated, forKey: blockchainsStorageKey)
+            }
             return
         }
 

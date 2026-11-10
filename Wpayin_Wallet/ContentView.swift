@@ -87,7 +87,13 @@ struct ContentView: View {
 
             // Keep the branded launch experience visible long enough to feel
             // intentional, even when the cached wallet restores instantly.
-            let minimumLaunchDuration: TimeInterval = 0.9
+            var minimumLaunchDuration: TimeInterval = 0.9
+#if DEBUG
+            // Documentation screenshots only: keep the launch screen on screen.
+            if ProcessInfo.processInfo.arguments.contains("--ui-screenshot-hold-launch") {
+                minimumLaunchDuration = 30
+            }
+#endif
             let remaining = minimumLaunchDuration - Date().timeIntervalSince(launchStartedAt)
             if remaining > 0 {
                 try? await Task.sleep(nanoseconds: UInt64(remaining * 1_000_000_000))

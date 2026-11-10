@@ -94,6 +94,18 @@ iOSInjectionProject/
 *.xcconfig
 .env
 .env.*
+# Signing material and private keys
+*.p12
+*.p8
+*.cer
+*.mobileprovision
+*.pem
+*.key
+*.jks
+*.keystore
+keystore.properties
+GoogleService-Info.plist
+*.log
 *.example
 *.sample
 *.template
@@ -111,6 +123,11 @@ CODEX.md
 *.backup
 *.xcresult
 
+# Internal release notes and handoffs (not for the public repo)
+docs/RELEASE_HANDOFF_*.md
+docs/REVIEW_FIXES_*.md
+docs/GITHUB_TEXTY_*.txt
+
 # Public app screenshots used in README
 screenshots/*
 !screenshots/20260712_v1.1.8/
@@ -120,6 +137,8 @@ screenshots/*
 !screenshots/20260712_v1.1.8/04_swap.png
 !screenshots/20260712_v1.1.8/05_activity.png
 !screenshots/20260712_v1.1.8/06_settings.png
+!screenshots/20261110_v1.2.0/
+!screenshots/20261110_v1.2.0/*.png
 
 # macOS
 .DS_Store

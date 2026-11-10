@@ -175,6 +175,18 @@ private struct AppReleaseInfo: Identifiable {
 
     static let releases: [AppReleaseInfo] = [
         AppReleaseInfo(
+            version: "1.2.0",
+            date: "2026-11-10",
+            summary: "Added the Quintium network with your own node, balance, sending and history.",
+            changes: [
+                .init(icon: "pentagon.fill", text: "Added Quintium (QU, testnet tQU) with balance, sending and transaction history from the node."),
+                .init(icon: "server.rack", text: "Added Settings → Quintium to choose the network, set your node and test the connection."),
+                .init(icon: "checkmark.shield.fill", text: "Quintium never falls back to an Ethereum node, and an empty RPC address no longer crashes the app."),
+                .init(icon: "globe", text: "Added the QU/tQU logo and English and Czech translations.")
+            ],
+            isCurrent: true
+        ),
+        AppReleaseInfo(
             version: "1.1.10",
             date: "2026-10-25",
             summary: "Improved wallet security, account handling and transaction review.",
@@ -184,7 +196,7 @@ private struct AppReleaseInfo: Identifiable {
                 .init(icon: "lock.fill", text: "Corrected Auto-Lock timing and active-account private-key export."),
                 .init(icon: "arrow.clockwise", text: "Prevented delayed network responses from changing another wallet.")
             ],
-            isCurrent: true
+            isCurrent: false
         ),
         AppReleaseInfo(
             version: "1.1.9",

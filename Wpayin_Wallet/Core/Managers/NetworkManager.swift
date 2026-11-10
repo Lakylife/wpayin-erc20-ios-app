@@ -202,6 +202,23 @@ class NetworkManager {
                 isBitcoin: false
             )
 
+        case .quintium:
+            // Own chain. The node URL comes from QuintiumSettings: there is no
+            // public RPC yet. Never fall through to the Ethereum default below,
+            // that would sign with chain ID 1 and broadcast to Ethereum.
+            let network = QuintiumSettings.network
+            let rpcUrl = QuintiumSettings.rpcUrl(for: network)
+            return NetworkConfiguration(
+                blockchain: .quintium,
+                chainId: network.chainId,
+                rpcSources: rpcUrl.isEmpty ? [] : [RPCSource(name: "Quintium node", urls: [rpcUrl])],
+                explorerUrl: QuintiumSettings.explorerUrl(for: network),
+                supportsEIP1559: true,  // London base fee (min 1 gwei); the node also accepts type 0 and 1
+                nativeSymbol: network.symbol,
+                nativeDecimals: QuintiumNetwork.decimals,
+                isBitcoin: false
+            )
+
         default:
             // Default fallback
             return NetworkConfiguration(

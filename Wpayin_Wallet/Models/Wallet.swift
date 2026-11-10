@@ -191,6 +191,8 @@ struct DerivationPaths {
             return "m/44'/60'/0'/0/\(accountIndex)"  // Same as Ethereum
         case .fantom:
             return "m/44'/60'/0'/0/\(accountIndex)"  // Same as Ethereum
+        case .quintium:
+            return "\(QuintiumNetwork.derivationPathPrefix)/\(accountIndex)"  // Same as Ethereum and the Quintium wallet
         }
     }
 }

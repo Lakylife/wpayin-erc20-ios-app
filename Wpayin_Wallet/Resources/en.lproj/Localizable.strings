@@ -1134,3 +1134,31 @@
 "Secret clipboard copies stay on this device and expire after 30 seconds." = "Secret clipboard copies stay on this device and expire after 30 seconds.";
 "Corrected Auto-Lock timing and active-account private-key export." = "Corrected Auto-Lock timing and active-account private-key export.";
 "Prevented delayed network responses from changing another wallet." = "Prevented delayed network responses from changing another wallet.";
+
+// MARK: - Quintium (QU)
+"Address of a Quintium node with JSON-RPC (default port %@). There is no public node yet, so enter your own." = "Address of a Quintium node with JSON-RPC (default port %@). There is no public node yet, so enter your own.";
+"Address path" = "Address path";
+"Block time" = "Block time";
+"Connected. Chain ID %@, block %@." = "Connected. Chain ID %@, block %@.";
+"Currency" = "Currency";
+"Empty answer from the node" = "Empty answer from the node";
+"Enter a valid node URL starting with https:// or http://" = "Enter a valid node URL starting with https:// or http://";
+"Mainnet starts on 1 January 2027. Until then use the testnet." = "Mainnet starts on 1 January 2027. Until then use the testnet.";
+"Mainnet" = "Mainnet";
+"Network parameters" = "Network parameters";
+"No node is set for this network. Add a node URL in Settings." = "No node is set for this network. Add a node URL in Settings.";
+"Node" = "Node";
+"Our own Proof-of-Work blockchain, compatible with Ethereum. Your Quintium address is the same as your Ethereum address." = "Our own Proof-of-Work blockchain, compatible with Ethereum. Your Quintium address is the same as your Ethereum address.";
+"Saved" = "Saved";
+"Set up a node for your Quintium wallet" = "Set up a node for your Quintium wallet";
+"Test connection" = "Test connection";
+"The node belongs to another network (chain ID %@, expected %@)" = "The node belongs to another network (chain ID %@, expected %@)";
+"The node did not answer (HTTP error)" = "The node did not answer (HTTP error)";
+"decimals" = "decimals";
+
+/* Version history 1.2.0 */
+"Added the Quintium network with your own node, balance, sending and history." = "Added the Quintium network with your own node, balance, sending and history.";
+"Added Quintium (QU, testnet tQU) with balance, sending and transaction history from the node." = "Added Quintium (QU, testnet tQU) with balance, sending and transaction history from the node.";
+"Added Settings → Quintium to choose the network, set your node and test the connection." = "Added Settings → Quintium to choose the network, set your node and test the connection.";
+"Quintium never falls back to an Ethereum node, and an empty RPC address no longer crashes the app." = "Quintium never falls back to an Ethereum node, and an empty RPC address no longer crashes the app.";
+"Added the QU/tQU logo and English and Czech translations." = "Added the QU/tQU logo and English and Czech translations.";
