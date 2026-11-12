@@ -164,12 +164,15 @@ struct ExpandableTokenCard: View {
     }
 
     private var networksForToken: [BlockchainType] {
-        let allTokensForSymbol = walletManager.visibleTokens.filter { $0.symbol == token.symbol }
+        // Same rule as WalletManager.groupedTokens: symbols group case-insensitively.
+        let allTokensForSymbol = walletManager.visibleTokens.filter {
+            $0.symbol.caseInsensitiveCompare(token.symbol) == .orderedSame
+        }
         return Array(Set(allTokensForSymbol.map { $0.blockchain })).sorted { $0.name < $1.name }
     }
 
     private var allNetworkTokens: [Token] {
-        walletManager.visibleTokens.filter { $0.symbol == token.symbol }
+        walletManager.visibleTokens.filter { $0.symbol.caseInsensitiveCompare(token.symbol) == .orderedSame }
     }
 
     private var totalBalanceAcrossNetworks: Double {
@@ -189,6 +192,7 @@ struct ExpandableTokenCard: View {
         case .polygon: return 4
         case .bsc: return 5
         case .avalanche: return 6
+        case .quintium: return 7
         default: return 999
         }
     }

@@ -110,7 +110,7 @@ class SwapService {
     private let transactionService = TransactionService.shared
 
     // Uniswap V2 Router addresses for different chains
-    private let routerAddresses: [BlockchainType: String] = [
+    private let fixedRouterAddresses: [BlockchainType: String] = [
         .ethereum: "0x7a250d5630B4cF539739dF2C5dAcb4c659F2488D", // Uniswap V2 Router
         .bsc: "0x10ED43C718714eb63d5aA57B78B54704E256024E", // PancakeSwap Router
         .polygon: "0xa5E0829CaCEd8fFDD4De3c43696c57F7D7A678ff", // QuickSwap Router
@@ -120,7 +120,7 @@ class SwapService {
     ]
 
     // Wrapped native token addresses
-    private let wrappedNativeAddresses: [BlockchainType: String] = [
+    private let fixedWrappedNativeAddresses: [BlockchainType: String] = [
         .ethereum: "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2", // WETH
         .bsc: "0xbb4CdB9CBd36B01bD1cBaEBF2De08d9173bc095c", // WBNB
         .polygon: "0x0d500B1d8E8eF31E21C99d1Db9A6444d3ADf1270", // WMATIC
@@ -128,6 +128,26 @@ class SwapService {
         .optimism: "0x4200000000000000000000000000000000000006", // WETH
         .base: "0x4200000000000000000000000000000000000006" // WETH
     ]
+
+    /// Fixed routers plus Quintium Swap, which follows the active Quintium network.
+    private var routerAddresses: [BlockchainType: String] {
+        var routers = fixedRouterAddresses
+        routers[.quintium] = QuintiumSettings.network.swapRouterAddress
+        return routers
+    }
+
+    private var wrappedNativeAddresses: [BlockchainType: String] {
+        var wrapped = fixedWrappedNativeAddresses
+        if QuintiumSettings.network.swapRouterAddress != nil {
+            wrapped[.quintium] = QuintiumNetwork.wrappedNativeAddress
+        }
+        return wrapped
+    }
+
+    /// Chains with a working swap router right now.
+    static var swapBlockchains: Set<BlockchainType> {
+        Set(shared.routerAddresses.keys)
+    }
 
     private init() {}
 
@@ -612,8 +632,14 @@ class SwapService {
     }
 
     private func buildSwapPath(from: String, to: String, blockchain: BlockchainType) -> [String] {
-        // Simple direct path for now
-        // In production, you'd use a routing algorithm to find best path
+        // Quintium Swap pairs every token with the native coin (WAET), so a
+        // token ↔ token trade goes through WAET, like the Quintium Explorer does.
+        if blockchain == .quintium, let hub = wrappedNativeAddresses[.quintium],
+           from.caseInsensitiveCompare(hub) != .orderedSame,
+           to.caseInsensitiveCompare(hub) != .orderedSame {
+            return [from, hub, to]
+        }
+        // Simple direct path for the other chains
         return [from, to]
     }
 
@@ -639,8 +665,12 @@ class SwapService {
         var head: [Data] = []
         let selector: String
 
+        // Quintium's SwapRouter names the native legs "Native" instead of "ETH":
+        // swapExactNativeForTokens — 0xc075a591, swapExactTokensForNative — 0x029e384f.
+        let quintium = fromToken.blockchain == .quintium
+
         if fromToken.isNative {
-            selector = "7ff36ab5"
+            selector = quintium ? "c075a591" : "7ff36ab5"
             head = [
                 abiUInt(amountOutMinWei),
                 abiUInt(BigUInt(4 * 32)), // offset of path array (4 head slots)
@@ -648,7 +678,7 @@ class SwapService {
                 abiUInt(deadlineTimestamp)
             ]
         } else {
-            selector = toToken.isNative ? "18cbafe5" : "38ed1739"
+            selector = toToken.isNative ? (quintium ? "029e384f" : "18cbafe5") : "38ed1739"
             head = [
                 abiUInt(amountInWei),
                 abiUInt(amountOutMinWei),

@@ -77,6 +77,29 @@ enum QuintiumNetwork: String, CaseIterable, Codable, Identifiable, Sendable {
     /// RPC methods of the Quintium node that return the transaction history
     /// of an address (`aether_*` is the original name, `quintium_*` its twin).
     static let addressTransactionsMethod = "aether_addressTxs"
+
+    // MARK: Quintium Swap
+
+    /// WAET, the wrapped native coin. A genesis predeploy, so the address is the
+    /// same on every Quintium network.
+    static let wrappedNativeAddress = "0xae0000000000000000000000000000000000000a"
+
+    /// Quintium Swap router (`SwapRouter.sol`, Uniswap V2 style) from
+    /// `packages/explorer/public/deployments.json`. Mainnet has none yet.
+    var swapRouterAddress: String? {
+        switch self {
+        case .testnet: return "0xfee495049060F02Fc9Ef91e179fF48E8a7471E95"
+        case .mainnet: return nil
+        }
+    }
+
+    /// Tokens offered in the wallet and in Swap without the user adding them.
+    /// Intentionally empty: tokens on Quintium are created by users, who add
+    /// them to the wallet themselves (custom token). Quintium Swap still works
+    /// for any token that has a pool against tQU/QU.
+    var swapTokens: [(symbol: String, name: String, contractAddress: String, decimals: Int)] {
+        []
+    }
 }
 
 // MARK: - User settings
@@ -124,11 +147,34 @@ enum QuintiumSettings {
 
     // MARK: Explorer
 
+    /// Explorer the wallet links to. Without an explorer of its own the node's
+    /// built-in Quintium Explorer is used: the node serves it on the same
+    /// address and port as JSON-RPC (/tx/…, /address/…, /network).
     static func explorerUrl(for network: QuintiumNetwork) -> String {
+        if let custom = customExplorerUrl(for: network) { return custom }
+        return explorerOrigin(of: rpcUrl(for: network)) ?? ""
+    }
+
+    /// Explorer address the user or the build set explicitly, nil when automatic.
+    static func customExplorerUrl(for network: QuintiumNetwork) -> String? {
         if let saved = cleaned(defaults.string(forKey: explorerKey(network))) {
             return saved
         }
-        return buildValue(network == .mainnet ? "QUINTIUM_EXPLORER_URL" : "QUINTIUM_TESTNET_EXPLORER_URL") ?? ""
+        return buildValue(network == .mainnet ? "QUINTIUM_EXPLORER_URL" : "QUINTIUM_TESTNET_EXPLORER_URL")
+    }
+
+    /// "http://203.0.113.7:8546/rpc" → "http://203.0.113.7:8546"
+    static func explorerOrigin(of rpcUrl: String) -> String? {
+        guard isValidURL(rpcUrl),
+              var components = URLComponents(string: rpcUrl.trimmingCharacters(in: .whitespacesAndNewlines)) else {
+            return nil
+        }
+        components.path = ""
+        components.query = nil
+        components.fragment = nil
+        components.user = nil
+        components.password = nil
+        return components.string
     }
 
     static func setExplorerUrl(_ value: String, for network: QuintiumNetwork) {

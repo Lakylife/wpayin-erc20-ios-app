@@ -180,6 +180,8 @@ struct AssetDetailView: View {
     }
 
     private func loadAssetData() {
+        // No market data exists for Quintium coins yet.
+        guard token.blockchain != .quintium else { return }
         let coinId = APIService.getCoinId(for: token.symbol)
         Logger.log("🚀 Loading asset data for: \(token.symbol) -> \(coinId)")
 

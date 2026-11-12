@@ -14,7 +14,7 @@ struct QuintiumSettingsView: View {
 
     @State private var network: QuintiumNetwork = QuintiumSettings.network
     @State private var rpcUrl: String = QuintiumSettings.rpcUrl(for: QuintiumSettings.network)
-    @State private var explorerUrl: String = QuintiumSettings.explorerUrl(for: QuintiumSettings.network)
+    @State private var explorerUrl: String = QuintiumSettings.customExplorerUrl(for: QuintiumSettings.network) ?? ""
     @State private var checkState: CheckState = .idle
     @State private var savedMessage: String?
 
@@ -52,7 +52,7 @@ struct QuintiumSettingsView: View {
             }
             .onChange(of: network) { newValue in
                 rpcUrl = QuintiumSettings.rpcUrl(for: newValue)
-                explorerUrl = QuintiumSettings.explorerUrl(for: newValue)
+                explorerUrl = QuintiumSettings.customExplorerUrl(for: newValue) ?? ""
                 checkState = .idle
                 savedMessage = nil
             }
@@ -107,12 +107,20 @@ struct QuintiumSettingsView: View {
             Text("Address of a Quintium node with JSON-RPC (default port %@). There is no public node yet, so enter your own.".localized("\(network.defaultRpcPort)"))
                 .font(.system(size: 12))
                 .foregroundColor(WpayinColors.textTertiary)
+            Text("At home use the local address, for example http://192.168.1.20:%@. Away from home use the public address of your connection, for example http://203.0.113.7:%@. The Quintium app shows both under Network → Connect to another computer.".localized("\(network.defaultRpcPort)", "\(network.defaultRpcPort)"))
+                .font(.system(size: 12))
+                .foregroundColor(WpayinColors.textTertiary)
+                .fixedSize(horizontal: false, vertical: true)
 
             field(
                 title: "Block Explorer URL".localized,
                 text: $explorerUrl,
-                placeholder: "https://explorer.example.com"
+                placeholder: QuintiumSettings.explorerOrigin(of: rpcUrl) ?? "Automatic".localized
             )
+            Text("Leave empty for automatic: the explorer built into the node, on the same address as RPC.".localized)
+                .font(.system(size: 12))
+                .foregroundColor(WpayinColors.textTertiary)
+                .fixedSize(horizontal: false, vertical: true)
 
             Button(action: checkNode) {
                 HStack(spacing: 8) {
@@ -255,5 +263,25 @@ struct QuintiumSettingsView: View {
                 .fixedSize(horizontal: false, vertical: true)
         }
         .foregroundColor(color)
+    }
+}
+
+/// Shown in Bridge and P2P while those features have no Quintium contracts yet,
+/// so Quintium is visible there without pretending a route exists.
+struct QuintiumUnavailableNote: View {
+    let text: String
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 10) {
+            QuintiumIconMark(size: 22)
+            Text(text)
+                .font(.system(size: 13))
+                .foregroundColor(WpayinColors.textSecondary)
+                .fixedSize(horizontal: false, vertical: true)
+            Spacer(minLength: 0)
+        }
+        .padding(12)
+        .background(RoundedRectangle(cornerRadius: 14).fill(WpayinColors.surface))
+        .overlay(RoundedRectangle(cornerRadius: 14).stroke(QuintiumIconMark.gold.opacity(0.35), lineWidth: 1))
     }
 }

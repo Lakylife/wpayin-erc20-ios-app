@@ -761,9 +761,12 @@ final class APIService: ObservableObject, @unchecked Sendable {
         // Convert from Wei to token units using decimals
         let balance = balanceWei / pow(10, Double(decimals))
 
-        // Fetch price from CoinGecko
+        // Fetch price from CoinGecko. Quintium test tokens have no market:
+        // "tBTC" would otherwise match the unrelated CoinGecko coin "tbtc".
         let coingeckoId = APIService.getCoinId(for: symbol)
-        let priceAndLogos = (try? await fetchPricesAndLogos(for: [coingeckoId])) ?? [:]
+        let priceAndLogos = config.blockchainType == .quintium
+            ? [:]
+            : ((try? await fetchPricesAndLogos(for: [coingeckoId])) ?? [:])
         let priceInfo = priceAndLogos[coingeckoId]
         let price = priceInfo?.price ?? 0
         let iconUrl = priceInfo?.imageUrl

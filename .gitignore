@@ -139,6 +139,8 @@ screenshots/*
 !screenshots/20260712_v1.1.8/06_settings.png
 !screenshots/20261110_v1.2.0/
 !screenshots/20261110_v1.2.0/*.png
+!screenshots/20261112_v1.3.0/
+!screenshots/20261112_v1.3.0/*.png
 
 # macOS
 .DS_Store

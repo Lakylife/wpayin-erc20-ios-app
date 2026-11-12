@@ -1,6 +1,6 @@
-# Wpayin Wallet 1.2.0
+# Wpayin Wallet 1.3.0
 
-Release details and verification status: [1.2.0 release notes](RELEASE_NOTES_v1.2.0.md).
+Release details and verification status: [1.3.0 release notes](RELEASE_NOTES_v1.3.0.md).
 
 Wpayin Wallet is a non-custodial iOS wallet built with SwiftUI and Trust
 Wallet Core. It supports Bitcoin, Ethereum, Solana, Quintium, EVM-compatible networks,
@@ -17,24 +17,39 @@ work; the existing iOS target is unchanged by the Android project.
 > recovery phrase and private keys.
 
 <p align="center">
-  <img src="./screenshots/20261110_v1.2.0/01_launch.png" width="220" alt="Wpayin Wallet launch">
-  <img src="./screenshots/20261110_v1.2.0/02_welcome.png" width="220" alt="Wpayin Wallet welcome">
-  <img src="./screenshots/20261110_v1.2.0/03_home.png" width="220" alt="Wpayin Wallet home">
+  <img src="./screenshots/20261112_v1.3.0/01_home_tqu.png" width="220" alt="Wpayin Wallet Home with tQU">
+  <img src="./screenshots/20261112_v1.3.0/02_all_assets_quintium.png" width="220" alt="Wpayin Wallet All Assets filtered to Quintium">
+  <img src="./screenshots/20261112_v1.3.0/03_swap_networks.png" width="220" alt="Wpayin Wallet Swap networks with Quintium">
 </p>
 <p align="center">
-  <img src="./screenshots/20261110_v1.2.0/04_swap.png" width="220" alt="Wpayin Wallet swap">
-  <img src="./screenshots/20261110_v1.2.0/05_activity.png" width="220" alt="Wpayin Wallet activity">
-  <img src="./screenshots/20261110_v1.2.0/06_settings.png" width="220" alt="Wpayin Wallet settings">
+  <img src="./screenshots/20261112_v1.3.0/04_swap_quintium_testnet.png" width="220" alt="Wpayin Wallet Swap on the Quintium testnet">
+  <img src="./screenshots/20261112_v1.3.0/05_bridge_quintium_note.png" width="220" alt="Wpayin Wallet Bridge note for Quintium">
+  <img src="./screenshots/20261112_v1.3.0/06_p2p_quintium_note.png" width="220" alt="Wpayin Wallet P2P note for Quintium">
 </p>
 <p align="center">
-  <img src="./screenshots/20261110_v1.2.0/07_quintium.png" width="220" alt="Wpayin Wallet Quintium settings">
+  <img src="./screenshots/20261112_v1.3.0/07_settings_quintium.png" width="220" alt="Wpayin Wallet Settings → Quintium">
 </p>
 
 Screenshots are taken in the iOS Simulator from a credential-free DEBUG
 fixture (`--ui-screenshot-mode`): no recovery phrase, private key or real
 balance is shown.
 
-## Version 1.2.0
+## Version 1.3.0
+
+- Added **Quintium Swap** on the Quintium testnet. Swaps go through the
+  Quintium router (`0xfee495049060F02Fc9Ef91e179fF48E8a7471E95`) with wrapped
+  tQU (WAET); the native coin is selected first.
+- Added Quintium to the **All Assets** network filter and to the Swap network
+  list; tQU is shown as one grouped asset with its own icon.
+- The block explorer address is filled in automatically from the node's RPC
+  address (the explorer built into the node).
+- **Settings → Quintium** explains how to reach your node away from home
+  (local address at home, public IP address of your connection elsewhere).
+- Bridge and P2P show a note that they are not available on Quintium yet.
+- The testnet was restarted (testnet-4). The app ships no preset Quintium
+  tokens; add your own with **Add Token**.
+
+## Previous version 1.2.0
 
 - Added the Quintium network (QU on mainnet, tQU on testnet): balance, sending
   and transaction history read from the node's own index (`aether_addressTxs`).
@@ -47,6 +62,8 @@ balance is shown.
 - An empty or invalid RPC address now shows an error instead of crashing.
 - Home asset list keeps the original token symbol case (tQU) and the correct
   network icon.
+
+See [RELEASE_NOTES_v1.2.0.md](RELEASE_NOTES_v1.2.0.md) for details.
 
 ## Quintium network
 
@@ -66,7 +83,7 @@ the same as your Ethereum address.
 - The testnet is running now; mainnet starts on 1 January 2027 (00:00 UTC).
 - QU has no market price yet, so fiat values for Quintium show $0.00.
 
-## Previous version 1.1.10
+## Version 1.1.10
 
 - Added fresh device authentication for recovery-phrase and private-key export.
 - Limited secret clipboard copies to this device with a 30-second expiry.

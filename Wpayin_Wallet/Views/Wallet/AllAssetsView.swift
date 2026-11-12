@@ -28,7 +28,11 @@ struct AllAssetsView: View {
             filters.append(.native)
         }
 
-        let tokenBlockchains = Array(Set(allAssets.filter { !$0.isNative }.map(\.blockchain)))
+        // One chip per network that holds tokens, plus Quintium, whose coin is
+        // native-only on mainnet. The chip shows everything on that network.
+        let tokenBlockchains = Array(Set(
+            allAssets.filter { !$0.isNative || $0.blockchain == .quintium }.map(\.blockchain)
+        ))
             .sorted { $0.name < $1.name }
         filters.append(contentsOf: tokenBlockchains.map { .blockchain($0) })
 
@@ -43,7 +47,9 @@ struct AllAssetsView: View {
         case .native:
             filteredAssets = allAssets.filter { $0.isNative }
         case .blockchain(let blockchain):
-            filteredAssets = allAssets.filter { !$0.isNative && $0.blockchain == blockchain }
+            filteredAssets = allAssets.filter {
+                $0.blockchain == blockchain && (!$0.isNative || blockchain == .quintium)
+            }
         case .all:
             filteredAssets = allAssets
         }

@@ -174,8 +174,11 @@ final class WalletManager: ObservableObject {
             let unifiedPrice = unifiedPrice(for: symbol, tokens: tokens, totalBalance: totalBalance)
 
             // Use the primary blockchain for the symbol (Ethereum for ETH, Bitcoin for BTC, etc.)
-            let primaryBlockchain = getPrimaryBlockchain(for: symbol)
-            let primaryToken = tokens.first { $0.blockchain == primaryBlockchain } ?? firstToken
+            // A symbol that exists only on other chains (tUSDT on Quintium, for
+            // example) must keep its own chain, not fall back to Ethereum.
+            let preferredBlockchain = getPrimaryBlockchain(for: symbol)
+            let primaryToken = tokens.first { $0.blockchain == preferredBlockchain } ?? firstToken
+            let primaryBlockchain = primaryToken.blockchain
 
             return Token(
                 contractAddress: primaryToken.contractAddress,
@@ -1011,6 +1014,11 @@ final class WalletManager: ObservableObject {
                 ("WETH", "Wrapped Ether", "0x49d5c2bdffac6ce2bfdb6640f4f80f226bc10bab", 18),
                 ("BTC.b", "Bitcoin (Avalanche)", "0x152b9d0fdc40c096757f570a51e494bd4b943e50", 8)
             ]
+        case .quintium:
+            // No preset tokens: users create Quintium tokens and add them themselves.
+            return QuintiumSettings.network.swapTokens.map {
+                ($0.symbol, $0.name, $0.contractAddress.lowercased(), $0.decimals)
+            }
         default:
             return []
         }
@@ -2342,7 +2350,9 @@ final class WalletManager: ObservableObject {
         guard !tokens.isEmpty else { return }
 
         let generation = refreshGeneration
-        let coinIds = Array(Set(tokens.map { APIService.getCoinId(for: $0.symbol) }))
+        // Quintium coins and test tokens have no market price. Looking them up
+        // by symbol would pick unrelated CoinGecko coins ("tbtc").
+        let coinIds = Array(Set(tokens.filter { $0.blockchain != .quintium }.map { APIService.getCoinId(for: $0.symbol) }))
         Logger.log("📊 Updating prices/logos for \(coinIds.count) assets...")
 
         do {
@@ -2350,7 +2360,7 @@ final class WalletManager: ObservableObject {
             guard refreshGeneration == generation else { return }
             tokens = tokens.map { token in
                 let coinId = APIService.getCoinId(for: token.symbol)
-                guard let priceInfo = lookup[coinId] else { return token }
+                guard token.blockchain != .quintium, let priceInfo = lookup[coinId] else { return token }
 
                 return Token(
                     contractAddress: token.contractAddress,
@@ -2368,7 +2378,7 @@ final class WalletManager: ObservableObject {
             saveCachedPrices(from: tokens)
 
             var changes: [String: Double] = [:]
-            for token in tokens {
+            for token in tokens where token.blockchain != .quintium {
                 let coinId = APIService.getCoinId(for: token.symbol)
                 if let change = lookup[coinId]?.priceChange24h {
                     changes[token.symbol.uppercased()] = change

@@ -1162,3 +1162,17 @@
 "Added Settings → Quintium to choose the network, set your node and test the connection." = "Added Settings → Quintium to choose the network, set your node and test the connection.";
 "Quintium never falls back to an Ethereum node, and an empty RPC address no longer crashes the app." = "Quintium never falls back to an Ethereum node, and an empty RPC address no longer crashes the app.";
 "Added the QU/tQU logo and English and Czech translations." = "Added the QU/tQU logo and English and Czech translations.";
+
+/* Quintium, 2026-11-12 */
+"At home use the local address, for example http://192.168.1.20:%@. Away from home use the public address of your connection, for example http://203.0.113.7:%@. The Quintium app shows both under Network → Connect to another computer." = "At home use the local address, for example http://192.168.1.20:%@. Away from home use the public address of your connection, for example http://203.0.113.7:%@. The Quintium app shows both under Network → Connect to another computer.";
+"Leave empty for automatic: the explorer built into the node, on the same address as RPC." = "Leave empty for automatic: the explorer built into the node, on the same address as RPC.";
+"Bridge for Quintium is not running yet. It opens once independent validators run on the network." = "Bridge for Quintium is not running yet. It opens once independent validators run on the network.";
+"P2P trading on Quintium needs the swap contract on the network. It is not deployed yet." = "P2P trading on Quintium needs the swap contract on the network. It is not deployed yet.";
+"Quintium Swap is available on the Quintium testnet only." = "Quintium Swap is available on the Quintium testnet only.";
+
+/* Version history 1.3.0 */
+"Added Quintium Swap on testnet and Quintium in network filters." = "Added Quintium Swap on testnet and Quintium in network filters.";
+"Added Quintium Swap on the Quintium testnet." = "Added Quintium Swap on the Quintium testnet.";
+"Added Quintium to the All Assets network filter and the Swap network list." = "Added Quintium to the All Assets network filter and the Swap network list.";
+"The explorer address is filled in automatically from your node address." = "The explorer address is filled in automatically from your node address.";
+"Settings → Quintium explains how to connect to your node from outside your home network." = "Settings → Quintium explains how to connect to your node from outside your home network.";

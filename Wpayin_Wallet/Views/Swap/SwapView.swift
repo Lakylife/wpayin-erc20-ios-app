@@ -100,14 +100,19 @@ struct SwapView: View {
             .map { $0.platform }
     }
 
-    private static let supportedSwapBlockchains: Set<BlockchainType> = [
-        .ethereum,
-        .bsc,
-        .polygon,
-        .arbitrum,
-        .optimism,
-        .base
-    ]
+    private static var supportedSwapBlockchains: Set<BlockchainType> {
+        // Quintium joins while its network has Quintium Swap (the testnet now).
+        var chains: Set<BlockchainType> = [
+            .ethereum,
+            .bsc,
+            .polygon,
+            .arbitrum,
+            .optimism,
+            .base
+        ]
+        if SwapService.swapBlockchains.contains(.quintium) { chains.insert(.quintium) }
+        return chains
+    }
 
     private var swapRate: Double {
         if let quote = currentLiveQuote, quote.amountIn > 0 {
@@ -318,7 +323,8 @@ struct SwapView: View {
         }
         .onChange(of: selectedNetwork) { _ in
             if selectedFromToken?.blockchain.rawValue != selectedNetwork.rawValue {
-                selectedFromToken = availableTokens.first
+                // Start from the network's own coin (ETH, tQU, …), not an arbitrary token.
+                selectedFromToken = availableTokens.first(where: { $0.isNative }) ?? availableTokens.first
             }
             if selectedToToken?.blockchain.rawValue != selectedNetwork.rawValue {
                 selectedToToken = firstAvailableToken(excluding: selectedFromToken)
@@ -2054,7 +2060,7 @@ struct TokenPickerView: View {
 
     private func networkRank(_ network: BlockchainPlatform) -> Int {
         let preferred: [BlockchainPlatform] = [
-            .ethereum, .base, .arbitrum, .bsc, .polygon, .optimism,
+            .ethereum, .quintium, .base, .arbitrum, .bsc, .polygon, .optimism,
             .avalanche, .solana, .bitcoin
         ]
         return preferred.firstIndex(of: network)
@@ -2120,7 +2126,8 @@ private struct SwapTokenPickerRow: View {
 
                     VStack(alignment: .leading, spacing: 4) {
                         HStack(spacing: 6) {
-                            Text(token.symbol.uppercased())
+                            // Quintium test symbols keep their lowercase "t" (tQU, tUSDT).
+                            Text(token.blockchain == .quintium ? token.symbol : token.symbol.uppercased())
                                 .font(.system(size: 15, weight: .semibold, design: .rounded))
                                 .foregroundColor(WpayinColors.text)
 
@@ -2516,7 +2523,7 @@ struct NetworkSelectorSheet: View {
 
     private var trendingNetworks: [BlockchainPlatform] {
         let trending: [BlockchainPlatform] = [
-            .ethereum, .base, .arbitrum, .solana, .bsc, .polygon, .optimism, .avalanche
+            .ethereum, .quintium, .base, .arbitrum, .solana, .bsc, .polygon, .optimism, .avalanche
         ]
         return trending.filter { networks.contains($0) }
     }
@@ -2626,7 +2633,7 @@ struct NetworkSelectorSheet: View {
 
     private func networkRank(_ network: BlockchainPlatform) -> Int {
         let preferred: [BlockchainPlatform] = [
-            .ethereum, .base, .arbitrum, .bsc, .polygon, .optimism,
+            .ethereum, .quintium, .base, .arbitrum, .bsc, .polygon, .optimism,
             .avalanche, .solana, .bitcoin
         ]
         return preferred.firstIndex(of: network)
