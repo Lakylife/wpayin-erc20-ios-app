@@ -175,6 +175,18 @@ private struct AppReleaseInfo: Identifiable {
 
     static let releases: [AppReleaseInfo] = [
         AppReleaseInfo(
+            version: "1.3.1",
+            date: "2026-11-12",
+            summary: "Added P2P trading on the Quintium testnet.",
+            changes: [
+                .init(icon: "person.2.fill", text: "P2P trading now works on the Quintium testnet."),
+                .init(icon: "gift", text: "tQU is wrapped to WQU automatically (1:1) when you trade it."),
+                .init(icon: "percent", text: "The P2P contract on Quintium charges no protocol fee."),
+                .init(icon: "wrench.and.screwdriver", text: "Fixed a crash when adding a token with a large balance, and custom tokens now show the balance of the active account.")
+            ],
+            isCurrent: true
+        ),
+        AppReleaseInfo(
             version: "1.3.0",
             date: "2026-11-12",
             summary: "Added Quintium Swap on testnet and Quintium in network filters.",
@@ -184,7 +196,7 @@ private struct AppReleaseInfo: Identifiable {
                 .init(icon: "safari", text: "The explorer address is filled in automatically from your node address."),
                 .init(icon: "network", text: "Settings → Quintium explains how to connect to your node from outside your home network.")
             ],
-            isCurrent: true
+            isCurrent: false
         ),
         AppReleaseInfo(
             version: "1.2.0",

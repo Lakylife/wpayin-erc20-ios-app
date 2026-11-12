@@ -1,6 +1,6 @@
-# Wpayin Wallet 1.3.0
+# Wpayin Wallet 1.3.1
 
-Release details and verification status: [1.3.0 release notes](RELEASE_NOTES_v1.3.0.md).
+Release details and verification status: [1.3.1 release notes](RELEASE_NOTES_v1.3.1.md).
 
 Wpayin Wallet is a non-custodial iOS wallet built with SwiftUI and Trust
 Wallet Core. It supports Bitcoin, Ethereum, Solana, Quintium, EVM-compatible networks,
@@ -17,24 +17,42 @@ work; the existing iOS target is unchanged by the Android project.
 > recovery phrase and private keys.
 
 <p align="center">
+  <img src="./screenshots/20261112_v1.3.1/02_p2p_sell_tqu_quintium.png" width="220" alt="Wpayin Wallet P2P sell offer on the Quintium testnet">
+  <img src="./screenshots/20261112_v1.3.1/03_p2p_offer_created_quintium.png" width="220" alt="Wpayin Wallet signed P2P offer on Quintium">
+  <img src="./screenshots/20261112_v1.3.1/04_p2p_offer_verified_quintium.png" width="220" alt="Wpayin Wallet P2P offer verified on-chain on Quintium">
+</p>
+<p align="center">
+  <img src="./screenshots/20261112_v1.3.1/05_p2p_trade_completed_quintium.png" width="220" alt="Wpayin Wallet P2P trade completed on Quintium">
+  <img src="./screenshots/20261112_v1.3.1/06_p2p_replay_rejected.png" width="220" alt="Wpayin Wallet rejects an already used P2P offer">
+  <img src="./screenshots/20261112_v1.3.1/01_p2p_buy_no_quintium_note.png" width="220" alt="Wpayin Wallet P2P Buy screen">
+</p>
+<p align="center">
   <img src="./screenshots/20261112_v1.3.0/01_home_tqu.png" width="220" alt="Wpayin Wallet Home with tQU">
-  <img src="./screenshots/20261112_v1.3.0/02_all_assets_quintium.png" width="220" alt="Wpayin Wallet All Assets filtered to Quintium">
-  <img src="./screenshots/20261112_v1.3.0/03_swap_networks.png" width="220" alt="Wpayin Wallet Swap networks with Quintium">
-</p>
-<p align="center">
   <img src="./screenshots/20261112_v1.3.0/04_swap_quintium_testnet.png" width="220" alt="Wpayin Wallet Swap on the Quintium testnet">
-  <img src="./screenshots/20261112_v1.3.0/05_bridge_quintium_note.png" width="220" alt="Wpayin Wallet Bridge note for Quintium">
-  <img src="./screenshots/20261112_v1.3.0/06_p2p_quintium_note.png" width="220" alt="Wpayin Wallet P2P note for Quintium">
-</p>
-<p align="center">
   <img src="./screenshots/20261112_v1.3.0/07_settings_quintium.png" width="220" alt="Wpayin Wallet Settings → Quintium">
 </p>
 
-Screenshots are taken in the iOS Simulator from a credential-free DEBUG
-fixture (`--ui-screenshot-mode`): no recovery phrase, private key or real
-balance is shown.
+The 1.3.1 P2P screenshots come from a real trade between two throwaway test
+wallets on a temporary local Quintium testnet node; the 1.3.0 screenshots are
+from a credential-free DEBUG fixture (`--ui-screenshot-mode`). No recovery
+phrase, private key or real balance is shown.
 
-## Version 1.3.0
+## Version 1.3.1
+
+- **P2P trading on the Quintium testnet.** Offers settle atomically through
+  AirSwap SwapERC20 v4.3 at `0x60FD058c896B7E039363F07485016116f915ae02`
+  (EIP-712 domain `SWAP_ERC20` / `4.3`, chain ID 52402) with a zero protocol
+  fee. tQU is wrapped to WQU (`0xae00…000a`) automatically, 1:1. Mainnet has
+  no P2P contract yet, so P2P stays off there; Bridge is still unavailable on
+  Quintium.
+- Fixed a crash when adding a custom token whose balance is above about
+  9.2 tokens (18 decimals): hex balances are now converted with arbitrary
+  precision.
+- Custom tokens now show the balance of the active account instead of the
+  balance stored when the token was added.
+- The **You receive** amount in P2P Sell can be typed again (a custom price).
+
+## Previous version 1.3.0
 
 - Added **Quintium Swap** on the Quintium testnet. Swaps go through the
   Quintium router (`0xfee495049060F02Fc9Ef91e179fF48E8a7471E95`) with wrapped
@@ -49,7 +67,7 @@ balance is shown.
 - The testnet was restarted (testnet-4). The app ships no preset Quintium
   tokens; add your own with **Add Token**.
 
-## Previous version 1.2.0
+## Version 1.2.0
 
 - Added the Quintium network (QU on mainnet, tQU on testnet): balance, sending
   and transaction history read from the node's own index (`aether_addressTxs`).
@@ -82,6 +100,9 @@ the same as your Ethereum address.
   `QUINTIUM_TESTNET_EXPLORER_URL` as scheme environment variables).
 - The testnet is running now; mainnet starts on 1 January 2027 (00:00 UTC).
 - QU has no market price yet, so fiat values for Quintium show $0.00.
+- On the testnet, Swap uses the Quintium router and P2P uses AirSwap
+  SwapERC20 v4.3 at `0x60FD058c896B7E039363F07485016116f915ae02` (zero
+  protocol fee, tQU auto-wrapped to WQU). Neither is deployed on mainnet yet.
 
 ## Version 1.1.10
 

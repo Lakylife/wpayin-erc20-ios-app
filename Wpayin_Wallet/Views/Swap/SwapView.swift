@@ -1487,7 +1487,7 @@ struct ModernTokenSelector: View {
 
             HStack(spacing: 12) {
                 Group {
-                    if isInput && showsMax {
+                    if isInput {
                         TextField("0.0", text: $amount)
                             .keyboardType(.decimalPad)
                             .multilineTextAlignment(.leading)
@@ -1520,7 +1520,7 @@ struct ModernTokenSelector: View {
                         .lineLimit(1)
                         .minimumScaleFactor(0.65)
 
-                    if isInput {
+                    if isInput && showsMax {
                         Button {
                             if let onMax {
                                 onMax()

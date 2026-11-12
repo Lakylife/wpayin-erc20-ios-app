@@ -1176,3 +1176,10 @@
 "Added Quintium to the All Assets network filter and the Swap network list." = "Added Quintium to the All Assets network filter and the Swap network list.";
 "The explorer address is filled in automatically from your node address." = "The explorer address is filled in automatically from your node address.";
 "Settings → Quintium explains how to connect to your node from outside your home network." = "Settings → Quintium explains how to connect to your node from outside your home network.";
+
+/* Version history 1.3.1 */
+"Added P2P trading on the Quintium testnet." = "Added P2P trading on the Quintium testnet.";
+"P2P trading now works on the Quintium testnet." = "P2P trading now works on the Quintium testnet.";
+"tQU is wrapped to WQU automatically (1:1) when you trade it." = "tQU is wrapped to WQU automatically (1:1) when you trade it.";
+"The P2P contract on Quintium charges no protocol fee." = "The P2P contract on Quintium charges no protocol fee.";
+"Fixed a crash when adding a token with a large balance, and custom tokens now show the balance of the active account." = "Fixed a crash when adding a token with a large balance, and custom tokens now show the balance of the active account.";

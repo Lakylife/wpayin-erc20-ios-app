@@ -111,7 +111,7 @@ final class P2PTradeService {
     /// AirSwap SwapERC20 v4.3 — deployed at the same address on every
     /// supported chain (verified via eth_getCode 2026-07-06). Optimism has
     /// no deployment, so it is intentionally absent.
-    static let swapContracts: [BlockchainType: String] = [
+    static let fixedSwapContracts: [BlockchainType: String] = [
         .ethereum: "0xD82E10B9A4107939e55fCCa9B53A9ede6CF2fC46",
         .bsc: "0xD82E10B9A4107939e55fCCa9B53A9ede6CF2fC46",
         .polygon: "0xD82E10B9A4107939e55fCCa9B53A9ede6CF2fC46",
@@ -120,12 +120,24 @@ final class P2PTradeService {
         .avalanche: "0xD82E10B9A4107939e55fCCa9B53A9ede6CF2fC46"
     ]
 
+    /// Fixed chains plus Quintium, which follows the active Quintium network
+    /// (testnet has its own SwapERC20 deployment, mainnet none yet).
+    static var swapContracts: [BlockchainType: String] {
+        swapContracts(quintium: QuintiumSettings.network)
+    }
+
+    static func swapContracts(quintium network: QuintiumNetwork) -> [BlockchainType: String] {
+        var contracts = fixedSwapContracts
+        contracts[.quintium] = network.p2pSwapContract
+        return contracts
+    }
+
     static var supportedBlockchains: Set<BlockchainType> { Set(swapContracts.keys) }
 
     /// Canonical wrapped-native tokens. Selling or paying with the native coin
     /// is supported by auto-wrapping the needed amount into these (deposit()
     /// is a 1:1 wrap, so the user's value is unchanged).
-    static let wrappedNative: [BlockchainType: (address: String, symbol: String)] = [
+    static let fixedWrappedNative: [BlockchainType: (address: String, symbol: String)] = [
         .ethereum: ("0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2", "WETH"),
         .arbitrum: ("0x82aF49447D8a07e3bd95BD0d56f35241523fBab1", "WETH"),
         .base: ("0x4200000000000000000000000000000000000006", "WETH"),
@@ -133,6 +145,19 @@ final class P2PTradeService {
         .bsc: ("0xbb4CdB9CBd36B01bD1cBaEBF2De08d9173bc095c", "WBNB"),
         .avalanche: ("0xB31f66AA3C1e785363F0875A1B74E27b85FD66c7", "WAVAX")
     ]
+
+    static var wrappedNative: [BlockchainType: (address: String, symbol: String)] {
+        wrappedNative(quintium: QuintiumSettings.network)
+    }
+
+    /// Quintium's wrapped coin (WQU) is listed only where P2P is available.
+    static func wrappedNative(quintium network: QuintiumNetwork) -> [BlockchainType: (address: String, symbol: String)] {
+        var wrapped = fixedWrappedNative
+        if network.p2pSwapContract != nil {
+            wrapped[.quintium] = (QuintiumNetwork.wrappedNativeAddress, network.wrappedNativeSymbol)
+        }
+        return wrapped
+    }
 
     private let payloadPrefix = "WPAYIN-P2P:"
 

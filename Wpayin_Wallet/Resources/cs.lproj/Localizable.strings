@@ -1226,3 +1226,10 @@
 "Added Quintium to the All Assets network filter and the Swap network list." = "Quintium přidán do filtru sítí ve Všech aktivech a do seznamu sítí ve Swapu.";
 "The explorer address is filled in automatically from your node address." = "Adresa Exploreru se doplní automaticky podle adresy uzlu.";
 "Settings → Quintium explains how to connect to your node from outside your home network." = "Nastavení → Quintium vysvětluje, jak se k uzlu připojit mimo domácí síť.";
+
+/* Version history 1.3.1 */
+"Added P2P trading on the Quintium testnet." = "Přidáno P2P obchodování na testnetu Quintia.";
+"P2P trading now works on the Quintium testnet." = "P2P obchodování nyní funguje na testnetu Quintia.";
+"tQU is wrapped to WQU automatically (1:1) when you trade it." = "tQU se při obchodu automaticky zabalí na WQU (1:1).";
+"The P2P contract on Quintium charges no protocol fee." = "P2P kontrakt na Quintiu si neúčtuje žádný protokolový poplatek.";
+"Fixed a crash when adding a token with a large balance, and custom tokens now show the balance of the active account." = "Opraven pád při přidání tokenu s velkým zůstatkem a vlastní tokeny nyní ukazují zůstatek aktivního účtu.";

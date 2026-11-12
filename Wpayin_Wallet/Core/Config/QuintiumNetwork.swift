@@ -93,6 +93,22 @@ enum QuintiumNetwork: String, CaseIterable, Codable, Identifiable, Sendable {
         }
     }
 
+    // MARK: P2P (AirSwap SwapERC20)
+
+    /// AirSwap SwapERC20 v4.3 (bytecode of the official 4.3.1 release, EIP-712
+    /// domain "SWAP_ERC20" / "4.3", protocol fee 0). Deployed on the testnet
+    /// only; mainnet has none yet, so P2P stays off there.
+    var p2pSwapContract: String? {
+        switch self {
+        case .testnet: return "0x60FD058c896B7E039363F07485016116f915ae02"
+        case .mainnet: return nil
+        }
+    }
+
+    /// Symbol of the wrapped native coin (`symbol()` of the predeploy at
+    /// `wrappedNativeAddress`).
+    var wrappedNativeSymbol: String { "WQU" }
+
     /// Tokens offered in the wallet and in Swap without the user adding them.
     /// Intentionally empty: tokens on Quintium are created by users, who add
     /// them to the wallet themselves (custom token). Quintium Swap still works

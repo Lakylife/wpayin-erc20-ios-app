@@ -52,14 +52,6 @@ struct P2PTradeView: View {
                         .padding(.top, 10)
                         .padding(.bottom, 14)
 
-                    if walletManager.tokens.contains(where: { $0.blockchain == .quintium }) {
-                        QuintiumUnavailableNote(
-                            text: "P2P trading on Quintium needs the swap contract on the network. It is not deployed yet.".localized
-                        )
-                        .padding(.horizontal, 20)
-                        .padding(.bottom, 12)
-                    }
-
                     switch mode {
                     case .buy:
                         P2PBuyContent()

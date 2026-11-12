@@ -201,4 +201,25 @@ struct Wpayin_WalletTests {
         )
     }
 
+    @Test func quintiumP2PConfigFollowsNetwork() {
+        let testnetContracts = P2PTradeService.swapContracts(quintium: .testnet)
+        #expect(testnetContracts[.quintium] == "0x60FD058c896B7E039363F07485016116f915ae02")
+        let testnetWrapped = P2PTradeService.wrappedNative(quintium: .testnet)[.quintium]
+        #expect(testnetWrapped?.address == "0xae0000000000000000000000000000000000000a")
+        #expect(testnetWrapped?.symbol == "WQU")
+
+        #expect(P2PTradeService.swapContracts(quintium: .mainnet)[.quintium] == nil)
+        #expect(P2PTradeService.wrappedNative(quintium: .mainnet)[.quintium] == nil)
+        // Other chains are unaffected by the Quintium network
+        #expect(P2PTradeService.swapContracts(quintium: .mainnet)[.ethereum] == "0xD82E10B9A4107939e55fCCa9B53A9ede6CF2fC46")
+    }
+
+    @Test func hexToDecimalHandlesBalancesAboveIntMax() {
+        // 100 tokens with 18 decimals = 1e20 wei, beyond Int.max
+        #expect("56bc75e2d63100000".hexToDecimal() == "100000000000000000000")
+        #expect("0".hexToDecimal() == "0")
+        #expect("".hexToDecimal() == "0")
+        #expect("xyz".hexToDecimal() == nil)
+    }
+
 }

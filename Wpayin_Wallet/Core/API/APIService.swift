@@ -8,6 +8,7 @@
 
 import Foundation
 import Combine
+import BigInt
 
 struct NativeBalanceRequest: Sendable {
     let config: BlockchainConfig
@@ -1365,13 +1366,12 @@ final class APIService: ObservableObject, @unchecked Sendable {
 
 // MARK: - String Extension for Hex Conversion
 extension String {
+    /// "de0b6b3a7640000" → "1000000000000000000". Arbitrary precision: token
+    /// balances in wei easily exceed Int.max (about 9.22 tokens at 18 decimals).
     func hexToDecimal() -> String? {
         guard self.allSatisfy({ $0.isHexDigit }) else { return nil }
-        let decimal = self.reduce(0) { acc, char in
-            let value = char.hexDigitValue ?? 0
-            return acc * 16 + value
-        }
-        return String(decimal)
+        if isEmpty { return "0" }
+        return BigUInt(self, radix: 16)?.description
     }
 
     func padLeft(toLength: Int, withPad: String) -> String {

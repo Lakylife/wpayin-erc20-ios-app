@@ -964,7 +964,23 @@ final class WalletManager: ObservableObject {
         return tokens
     }
 
+    /// Preset tokens of the network plus the user's custom tokens on it, so the
+    /// balance of a custom token is read live for the active account instead of
+    /// showing the amount stored when the token was added (custom tokens are
+    /// shared by all accounts).
     private func knownERC20Tokens(for platform: BlockchainPlatform) -> [(symbol: String, name: String, contractAddress: String, decimals: Int)] {
+        var tokens = presetERC20Tokens(for: platform)
+        guard let blockchain = platform.blockchainType else { return tokens }
+        for custom in savedCustomTokens where custom.blockchain == blockchain && !custom.isNative {
+            // Keep the stored spelling: token keys elsewhere use it verbatim.
+            guard let contract = custom.contractAddress,
+                  !tokens.contains(where: { $0.contractAddress.lowercased() == contract.lowercased() }) else { continue }
+            tokens.append((custom.symbol, custom.name, contract, custom.decimals))
+        }
+        return tokens
+    }
+
+    private func presetERC20Tokens(for platform: BlockchainPlatform) -> [(symbol: String, name: String, contractAddress: String, decimals: Int)] {
         switch platform {
         case .ethereum:
             return [
