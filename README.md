@@ -1,6 +1,6 @@
 # Wpayin Wallet 1.3.1
 
-Release details and verification status: [1.3.1 release notes](RELEASE_NOTES_v1.3.1.md).
+Release details and verification status: [1.3.1 release notes](docs/release-notes/RELEASE_NOTES_v1.3.1.md).
 
 Wpayin Wallet is a non-custodial iOS wallet built with SwiftUI and Trust
 Wallet Core. It supports Bitcoin, Ethereum, Solana, Quintium, EVM-compatible networks,
@@ -81,7 +81,7 @@ phrase, private key or real balance is shown.
 - Home asset list keeps the original token symbol case (tQU) and the correct
   network icon.
 
-See [RELEASE_NOTES_v1.2.0.md](RELEASE_NOTES_v1.2.0.md) for details.
+See [RELEASE_NOTES_v1.2.0.md](docs/release-notes/RELEASE_NOTES_v1.2.0.md) for details.
 
 ## Quintium network
 
@@ -114,7 +114,7 @@ the same as your Ethereum address.
 
 The simulator build and unit tests pass. On-device authentication checks remain manual.
 
-See [RELEASE_NOTES_v1.1.10.md](RELEASE_NOTES_v1.1.10.md) for details.
+See [RELEASE_NOTES_v1.1.10.md](docs/release-notes/RELEASE_NOTES_v1.1.10.md) for details.
 
 ## Version 1.1.9
 
@@ -133,7 +133,7 @@ See [RELEASE_NOTES_v1.1.10.md](RELEASE_NOTES_v1.1.10.md) for details.
 - Refined and slightly extended the launch experience without restoring the
   previous dark backing behind the logo.
 
-See [RELEASE_NOTES_v1.1.9.md](RELEASE_NOTES_v1.1.9.md) for the complete
+See [RELEASE_NOTES_v1.1.9.md](docs/release-notes/RELEASE_NOTES_v1.1.9.md) for the complete
 release notes.
 
 ## Requirements
