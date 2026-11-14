@@ -566,9 +566,12 @@ final class WalletManager: ObservableObject {
             // while fresh balances replace the cached shell in the background.
             primeWalletForImmediateDisplay()
             isInitializing = false
-            await Task.yield()
-            await refreshWalletData()
-            startPriceUpdates()
+            // Fresh balances load in the background. The launch screen must not wait for the network:
+            // one slow or unreachable node (or a price API) used to keep the app on the loading screen.
+            Task { [weak self] in
+                await self?.refreshWalletData()
+                self?.startPriceUpdates()
+            }
         } else {
             stopPriceUpdates()
             isInitializing = false

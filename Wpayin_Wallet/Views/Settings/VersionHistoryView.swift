@@ -175,6 +175,15 @@ private struct AppReleaseInfo: Identifiable {
 
     static let releases: [AppReleaseInfo] = [
         AppReleaseInfo(
+            version: "1.4.2",
+            date: "2026-11-14",
+            summary: "The app opens right away.",
+            changes: [
+                .init(icon: "bolt", text: "The wallet opens immediately from saved data; fresh balances and prices load in the background, so a slow network no longer keeps the app on the loading screen.")
+            ],
+            isCurrent: true
+        ),
+        AppReleaseInfo(
             version: "1.4.1",
             date: "2026-11-14",
             summary: "New Quinvium logo and mainnet by default.",
@@ -182,7 +191,7 @@ private struct AppReleaseInfo: Identifiable {
                 .init(icon: "hexagon", text: "Quinvium has a new logo: the letter Q as a hexagon in Quinvium yellow."),
                 .init(icon: "network", text: "Quinvium mainnet (QU, chain ID 52401) is live; the wallet connects to rpc.quinvium.com and explorer.quinvium.com.")
             ],
-            isCurrent: true
+            isCurrent: false
         ),
         AppReleaseInfo(
             version: "1.4.0",
