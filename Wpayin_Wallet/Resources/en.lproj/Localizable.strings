@@ -1135,22 +1135,22 @@
 "Corrected Auto-Lock timing and active-account private-key export." = "Corrected Auto-Lock timing and active-account private-key export.";
 "Prevented delayed network responses from changing another wallet." = "Prevented delayed network responses from changing another wallet.";
 
-// MARK: - Quintium (QU)
-"Address of a Quintium node with JSON-RPC (default port %@). There is no public node yet, so enter your own." = "Address of a Quintium node with JSON-RPC (default port %@). There is no public node yet, so enter your own.";
+// MARK: - Quinvium (QU)
+"Address of a Quinvium node with JSON-RPC (default port %@). There is no public node yet, so enter your own." = "Address of a Quinvium node with JSON-RPC (default port %@). There is no public node yet, so enter your own.";
 "Address path" = "Address path";
 "Block time" = "Block time";
 "Connected. Chain ID %@, block %@." = "Connected. Chain ID %@, block %@.";
 "Currency" = "Currency";
 "Empty answer from the node" = "Empty answer from the node";
 "Enter a valid node URL starting with https:// or http://" = "Enter a valid node URL starting with https:// or http://";
-"Mainnet starts on 1 January 2027. Until then use the testnet." = "Mainnet starts on 1 January 2027. Until then use the testnet.";
+"Mainnet starts on 1 January 2027. Until then use the testnet." = "Mainnet starts on 14 November 2026 at 00:00 CET. Until then use the testnet.";
 "Mainnet" = "Mainnet";
 "Network parameters" = "Network parameters";
 "No node is set for this network. Add a node URL in Settings." = "No node is set for this network. Add a node URL in Settings.";
 "Node" = "Node";
-"Our own Proof-of-Work blockchain, compatible with Ethereum. Your Quintium address is the same as your Ethereum address." = "Our own Proof-of-Work blockchain, compatible with Ethereum. Your Quintium address is the same as your Ethereum address.";
+"Our own Proof-of-Work blockchain, compatible with Ethereum. Your Quinvium address is the same as your Ethereum address." = "Our own Proof-of-Work blockchain, compatible with Ethereum. Your Quinvium address is the same as your Ethereum address.";
 "Saved" = "Saved";
-"Set up a node for your Quintium wallet" = "Set up a node for your Quintium wallet";
+"Set up a node for your Quinvium wallet" = "Set up a node for your Quinvium wallet";
 "Test connection" = "Test connection";
 "The node belongs to another network (chain ID %@, expected %@)" = "The node belongs to another network (chain ID %@, expected %@)";
 "The node did not answer (HTTP error)" = "The node did not answer (HTTP error)";
@@ -1163,12 +1163,12 @@
 "Quintium never falls back to an Ethereum node, and an empty RPC address no longer crashes the app." = "Quintium never falls back to an Ethereum node, and an empty RPC address no longer crashes the app.";
 "Added the QU/tQU logo and English and Czech translations." = "Added the QU/tQU logo and English and Czech translations.";
 
-/* Quintium, 2026-11-12 */
-"At home use the local address, for example http://192.168.1.20:%@. Away from home use the public address of your connection, for example http://203.0.113.7:%@. The Quintium app shows both under Network → Connect to another computer." = "At home use the local address, for example http://192.168.1.20:%@. Away from home use the public address of your connection, for example http://203.0.113.7:%@. The Quintium app shows both under Network → Connect to another computer.";
+/* Quinvium, 2026-11-12 */
+"At home use the local address, for example http://192.168.1.20:%@. Away from home use the public address of your connection, for example http://203.0.113.7:%@. The Quinvium app shows both under Network → Connect to another computer." = "At home use the local address, for example http://192.168.1.20:%@. Away from home use the public address of your connection, for example http://203.0.113.7:%@. The Quinvium app shows both under Network → Connect to another computer.";
 "Leave empty for automatic: the explorer built into the node, on the same address as RPC." = "Leave empty for automatic: the explorer built into the node, on the same address as RPC.";
-"Bridge for Quintium is not running yet. It opens once independent validators run on the network." = "Bridge for Quintium is not running yet. It opens once independent validators run on the network.";
-"P2P trading on Quintium needs the swap contract on the network. It is not deployed yet." = "P2P trading on Quintium needs the swap contract on the network. It is not deployed yet.";
-"Quintium Swap is available on the Quintium testnet only." = "Quintium Swap is available on the Quintium testnet only.";
+"Bridge for Quinvium is not running yet. It opens once independent validators run on the network." = "Bridge for Quinvium is not running yet. It opens once independent validators run on the network.";
+"P2P trading on Quinvium needs the swap contract on the network. It is not deployed yet." = "P2P trading on Quinvium needs the swap contract on the network. It is not deployed yet.";
+"Quinvium Swap is available on the Quinvium testnet only." = "Quinvium Swap is available on the Quinvium testnet only.";
 
 /* Version history 1.3.0 */
 "Added Quintium Swap on testnet and Quintium in network filters." = "Added Quintium Swap on testnet and Quintium in network filters.";
@@ -1183,3 +1183,16 @@
 "tQU is wrapped to WQU automatically (1:1) when you trade it." = "tQU is wrapped to WQU automatically (1:1) when you trade it.";
 "The P2P contract on Quintium charges no protocol fee." = "The P2P contract on Quintium charges no protocol fee.";
 "Fixed a crash when adding a token with a large balance, and custom tokens now show the balance of the active account." = "Fixed a crash when adding a token with a large balance, and custom tokens now show the balance of the active account.";
+
+/* Version history 1.3.2, Quintium http hint */
+"This connection is not encrypted (http). Anyone on the way can read or change the data. Use https if your node supports it." = "This connection is not encrypted (http). Anyone on the way can read or change the data. Use https if your node supports it.";
+"Your own Quintium node can be reached over http." = "Your own Quintium node can be reached over http.";
+"A Quintium node address starting with http:// now works, also on mobile data with a public IP address." = "A Quintium node address starting with http:// now works, also on mobile data with a public IP address.";
+"Settings → Quintium warns when the node connection is not encrypted." = "Settings → Quintium warns when the node connection is not encrypted.";
+"Unverified token. Anyone can create a token with any name, so check the contract address with its author before you trade it." = "Unverified token. Anyone can create a token with any name, so check the contract address with its author before you trade it.";
+
+/* Version history 1.4.0, Quinvium */
+"Quintium is now called Quinvium." = "Quintium is now called Quinvium.";
+"Quintium is now called Quinvium. The coin, addresses and your node settings stay the same." = "Quintium is now called Quinvium. The coin, addresses and your node settings stay the same.";
+"Plain http is blocked except for local addresses and your own Quinvium node." = "Plain http is blocked except for local addresses and your own Quinvium node.";
+"Adding a Quinvium token that is not on the token registry shows a warning." = "Adding a Quinvium token that is not on the token registry shows a warning.";

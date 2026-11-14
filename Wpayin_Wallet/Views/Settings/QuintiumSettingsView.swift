@@ -42,7 +42,7 @@ struct QuintiumSettingsView: View {
                     .padding(.bottom, 40)
                 }
             }
-            .navigationTitle("Quintium")
+            .navigationTitle("Quinvium")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
@@ -65,10 +65,10 @@ struct QuintiumSettingsView: View {
         VStack(spacing: 12) {
             QuintiumIconMark(size: 72)
                 .padding(.top, 20)
-            Text("Quintium (QU)")
+            Text("Quinvium (QU)")
                 .font(.system(size: 22, weight: .bold))
                 .foregroundColor(WpayinColors.text)
-            Text("Our own Proof-of-Work blockchain, compatible with Ethereum. Your Quintium address is the same as your Ethereum address.".localized)
+            Text("Our own Proof-of-Work blockchain, compatible with Ethereum. Your Quinvium address is the same as your Ethereum address.".localized)
                 .font(.system(size: 14))
                 .foregroundColor(WpayinColors.textSecondary)
                 .multilineTextAlignment(.center)
@@ -104,10 +104,17 @@ struct QuintiumSettingsView: View {
                 text: $rpcUrl,
                 placeholder: "https://rpc.example.com"
             )
-            Text("Address of a Quintium node with JSON-RPC (default port %@). There is no public node yet, so enter your own.".localized("\(network.defaultRpcPort)"))
+            if QuintiumSettings.isUnencryptedPublicURL(rpcUrl) {
+                note(
+                    icon: "lock.open",
+                    text: "This connection is not encrypted (http). Anyone on the way can read or change the data. Use https if your node supports it.".localized,
+                    color: WpayinColors.warning
+                )
+            }
+            Text("Address of a Quinvium node with JSON-RPC (default port %@). There is no public node yet, so enter your own.".localized("\(network.defaultRpcPort)"))
                 .font(.system(size: 12))
                 .foregroundColor(WpayinColors.textTertiary)
-            Text("At home use the local address, for example http://192.168.1.20:%@. Away from home use the public address of your connection, for example http://203.0.113.7:%@. The Quintium app shows both under Network → Connect to another computer.".localized("\(network.defaultRpcPort)", "\(network.defaultRpcPort)"))
+            Text("At home use the local address, for example http://192.168.1.20:%@. Away from home use the public address of your connection, for example http://203.0.113.7:%@. The Quinvium app shows both under Network → Connect to another computer.".localized("\(network.defaultRpcPort)", "\(network.defaultRpcPort)"))
                 .font(.system(size: 12))
                 .foregroundColor(WpayinColors.textTertiary)
                 .fixedSize(horizontal: false, vertical: true)

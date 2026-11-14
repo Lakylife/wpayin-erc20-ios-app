@@ -1185,22 +1185,22 @@
 "Corrected Auto-Lock timing and active-account private-key export." = "Opraveny intervaly automatického zamčení a export klíče aktivního účtu.";
 "Prevented delayed network responses from changing another wallet." = "Opožděné síťové odpovědi již nemění stav jiné peněženky.";
 
-// MARK: - Quintium (QU)
-"Address of a Quintium node with JSON-RPC (default port %@). There is no public node yet, so enter your own." = "Adresa uzlu Quintium s JSON-RPC (výchozí port %@). Veřejný uzel zatím není, zadejte vlastní.";
+// MARK: - Quinvium (QU)
+"Address of a Quinvium node with JSON-RPC (default port %@). There is no public node yet, so enter your own." = "Adresa uzlu Quinvium s JSON-RPC (výchozí port %@). Veřejný uzel zatím není, zadejte vlastní.";
 "Address path" = "Cesta adresy";
 "Block time" = "Doba bloku";
 "Connected. Chain ID %@, block %@." = "Připojeno. Chain ID %@, blok %@.";
 "Currency" = "Měna";
 "Empty answer from the node" = "Uzel vrátil prázdnou odpověď";
 "Enter a valid node URL starting with https:// or http://" = "Zadejte platnou adresu uzlu začínající https:// nebo http://";
-"Mainnet starts on 1 January 2027. Until then use the testnet." = "Mainnet startuje 1. 1. 2027. Do té doby použijte testnet.";
+"Mainnet starts on 1 January 2027. Until then use the testnet." = "Mainnet startuje 14. 11. 2026 v 00:00 SEČ. Do té doby použijte testnet.";
 "Mainnet" = "Mainnet";
 "Network parameters" = "Parametry sítě";
 "No node is set for this network. Add a node URL in Settings." = "Pro tuto síť není nastavený uzel. Doplňte adresu uzlu v Nastavení.";
 "Node" = "Uzel";
-"Our own Proof-of-Work blockchain, compatible with Ethereum. Your Quintium address is the same as your Ethereum address." = "Náš vlastní blockchain s Proof-of-Work, kompatibilní s Ethereem. Adresa pro Quintium je stejná jako adresa pro Ethereum.";
+"Our own Proof-of-Work blockchain, compatible with Ethereum. Your Quinvium address is the same as your Ethereum address." = "Náš vlastní blockchain s Proof-of-Work, kompatibilní s Ethereem. Adresa pro Quinvium je stejná jako adresa pro Ethereum.";
 "Saved" = "Uloženo";
-"Set up a node for your Quintium wallet" = "Nastavte uzel pro peněženku Quintium";
+"Set up a node for your Quinvium wallet" = "Nastavte uzel pro peněženku Quinvium";
 "Test connection" = "Vyzkoušet spojení";
 "The node belongs to another network (chain ID %@, expected %@)" = "Uzel patří k jiné síti (chain ID %@, očekáváno %@)";
 "The node did not answer (HTTP error)" = "Uzel neodpověděl (chyba HTTP)";
@@ -1213,12 +1213,12 @@
 "Quintium never falls back to an Ethereum node, and an empty RPC address no longer crashes the app." = "Quintium nikdy nepoužije uzel Etherea a prázdná adresa RPC už aplikaci neshodí.";
 "Added the QU/tQU logo and English and Czech translations." = "Přidáno logo QU/tQU a anglické a české překlady.";
 
-/* Quintium, 2026-11-12 */
-"At home use the local address, for example http://192.168.1.20:%@. Away from home use the public address of your connection, for example http://203.0.113.7:%@. The Quintium app shows both under Network → Connect to another computer." = "Doma použijte místní adresu, třeba http://192.168.1.20:%@. Mimo domov použijte veřejnou adresu vašeho připojení, třeba http://203.0.113.7:%@. Obě adresy ukazuje aplikace Quintium v části Síť → Spojit s jiným počítačem.";
+/* Quinvium, 2026-11-12 */
+"At home use the local address, for example http://192.168.1.20:%@. Away from home use the public address of your connection, for example http://203.0.113.7:%@. The Quinvium app shows both under Network → Connect to another computer." = "Doma použijte místní adresu, třeba http://192.168.1.20:%@. Mimo domov použijte veřejnou adresu vašeho připojení, třeba http://203.0.113.7:%@. Obě adresy ukazuje aplikace Quinvium v části Síť → Spojit s jiným počítačem.";
 "Leave empty for automatic: the explorer built into the node, on the same address as RPC." = "Nechte prázdné pro automatické nastavení: použije se Explorer přímo v uzlu, na stejné adrese jako RPC.";
-"Bridge for Quintium is not running yet. It opens once independent validators run on the network." = "Most pro Quintium zatím neběží. Otevře se, až na síti poběží nezávislí validátoři.";
-"P2P trading on Quintium needs the swap contract on the network. It is not deployed yet." = "P2P obchodování na Quintiu potřebuje na síti směnný kontrakt. Ten zatím nasazený není.";
-"Quintium Swap is available on the Quintium testnet only." = "Quintium Swap zatím funguje jen na testnetu Quintia.";
+"Bridge for Quinvium is not running yet. It opens once independent validators run on the network." = "Most pro Quinvium zatím neběží. Otevře se, až na síti poběží nezávislí validátoři.";
+"P2P trading on Quinvium needs the swap contract on the network. It is not deployed yet." = "P2P obchodování na Quinviu potřebuje na síti směnný kontrakt. Ten zatím nasazený není.";
+"Quinvium Swap is available on the Quinvium testnet only." = "Quinvium Swap zatím funguje jen na testnetu Quinvia.";
 
 /* Version history 1.3.0 */
 "Added Quintium Swap on testnet and Quintium in network filters." = "Přidán Quintium Swap na testnetu a Quintium ve filtrech sítí.";
@@ -1233,3 +1233,16 @@
 "tQU is wrapped to WQU automatically (1:1) when you trade it." = "tQU se při obchodu automaticky zabalí na WQU (1:1).";
 "The P2P contract on Quintium charges no protocol fee." = "P2P kontrakt na Quintiu si neúčtuje žádný protokolový poplatek.";
 "Fixed a crash when adding a token with a large balance, and custom tokens now show the balance of the active account." = "Opraven pád při přidání tokenu s velkým zůstatkem a vlastní tokeny nyní ukazují zůstatek aktivního účtu.";
+
+/* Version history 1.3.2, Quintium http hint */
+"This connection is not encrypted (http). Anyone on the way can read or change the data. Use https if your node supports it." = "Toto spojení není šifrované (http). Kdokoli po cestě může data číst nebo měnit. Pokud to uzel podporuje, použijte https.";
+"Your own Quintium node can be reached over http." = "Vlastní uzel Quintium je dostupný i přes http.";
+"A Quintium node address starting with http:// now works, also on mobile data with a public IP address." = "Adresa uzlu Quintium začínající http:// nyní funguje, i na mobilních datech s veřejnou IP adresou.";
+"Settings → Quintium warns when the node connection is not encrypted." = "Nastavení → Quintium upozorní, když spojení s uzlem není šifrované.";
+"Unverified token. Anyone can create a token with any name, so check the contract address with its author before you trade it." = "Neověřený token. Token s libovolným názvem může vytvořit kdokoli, proto si před obchodem ověřte adresu kontraktu u jeho autora.";
+
+/* Version history 1.4.0, Quinvium */
+"Quintium is now called Quinvium." = "Quintium se teď jmenuje Quinvium.";
+"Quintium is now called Quinvium. The coin, addresses and your node settings stay the same." = "Quintium se teď jmenuje Quinvium. Mince, adresy i nastavení uzlu zůstávají stejné.";
+"Plain http is blocked except for local addresses and your own Quinvium node." = "Nešifrované http je zablokované, kromě místních adres a vlastního uzlu Quinvium.";
+"Adding a Quinvium token that is not on the token registry shows a warning." = "Při přidání tokenu Quinvium, který není v registru tokenů, se ukáže varování.";

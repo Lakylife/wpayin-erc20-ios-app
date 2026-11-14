@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  Keys that cannot be expressed as INFOPLIST_KEY_* build settings. Everything
+  else is generated from build settings (GENERATE_INFOPLIST_FILE = YES) and
+  merged with this file.
+
+  App Transport Security: Quintium has no public RPC node, so users connect to
+  their own node, which serves plain http (no TLS), often on a raw public IP
+  address such as http://203.0.113.7:8546. ATS exception domains cannot match
+  IP addresses, so arbitrary loads must be allowed. Settings -> Quintium warns
+  when a non-local node is reached over http. Other networks use https.
+
+  Do not add NSAllowsLocalNetworking (or other NSAllowsArbitraryLoads* keys)
+  here: when any of them is present, iOS ignores NSAllowsArbitraryLoads and
+  http to public IPs is blocked again. Arbitrary loads already cover LAN hosts.
+-->
+<plist version="1.0">
+<dict>
+	<!-- Default testnet node (public Quinvium server, https). A node entered in Settings -> Quintium overrides it; the explorer follows the node address. -->
+	<key>QUINTIUM_EXPLORER_URL</key>
+	<string>https://explorer.quinvium.com</string>
+	<key>QUINTIUM_TESTNET_EXPLORER_URL</key>
+	<string>https://testnet.quinvium.com</string>
+	<key>QUINTIUM_RPC_URL</key>
+	<string>https://rpc.quinvium.com</string>
+	<key>QUINTIUM_TESTNET_RPC_URL</key>
+	<string>https://rpc1.quinvium.com</string>
+	<key>NSAppTransportSecurity</key>
+	<dict>
+		<key>NSAllowsArbitraryLoads</key>
+		<true/>
+	</dict>
+</dict>
+</plist>

@@ -183,7 +183,7 @@ enum BlockchainPlatform: String, CaseIterable, Codable, Identifiable {
         case .fantom:
             return Color(red: 0.08, green: 0.49, blue: 0.96)  // Blue
         case .quintium:
-            return Color(red: 0.95, green: 0.71, blue: 0.27)  // #F2B544 star gold
+            return Color(red: 1.0, green: 0.80, blue: 0.01)  // #FFCD02 Quinvium yellow
         }
     }
 
@@ -552,7 +552,7 @@ struct BlockchainConfig: Identifiable, Codable, Sendable {
         ),
 
         // Quintium (own chain). One slot that follows the active Quintium
-        // network (testnet now, mainnet from 1 January 2027).
+        // network (testnet now, mainnet from 14 November 2026).
         BlockchainConfig.quintium()
     ]
 

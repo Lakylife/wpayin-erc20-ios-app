@@ -16,6 +16,8 @@ import SwiftUI
 @main
 struct Wpayin_WalletApp: App {
     init() {
+        // Plain http stays limited to the user's own Quintium node.
+        PlainHTTPGuard.install()
         // Register the notification-center delegate before any notification
         // can arrive (needed for foreground banner presentation).
         _ = NotificationManager.shared

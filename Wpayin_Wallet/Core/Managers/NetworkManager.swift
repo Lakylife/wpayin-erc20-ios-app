@@ -211,7 +211,7 @@ class NetworkManager {
             return NetworkConfiguration(
                 blockchain: .quintium,
                 chainId: network.chainId,
-                rpcSources: rpcUrl.isEmpty ? [] : [RPCSource(name: "Quintium node", urls: [rpcUrl])],
+                rpcSources: rpcUrl.isEmpty ? [] : [RPCSource(name: "Quinvium node", urls: [rpcUrl])],
                 explorerUrl: QuintiumSettings.explorerUrl(for: network),
                 supportsEIP1559: true,  // London base fee (min 1 gwei); the node also accepts type 0 and 1
                 nativeSymbol: network.symbol,

@@ -38,8 +38,8 @@ enum QuintiumNetwork: String, CaseIterable, Codable, Identifiable, Sendable {
 
     var displayName: String {
         switch self {
-        case .mainnet: return "Quintium"
-        case .testnet: return "Quintium Testnet"
+        case .mainnet: return "Quinvium"
+        case .testnet: return "Quinvium Testnet"
         }
     }
 
@@ -53,9 +53,9 @@ enum QuintiumNetwork: String, CaseIterable, Codable, Identifiable, Sendable {
 
     var isTestnet: Bool { self == .testnet }
 
-    /// Mainnet genesis is planned for 1 January 2027 00:00 UTC
-    /// (`genesisTimestamp: 1798761600n`). The testnet is already running.
-    static let mainnetGenesis = Date(timeIntervalSince1970: 1_798_761_600)
+    /// Mainnet genesis: 14 November 2026 00:00 CET = 13 November 23:00 UTC
+    /// (`genesisTimestamp: 1794610800n`, genesis 0x49c889ad…ac39).
+    static let mainnetGenesis = Date(timeIntervalSince1970: 1_794_610_800)
 
     var isLaunched: Bool {
         switch self {
@@ -89,6 +89,16 @@ enum QuintiumNetwork: String, CaseIterable, Codable, Identifiable, Sendable {
     var swapRouterAddress: String? {
         switch self {
         case .testnet: return "0xfee495049060F02Fc9Ef91e179fF48E8a7471E95"
+        case .mainnet: return nil
+        }
+    }
+
+    /// Quintium token registry (`TokenRegistry.sol`): tokens the network
+    /// operator verified. Anyone can create a token with any name, so a token
+    /// outside the registry is shown as unverified. Mainnet has none yet.
+    var tokenRegistryAddress: String? {
+        switch self {
+        case .testnet: return "0x1F29eD151d57E51706494aB3E9579B2212102C10"
         case .mainnet: return nil
         }
     }
@@ -135,7 +145,7 @@ enum QuintiumSettings {
     private static func rpcKey(_ network: QuintiumNetwork) -> String { "Quintium.RPC.\(network.rawValue)" }
     private static func explorerKey(_ network: QuintiumNetwork) -> String { "Quintium.Explorer.\(network.rawValue)" }
 
-    /// Active network. Testnet until the user switches; mainnet starts on 1 January 2027.
+    /// Active network. Testnet until the user switches; mainnet starts on 14 November 2026 00:00 CET.
     static var network: QuintiumNetwork {
         get {
             defaults.string(forKey: networkKey).flatMap(QuintiumNetwork.init(rawValue:)) ?? .testnet
@@ -208,6 +218,34 @@ enum QuintiumSettings {
               scheme == "https" || scheme == "http",
               url.host?.isEmpty == false else { return false }
         return true
+    }
+
+    /// True when the node is reached over plain http on a host outside the
+    /// local network (public IP or domain), so traffic crosses the internet
+    /// unencrypted. Local hosts (loopback, private IPv4 ranges, link-local,
+    /// IPv6 ULA, *.local) are not flagged.
+    static func isUnencryptedPublicURL(_ value: String) -> Bool {
+        guard isValidURL(value),
+              let url = URL(string: value.trimmingCharacters(in: .whitespacesAndNewlines)),
+              url.scheme?.lowercased() == "http",
+              let host = url.host?.lowercased() else { return false }
+        return !isLocalHost(host)
+    }
+
+    static func isLocalHost(_ rawHost: String) -> Bool {
+        let host = rawHost.trimmingCharacters(in: CharacterSet(charactersIn: "[]")).lowercased()
+        if host == "localhost" || host.hasSuffix(".local") || host.hasSuffix(".localhost") { return true }
+        if host == "::1" || host.hasPrefix("fe80:") || host.hasPrefix("fc") || host.hasPrefix("fd") {
+            return host.contains(":")
+        }
+        let parts = host.split(separator: ".", omittingEmptySubsequences: false).compactMap { Int($0) }
+        guard parts.count == 4, parts.allSatisfy({ (0...255).contains($0) }) else { return false }
+        switch (parts[0], parts[1]) {
+        case (10, _), (127, _), (192, 168), (169, 254): return true
+        case (172, 16...31): return true
+        case (100, 64...127): return true // CGNAT / Tailscale
+        default: return false
+        }
     }
 
     // MARK: Helpers
@@ -297,6 +335,25 @@ enum QuintiumNodeClient {
         return page.items
     }
 
+    /// `listed(address)` of the token registry. Returns nil when the network
+    /// has no registry or the node cannot be asked, so the caller can tell
+    /// "unverified" from "unknown".
+    static func isVerifiedToken(_ token: String, network: QuintiumNetwork = QuintiumSettings.network) async -> Bool? {
+        guard let registry = network.tokenRegistryAddress,
+              let url = URL(string: QuintiumSettings.rpcUrl(for: network)),
+              let data = listedCallData(token: token) else { return nil }
+        let result: String? = try? await call(url: url, method: "eth_call", params: [["to": registry, "data": data], "latest"])
+        guard let hex = result?.dropHexPrefix, !hex.isEmpty else { return nil }
+        return hex.contains { $0 != "0" }
+    }
+
+    /// Call data of `listed(address)`: selector 0x64138230 and the padded address.
+    static func listedCallData(token: String) -> String? {
+        let hex = token.trimmingCharacters(in: .whitespacesAndNewlines).lowercased().dropHexPrefix
+        guard hex.count == 40, hex.allSatisfy({ $0.isHexDigit }) else { return nil }
+        return "0x64138230" + String(repeating: "0", count: 24) + hex
+    }
+
     private struct RPCEnvelope<T: Decodable>: Decodable {
         struct RPCError: Decodable { let code: Int; let message: String }
         let result: T?
@@ -310,6 +367,8 @@ enum QuintiumNodeClient {
         request.httpBody = try JSONSerialization.data(withJSONObject: [
             "jsonrpc": "2.0", "id": 1, "method": method, "params": params
         ])
+        // The node address is the one place where plain http is allowed (see PlainHTTPGuard).
+        PlainHTTPGuard.allow(host: url.host)
         let (data, response) = try await URLSession.shared.data(for: request)
         guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
             throw NodeError.badResponse("The node did not answer (HTTP error)".localized)

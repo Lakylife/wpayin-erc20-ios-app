@@ -277,7 +277,7 @@ struct BridgeContentView: View {
                     networksRow
                     if walletManager.tokens.contains(where: { $0.blockchain == .quintium }) {
                         QuintiumUnavailableNote(
-                            text: "Bridge for Quintium is not running yet. It opens once independent validators run on the network.".localized
+                            text: "Bridge for Quinvium is not running yet. It opens once independent validators run on the network.".localized
                         )
                     }
                     bridgeCard

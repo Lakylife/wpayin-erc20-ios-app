@@ -175,6 +175,37 @@ private struct AppReleaseInfo: Identifiable {
 
     static let releases: [AppReleaseInfo] = [
         AppReleaseInfo(
+            version: "1.4.1",
+            date: "2026-11-14",
+            summary: "New Quinvium logo and mainnet by default.",
+            changes: [
+                .init(icon: "hexagon", text: "Quinvium has a new logo: the letter Q as a hexagon in Quinvium yellow."),
+                .init(icon: "network", text: "Quinvium mainnet (QU, chain ID 52401) is live; the wallet connects to rpc.quinvium.com and explorer.quinvium.com.")
+            ],
+            isCurrent: true
+        ),
+        AppReleaseInfo(
+            version: "1.4.0",
+            date: "2026-11-13",
+            summary: "Quintium is now called Quinvium.",
+            changes: [
+                .init(icon: "textformat", text: "Quintium is now called Quinvium. The coin, addresses and your node settings stay the same."),
+                .init(icon: "lock.shield", text: "Plain http is blocked except for local addresses and your own Quinvium node."),
+                .init(icon: "exclamationmark.triangle", text: "Adding a Quinvium token that is not on the token registry shows a warning.")
+            ],
+            isCurrent: false
+        ),
+        AppReleaseInfo(
+            version: "1.3.2",
+            date: "2026-11-12",
+            summary: "Your own Quintium node can be reached over http.",
+            changes: [
+                .init(icon: "network", text: "A Quintium node address starting with http:// now works, also on mobile data with a public IP address."),
+                .init(icon: "lock.open", text: "Settings → Quintium warns when the node connection is not encrypted.")
+            ],
+            isCurrent: false
+        ),
+        AppReleaseInfo(
             version: "1.3.1",
             date: "2026-11-12",
             summary: "Added P2P trading on the Quintium testnet.",
@@ -184,7 +215,7 @@ private struct AppReleaseInfo: Identifiable {
                 .init(icon: "percent", text: "The P2P contract on Quintium charges no protocol fee."),
                 .init(icon: "wrench.and.screwdriver", text: "Fixed a crash when adding a token with a large balance, and custom tokens now show the balance of the active account.")
             ],
-            isCurrent: true
+            isCurrent: false
         ),
         AppReleaseInfo(
             version: "1.3.0",

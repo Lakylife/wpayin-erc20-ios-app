@@ -165,10 +165,10 @@ struct SettingsView: View {
 
                             SettingsRow(
                                 icon: "pentagon.fill",
-                                title: "Quintium",
+                                title: "Quinvium",
                                 subtitle: QuintiumSettings.isConfigured
                                     ? QuintiumSettings.network.displayName
-                                    : "Set up a node for your Quintium wallet".localized,
+                                    : "Set up a node for your Quinvium wallet".localized,
                                 action: { activeSheet = .quintium }
                             )
 

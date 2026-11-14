@@ -23,6 +23,7 @@ struct AddTokenView: View {
     @State private var showError = false
     @State private var errorMessage = ""
     @State private var autoFetched = false
+    @State private var isUnverifiedToken = false
     @State private var selectedBlockchain: BlockchainPlatform = .ethereum
     @State private var showBlockchainPicker = false
     @State private var metadataFetchTask: Task<Void, Never>?
@@ -116,6 +117,22 @@ struct AddTokenView: View {
                                 contractAddress: contractAddress,
                                 iconUrl: tokenIconUrl
                             )
+                        }
+
+                        if isValidToken && isUnverifiedToken {
+                            HStack(alignment: .top, spacing: 9) {
+                                Image(systemName: "exclamationmark.triangle.fill")
+                                    .foregroundColor(WpayinColors.warning)
+                                Text("Unverified token. Anyone can create a token with any name, so check the contract address with its author before you trade it.".localized)
+                                    .font(.wpayinCaption)
+                                    .foregroundColor(WpayinColors.textSecondary)
+                                    .fixedSize(horizontal: false, vertical: true)
+                            }
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding(12)
+                            .background(WpayinColors.warning.opacity(0.12))
+                            .cornerRadius(12)
+                            .accessibilityIdentifier("unverifiedTokenWarning")
                         }
                     }
                     .padding(.horizontal, 24)
@@ -223,6 +240,16 @@ struct AddTokenView: View {
                     tokenIconUrl = tokenInfo.imageUrl
                     tokenPrice = tokenInfo.price
                     autoFetched = true
+                    if requestedBlockchain == .quintium {
+                        Task {
+                            let verified = await QuintiumNodeClient.isVerifiedToken(requestedAddress)
+                            await MainActor.run {
+                                guard contractAddress.lowercased() == requestedAddress,
+                                      selectedBlockchain == requestedBlockchain else { return }
+                                isUnverifiedToken = verified == false
+                            }
+                        }
+                    }
                     Logger.log("✅ Auto-fetched token: \(tokenInfo.name) (\(tokenInfo.symbol)) on \(requestedBlockchain.name)")
                 }
             } catch {
@@ -250,6 +277,7 @@ struct AddTokenView: View {
         tokenIconUrl = nil
         tokenPrice = 0
         autoFetched = false
+        isUnverifiedToken = false
         isFetching = false
     }
 

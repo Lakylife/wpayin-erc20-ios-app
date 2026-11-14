@@ -381,7 +381,7 @@ extension Token {
 struct QuintiumIconMark: View {
     let size: CGFloat
 
-    static let gold = Color(red: 0.949, green: 0.710, blue: 0.267)   // #F2B544
+    static let gold = Color(red: 1.0, green: 0.804, blue: 0.008)     // #FFCD02 Quinvium yellow
     static let night = Color(red: 0.043, green: 0.086, blue: 0.133)  // #0B1622
 
     var body: some View {
@@ -404,14 +404,11 @@ private struct QuintiumGlyph: Shape {
             CGPoint(x: rect.minX + x * scale, y: rect.minY + y * scale)
         }
         var path = Path()
-        // Outer pentagon
-        path.addLines([p(32, 12.4), p(50.55, 25.87), p(43.46, 47.68), p(20.54, 47.68), p(13.45, 25.87)])
+        // The Quinvium mark: letter Q drawn as a hexagon, outline from Quinvium-Symbol.ttf (aether assets/brand).
+        // Nonzero fill: the ring is one contour with the opening for the tail, the tail is the second contour.
+        path.addLines([p(28.19, 35.31), p(29.82, 37.13), p(35.52, 43.07), p(41.75, 49.92), p(49.85, 49.92), p(41.99, 41.06), p(37.63, 36.22), p(37.01, 35.69), p(36.62, 35.45), p(36.05, 35.31), p(31.02, 35.31), p(30.97, 35.26), p(30.87, 35.31), p(29.92, 35.31), p(29.87, 35.26), p(29.77, 35.31)])
         path.closeSubpath()
-        // Inner pentagon (hole: wound opposite to the outer one, nonzero fill)
-        path.addLines([p(22.73, 28.89), p(26.27, 39.79), p(37.73, 39.79), p(41.27, 28.89), p(32, 22.15)])
-        path.closeSubpath()
-        // Tail of the Q
-        path.addLines([p(36.96, 33.28), p(47.63, 47.97), p(42.45, 51.73), p(31.78, 37.05)])
+        path.addLines([p(32.26, 12.35), p(31.16, 12.35), p(30.68, 12.45), p(30.01, 12.64), p(29.34, 12.97), p(22.97, 17.14), p(16.3, 21.65), p(15.68, 22.08), p(15.35, 22.46), p(14.91, 23.04), p(14.39, 24.04), p(14.29, 24.43), p(14.15, 25.15), p(14.15, 39), p(14.34, 40.05), p(14.77, 41.11), p(15.2, 41.68), p(16.06, 42.54), p(20.81, 45.71), p(28.91, 51.07), p(29.68, 51.46), p(30.59, 51.65), p(32.02, 51.6), p(32.6, 51.46), p(33.41, 51.07), p(38.25, 47.58), p(34.56, 43.45), p(34.42, 43.5), p(32.41, 44.94), p(31.88, 45.23), p(31.64, 45.32), p(30.97, 45.32), p(30.39, 45.08), p(24.79, 41.25), p(21.24, 38.9), p(20.76, 38.37), p(20.47, 37.8), p(20.28, 37.08), p(20.28, 27.4), p(20.38, 26.97), p(20.62, 26.39), p(20.81, 26.15), p(21.38, 25.58), p(28.19, 21.07), p(30.92, 19.25), p(31.59, 19.06), p(31.88, 19.06), p(32.41, 19.2), p(33.94, 20.16), p(36.43, 21.89), p(41.47, 25.24), p(42.33, 26.01), p(42.57, 26.49), p(42.71, 27.21), p(42.71, 37.51), p(42.57, 38.33), p(42.33, 38.81), p(41.75, 39.33), p(45.4, 43.41), p(45.49, 43.55), p(45.59, 43.55), p(47.12, 42.5), p(47.7, 42.06), p(48.08, 41.68), p(48.7, 40.72), p(48.89, 40.2), p(49.09, 39.19), p(49.09, 25.15), p(48.94, 24.33), p(48.75, 23.71), p(48.37, 22.99), p(47.98, 22.46), p(47.41, 21.89), p(46.26, 21.07), p(36.62, 14.6), p(33.8, 12.83), p(33.22, 12.54)])
         path.closeSubpath()
         return path
     }

@@ -1,9 +1,9 @@
-# Wpayin Wallet 1.3.1
+# Wpayin Wallet 1.4.0
 
 Release details and verification status: [1.3.1 release notes](docs/release-notes/RELEASE_NOTES_v1.3.1.md).
 
 Wpayin Wallet is a non-custodial iOS wallet built with SwiftUI and Trust
-Wallet Core. It supports Bitcoin, Ethereum, Solana, Quintium, EVM-compatible networks,
+Wallet Core. It supports Bitcoin, Ethereum, Solana, Quinvium, EVM-compatible networks,
 tokens, network-aware transaction history, NFTs, DEX swaps, cross-chain
 bridging, and atomic EVM P2P trading.
 
@@ -36,6 +36,26 @@ The 1.3.1 P2P screenshots come from a real trade between two throwaway test
 wallets on a temporary local Quintium testnet node; the 1.3.0 screenshots are
 from a credential-free DEBUG fixture (`--ui-screenshot-mode`). No recovery
 phrase, private key or real balance is shown.
+
+## Version 1.4.0
+
+- Quintium is now called **Quinvium**. Only the visible name changed: the
+  coin (QU, testnet tQU), chain IDs, addresses, your node settings and saved
+  data stay the same.
+- Plain `http://` is blocked for every network except local addresses and
+  your own Quinvium node.
+- Adding a Quinvium token that is not on the network's token registry shows a
+  warning.
+
+## Version 1.3.2
+
+- A Quintium node address starting with `http://` now works, including a
+  public IP address over mobile data. User-run Quintium nodes have no TLS, and
+  App Transport Security exceptions cannot name raw IP addresses, so the app
+  sets `NSAllowsArbitraryLoads` in `Wpayin_Wallet/Info.plist` (merged with the
+  generated Info.plist). All other networks use https.
+- **Settings → Quintium** warns when the node is reached over plain http on a
+  non-local address and recommends https.
 
 ## Version 1.3.1
 
@@ -83,24 +103,24 @@ phrase, private key or real balance is shown.
 
 See [RELEASE_NOTES_v1.2.0.md](docs/release-notes/RELEASE_NOTES_v1.2.0.md) for details.
 
-## Quintium network
+## Quinvium network
 
-Quintium is an EVM-compatible Proof-of-Work chain that
-uses Ethereum keys and addresses (`m/44'/60'/0'/0`), so your Quintium address is
+Quinvium is an EVM-compatible Proof-of-Work chain that
+uses Ethereum keys and addresses (`m/44'/60'/0'/0`), so your Quinvium address is
 the same as your Ethereum address.
 
 | Network | Chain ID | Currency | Default RPC port |
 | --- | --- | --- | --- |
-| Quintium Mainnet | 52401 | QU (18 decimals) | 8545 |
-| Quintium Testnet | 52402 | tQU (18 decimals) | 8546 |
+| Quinvium Mainnet | 52401 | QU (18 decimals) | 8545 |
+| Quinvium Testnet | 52402 | tQU (18 decimals) | 8546 |
 
-- There is no public Quintium RPC node yet. Run your own node and enter its URL
-  in **Settings → Quintium** (or set `QUINTIUM_RPC_URL` /
+- There is no public Quinvium RPC node yet. Run your own node and enter its URL
+  in **Settings → Quinvium** (or set `QUINTIUM_RPC_URL` /
   `QUINTIUM_TESTNET_RPC_URL` and the optional `QUINTIUM_EXPLORER_URL` /
   `QUINTIUM_TESTNET_EXPLORER_URL` as scheme environment variables).
 - The testnet is running now; mainnet starts on 1 January 2027 (00:00 UTC).
-- QU has no market price yet, so fiat values for Quintium show $0.00.
-- On the testnet, Swap uses the Quintium router and P2P uses AirSwap
+- QU has no market price yet, so fiat values for Quinvium show $0.00.
+- On the testnet, Swap uses the Quinvium router and P2P uses AirSwap
   SwapERC20 v4.3 at `0x60FD058c896B7E039363F07485016116f915ae02` (zero
   protocol fee, tQU auto-wrapped to WQU). Neither is deployed on mainnet yet.
 
@@ -208,10 +228,10 @@ continues to work when the board is not configured.
 - Optimism
 - Avalanche C-Chain
 - Base
-- Quintium (mainnet and testnet; requires your own node, see above)
+- Quinvium (mainnet and testnet; requires your own node, see above)
 
 Cross-chain bridging is available between the supported EVM networks listed
-above through LI.FI. LI.FI does not support Quintium, so Quintium is not
+above through LI.FI. LI.FI does not support Quinvium, so Quinvium is not
 available for bridging. Native Bitcoin and Solana cannot participate in atomic
 EVM P2P settlement; supported wrapped representations include WBTC, cbBTC,
 BTCB, and BTC.b where available.

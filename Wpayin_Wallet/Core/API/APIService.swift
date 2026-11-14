@@ -249,7 +249,7 @@ final class APIService: ObservableObject, @unchecked Sendable {
                     if firstFailure == nil {
                         firstFailure = error
                     }
-                    Logger.log("⚠️ Quintium transaction fetch failed: \(error)")
+                    Logger.log("⚠️ Quinvium transaction fetch failed: \(error)")
                 }
                 continue
             }

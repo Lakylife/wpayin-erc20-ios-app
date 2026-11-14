@@ -94,6 +94,38 @@ struct Wpayin_WalletTests {
         #expect(QuintiumSettings.isValidURL("https://rpc.example.com"))
     }
 
+    @Test func plainHttpIsBlockedExceptForTheQuintiumNode() {
+        #expect(!PlainHTTPGuard.isBlocked(URL(string: "https://api.coingecko.com/api/v3/ping")))
+        #expect(PlainHTTPGuard.isBlocked(URL(string: "http://api.example.org/prices")))
+        #expect(!PlainHTTPGuard.isBlocked(URL(string: "http://192.168.1.20:8546")))
+        #expect(!PlainHTTPGuard.isBlocked(URL(string: "http://127.0.0.1:8546")))
+        #expect(PlainHTTPGuard.isBlocked(URL(string: "http://198.51.100.77:8546")))
+        PlainHTTPGuard.allow(host: "198.51.100.77")
+        #expect(!PlainHTTPGuard.isBlocked(URL(string: "http://198.51.100.77:8546")))
+    }
+
+    @Test func tokenRegistryCallDataIsBuiltFromTheAddress() {
+        #expect(QuintiumNodeClient.listedCallData(token: "0x60FD058c896B7E039363F07485016116f915ae02") // gitleaks:allow (ABI call data, not a key)
+                == "0x6413823000000000000000000000000060fd058c896b7e039363f07485016116f915ae02")
+        #expect(QuintiumNodeClient.listedCallData(token: "0x1234") == nil)
+        #expect(QuintiumNetwork.mainnet.tokenRegistryAddress == nil)
+    }
+
+    @Test func quintiumWarnsOnlyForPlainHttpToPublicHosts() {
+        #expect(QuintiumSettings.isUnencryptedPublicURL("http://203.0.113.7:8546"))
+        #expect(QuintiumSettings.isUnencryptedPublicURL("http://node.example.com:8546"))
+        #expect(QuintiumSettings.isUnencryptedPublicURL("http://172.32.0.1:8546"))
+        #expect(!QuintiumSettings.isUnencryptedPublicURL("https://203.0.113.7:8546"))
+        #expect(!QuintiumSettings.isUnencryptedPublicURL("http://192.168.1.20:8546"))
+        #expect(!QuintiumSettings.isUnencryptedPublicURL("http://10.0.0.5:8546"))
+        #expect(!QuintiumSettings.isUnencryptedPublicURL("http://172.16.4.2:8546"))
+        #expect(!QuintiumSettings.isUnencryptedPublicURL("http://127.0.0.1:8546"))
+        #expect(!QuintiumSettings.isUnencryptedPublicURL("http://localhost:8546"))
+        #expect(!QuintiumSettings.isUnencryptedPublicURL("http://mynode.local:8546"))
+        #expect(!QuintiumSettings.isUnencryptedPublicURL("http://[fd12::1]:8546"))
+        #expect(!QuintiumSettings.isUnencryptedPublicURL(""))
+    }
+
     @Test func p2pOfferCodeRoundTripsThroughShareText() throws {
         let offer = P2POffer(
             chainId: 1,
