@@ -1178,10 +1178,16 @@ final class WalletManager: ObservableObject {
         Task { [weak self] in
             guard let self else { return }
             do {
-                let fetchedTransactions = try await self.apiService.getTransactions(
+                var fetchedTransactions = try await self.apiService.getTransactions(
                     for: resolvedAddress,
                     using: configs
                 )
+                // Bitcoin has no EVM explorer: its history (including sends still in the mempool) comes from mempool.space.
+                if let bitcoin = accounts.first(where: { $0.tokenType == .bitcoin })?.address,
+                   let history = try? await BitcoinService.shared.activity(address: bitcoin) {
+                    fetchedTransactions += history.prefix(50)
+                    fetchedTransactions.sort { $0.timestamp > $1.timestamp }
+                }
                 await MainActor.run {
                     guard self.refreshGeneration == generation else { return }
                     self.notifyForNewTransactions(fetchedTransactions, walletAddress: resolvedAddress)

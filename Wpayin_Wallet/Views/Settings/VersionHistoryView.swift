@@ -175,13 +175,23 @@ private struct AppReleaseInfo: Identifiable {
 
     static let releases: [AppReleaseInfo] = [
         AppReleaseInfo(
+            version: "1.4.3",
+            date: "2026-11-17",
+            summary: "Bitcoin sending and Bitcoin activity fixed.",
+            changes: [
+                .init(icon: "bitcoinsign.circle", text: "Sending Bitcoin no longer says \"Insufficient balance\" for every amount: the fee is now counted in BTC and the fee rates come live from mempool.space."),
+                .init(icon: "clock", text: "Activity shows Bitcoin transactions, including sends still waiting for confirmation.")
+            ],
+            isCurrent: true
+        ),
+        AppReleaseInfo(
             version: "1.4.2",
             date: "2026-11-14",
             summary: "The app opens right away.",
             changes: [
                 .init(icon: "bolt", text: "The wallet opens immediately from saved data; fresh balances and prices load in the background, so a slow network no longer keeps the app on the loading screen.")
             ],
-            isCurrent: true
+            isCurrent: false
         ),
         AppReleaseInfo(
             version: "1.4.1",
