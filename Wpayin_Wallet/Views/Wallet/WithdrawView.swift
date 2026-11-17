@@ -66,6 +66,8 @@ struct WithdrawView: View {
     @EnvironmentObject var settingsManager: SettingsManager
     @Environment(\.dismiss) private var dismiss
     @State private var selectedSymbol: String?
+    /// Bumped when live Bitcoin fee rates arrive, so the amounts depending on them are drawn again.
+    @State private var bitcoinFeesVersion = 0
     @State private var selectedNetwork: BlockchainType?
     @State private var recipientAddress = ""
     @State private var amount = ""
@@ -188,7 +190,7 @@ struct WithdrawView: View {
         if token.blockchain == .bitcoin {
             return isRecipientAddressValid &&
                    amountValue > 0 &&
-                   amountValue <= token.balance
+                   amountValue + estimatedGasFee <= token.balance
         }
 
         let hasGas = token.isNative
@@ -245,20 +247,22 @@ struct WithdrawView: View {
         return "Send cryptocurrency to another wallet".localized
     }
 
+    /// Size of a typical native SegWit payment: 1 input (68 vB), 2 outputs (31 vB each), overhead (~10 vB).
+    private static let bitcoinTypicalTxVBytes = 141
+
+    /// Bitcoin fee rate in satoshis per virtual byte for the chosen speed: live from mempool.space when known.
+    private var bitcoinFeeRate: Int {
+        _ = bitcoinFeesVersion
+        return BitcoinFeeCache.rate(for: selectedGasSpeed)
+    }
+
     private var estimatedGasFee: Double {
         guard let token = selectedToken else { return 0 }
 
-        // Bitcoin uses satoshis/byte, others use ETH/native token amount
+        // The fee in the coin of the network, so it can be compared with the balance.
+        // Bitcoin: fee rate (sat/vB) × size of a typical SegWit payment (1 input, 2 outputs ≈ 141 vB).
         if token.blockchain == .bitcoin {
-            // Return fee rate in satoshis/byte
-            switch selectedGasSpeed {
-            case .slow:
-                return 10  // ~1 hour
-            case .standard:
-                return 20  // ~30 minutes
-            case .fast:
-                return 40  // ~10-15 minutes
-            }
+            return Double(bitcoinFeeRate * Self.bitcoinTypicalTxVBytes) / 100_000_000
         }
 
         guard let selectedGasPrice else { return 0 }
@@ -577,6 +581,10 @@ struct WithdrawView: View {
         }
         .task(id: selectedToken.map { "\($0.blockchain.rawValue):\($0.contractAddress ?? "native")" }) {
             await refreshGasPrice()
+            if selectedToken?.blockchain == .bitcoin, let fees = try? await BitcoinService.shared.fetchFeeRates() {
+                BitcoinFeeCache.latest = fees
+                bitcoinFeesVersion += 1
+            }
         }
     }
 
@@ -648,7 +656,7 @@ struct WithdrawView: View {
                     result = try await BitcoinService.shared.sendTransaction(
                         to: recipientAddress,
                         amount: Decimal(amountValue),
-                        feeRate: estimatedGasFee > 0 ? Int(estimatedGasFee) : nil  // satoshis/byte
+                        feeRate: bitcoinFeeRate  // satoshis per vbyte; the balance checks use estimatedGasFee in BTC
                     )
                 } else if token.isNative {
                     // Send native token (ETH, BNB, MATIC, etc.)
@@ -1450,7 +1458,7 @@ struct WithdrawFeeSelectionView: View {
 
     private var selectedFeeText: String {
         if token.blockchain == .bitcoin {
-            return "\(Int(estimatedGas)) sat/vB"
+            return "\(Int((estimatedGas * 100_000_000 / 141).rounded())) sat/vB · ~\(String(format: "%.8f", estimatedGas)) BTC"
         }
         guard estimatedGas > 0 else { return "—" }
         return "~\(String(format: "%.6f", estimatedGas)) \(token.blockchain.nativeToken)"
@@ -1541,7 +1549,7 @@ struct WithdrawReviewStep: View {
 
     private var feeText: String {
         if token.blockchain == .bitcoin {
-            return "\(gasSpeed.displayName) · \(Int(estimatedGas)) sat/vB"
+            return "\(gasSpeed.displayName) · \(Int((estimatedGas * 100_000_000 / 141).rounded())) sat/vB · ~\(String(format: "%.8f", estimatedGas)) BTC"
         }
         return "\(gasSpeed.displayName) · ~\(String(format: "%.6f", estimatedGas)) \(token.blockchain.nativeToken)"
     }
@@ -1565,7 +1573,7 @@ struct TransactionSummaryView: View {
 
     private var feeValue: String {
         if token.blockchain == .bitcoin {
-            return "\(Int(estimatedGas)) sat/vB"
+            return "\(Int((estimatedGas * 100_000_000 / 141).rounded())) sat/vB · ~\(String(format: "%.8f", estimatedGas)) BTC"
         }
         return "~\(String(format: "%.6f", estimatedGas)) \(token.blockchain.nativeToken)"
     }
@@ -2201,13 +2209,8 @@ struct WithdrawGasSettingsSheet: View {
     private func feeText(for speed: WithdrawGasSpeed) -> String {
         guard let selectedToken else { return "" }
         if selectedToken.blockchain == .bitcoin {
-            let rate: Int
-            switch speed {
-            case .slow: rate = 10
-            case .standard: rate = 20
-            case .fast: rate = 40
-            }
-            return "\(rate) sat/vB"
+            let rate = BitcoinFeeCache.rate(for: speed)
+            return "\(rate) sat/vB · ~\(String(format: "%.8f", Double(rate * 141) / 100_000_000)) BTC"
         }
 
         let standardFee = estimatedGas / selectedSpeed.multiplier
@@ -2317,4 +2320,26 @@ struct WithdrawGasSettingsSheet: View {
     return WithdrawView()
         .environmentObject(walletManager)
         .environmentObject(SettingsManager())
+}
+
+
+/// Live Bitcoin fee rates (mempool.space), shared by the send screen and its fee sheet.
+/// Without an answer the old fixed rates apply. Rates never go below 1 sat/vB.
+enum BitcoinFeeCache {
+    static var latest: BitcoinFeeRate?
+
+    static func rate(for speed: WithdrawGasSpeed) -> Int {
+        guard let fees = latest else {
+            switch speed {
+            case .slow: return 10
+            case .standard: return 20
+            case .fast: return 40
+            }
+        }
+        switch speed {
+        case .slow: return max(1, fees.hourFee)
+        case .standard: return max(1, fees.halfHourFee)
+        case .fast: return max(1, fees.fastestFee)
+        }
+    }
 }
