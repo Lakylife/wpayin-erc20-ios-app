@@ -418,6 +418,67 @@ class BitcoinService {
         }
     }
 
+    // MARK: - Activity
+
+    /// Bitcoin history of the address for Activity, including transactions still waiting in the mempool, from
+    /// mempool.space (Esplora API; blockstream.info as fallback). Amounts are what the address sent or received.
+    func activity(address: String) async throws -> [Transaction] {
+        var lastError: Error = BitcoinError.networkError("No Bitcoin explorer")
+        for base in [mempoolAPI, mainnetAPI] {
+            do {
+                guard let url = URL(string: "\(base)/address/\(address)/txs") else { continue }
+                let (data, response) = try await URLSession.shared.data(from: url)
+                guard (response as? HTTPURLResponse)?.statusCode == 200,
+                      let list = try JSONSerialization.jsonObject(with: data) as? [[String: Any]] else {
+                    throw BitcoinError.networkError("Invalid response")
+                }
+                return list.compactMap { Self.activityItem($0, address: address) }
+            } catch {
+                lastError = error
+            }
+        }
+        throw lastError
+    }
+
+    static func activityItem(_ tx: [String: Any], address: String) -> Transaction? {
+        guard let txid = tx["txid"] as? String else { return nil }
+        let status = tx["status"] as? [String: Any]
+        let confirmed = status?["confirmed"] as? Bool ?? false
+        let blockTime = (status?["block_time"] as? NSNumber)?.doubleValue
+        var spent: Int64 = 0, received: Int64 = 0
+        var sender = "", recipient = ""
+        for input in tx["vin"] as? [[String: Any]] ?? [] {
+            guard let prev = input["prevout"] as? [String: Any] else { continue }
+            let owner = prev["scriptpubkey_address"] as? String ?? ""
+            if sender.isEmpty { sender = owner }
+            if owner == address { spent += (prev["value"] as? NSNumber)?.int64Value ?? 0 }
+        }
+        for output in tx["vout"] as? [[String: Any]] ?? [] {
+            let owner = output["scriptpubkey_address"] as? String ?? ""
+            let value = (output["value"] as? NSNumber)?.int64Value ?? 0
+            if owner == address { received += value } else if recipient.isEmpty { recipient = owner }
+        }
+        let fee = (tx["fee"] as? NSNumber)?.int64Value ?? 0
+        let outgoing = spent > 0
+        // Outgoing: what left the wallet without the fee; incoming: what arrived.
+        let sats = outgoing ? max(0, spent - received - fee) : received
+        return Transaction(
+            hash: txid,
+            from: outgoing ? address : sender,
+            to: outgoing ? recipient : address,
+            amount: Double(sats) / 100_000_000,
+            token: "BTC",
+            type: outgoing ? .send : .receive,
+            status: confirmed ? .confirmed : .pending,
+            timestamp: blockTime.map { Date(timeIntervalSince1970: $0) } ?? Date(),
+            gasUsed: 0,
+            gasFee: outgoing ? Double(fee) / 100_000_000 : 0,
+            blockNumber: (status?["block_height"] as? NSNumber).map { "\($0)" },
+            explorerUrl: URL(string: "https://mempool.space/tx/\(txid)"),
+            blockchain: .bitcoin
+        )
+    }
+
     // MARK: - Transaction History
 
     /// Fetch transaction history for address
